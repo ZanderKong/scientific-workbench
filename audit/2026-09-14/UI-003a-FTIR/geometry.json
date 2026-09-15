@@ -1,0 +1,92 @@
+[
+  {
+    "selector": ".detailHero",
+    "expected": {
+      "x": 314,
+      "y": 134,
+      "width": 980,
+      "height": 76
+    },
+    "actual": {
+      "x": 314,
+      "y": 134,
+      "width": 980,
+      "height": 76
+    }
+  },
+  {
+    "selector": ".contentArea",
+    "expected": {
+      "x": 314,
+      "y": 234,
+      "width": 980,
+      "height": 498.390625
+    },
+    "actual": {
+      "x": 314,
+      "y": 234,
+      "width": 980,
+      "height": 498.390625
+    }
+  },
+  {
+    "selector": ".dataBox",
+    "expected": {
+      "x": 314,
+      "y": 234,
+      "width": 980,
+      "height": 260
+    },
+    "actual": {
+      "x": 314,
+      "y": 234,
+      "width": 980,
+      "height": 260
+    }
+  },
+  {
+    "selector": ".componentList",
+    "expected": {
+      "x": 338,
+      "y": 281,
+      "width": 932,
+      "height": 189
+    },
+    "actual": {
+      "x": 338,
+      "y": 281,
+      "width": 932,
+      "height": 189
+    }
+  },
+  {
+    "selector": ".componentRow",
+    "expected": {
+      "x": 338,
+      "y": 281,
+      "width": 932,
+      "height": 43
+    },
+    "actual": {
+      "x": 338,
+      "y": 281,
+      "width": 932,
+      "height": 43
+    }
+  },
+  {
+    "selector": ".infoGrid",
+    "expected": {
+      "x": 314,
+      "y": 504,
+      "width": 980,
+      "height": 54
+    },
+    "actual": {
+      "x": 314,
+      "y": 504,
+      "width": 980,
+      "height": 54
+    }
+  }
+]

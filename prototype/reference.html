@@ -1,0 +1,1712 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>科研工作台 · Interactive Prototype v0.8</title>
+<style>
+:root{
+  --bg:#f5f5f2;--panel:#fafaf7;--side:#ececea;--line:rgba(42,47,44,.075);
+  --text:#2f3431;--muted:#8f9591;--muted2:#a7aca8;--hover:#efefeb;--dark:#343936;
+  --shadow:0 12px 36px rgba(39,44,41,.10),0 2px 6px rgba(39,44,41,.05);
+  font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI","PingFang SC","Microsoft YaHei",sans-serif
+}
+*{box-sizing:border-box}html,body{height:100%}body{margin:0;background:var(--bg);color:var(--text)}
+button,input,textarea,select{font:inherit}button{cursor:pointer}
+button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px solid rgba(52,57,54,.18);outline-offset:2px}
+.app{min-height:100%;display:grid;grid-template-columns:168px minmax(0,1fr)}
+.sidebar{position:sticky;top:0;height:100vh;background:var(--side);border-right:1px solid var(--line);padding:15px 10px;display:flex;flex-direction:column;z-index:30}
+.brand{padding:5px 8px 18px;font-size:12px;font-weight:680;color:#464c48}
+.nav{display:grid;gap:3px}
+.navItem,.sideAction{border:0;background:transparent;color:#737975;border-radius:8px;padding:8px 9px;display:flex;align-items:center;gap:9px;text-align:left;font-size:12px}
+.navItem:hover,.sideAction:hover{background:rgba(255,255,255,.55);color:#474d49}.navItem.active{background:#fff;color:#2f3431;box-shadow:0 1px 2px rgba(0,0,0,.035)}
+.icon{width:16px;text-align:center;color:#959a96}.sideBottom{margin-top:auto;display:grid;gap:2px}.sideAction{font-size:10px;color:#999e9a}
+.main{min-width:0}.topbar{height:48px;position:sticky;top:0;z-index:20;background:rgba(250,250,247,.93);backdrop-filter:blur(14px);border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;padding:0 18px;color:#939894;font-size:10px}
+.topLeft,.topRight{display:flex;align-items:center;gap:8px}.topbar button{border:0;background:transparent;color:#747a76;padding:5px 7px;border-radius:6px;font-size:10px}.topbar button:hover{background:var(--hover)}
+.page{padding:42px 42px 72px;max-width:1500px;margin:0 auto}.pageHeader{display:flex;justify-content:space-between;align-items:flex-end;gap:20px;margin-bottom:24px}.pageHeader h1{font-size:28px;letter-spacing:-.025em;margin:0}.pageHeader p{font-size:11px;color:#969b98;margin:7px 0 0;max-width:700px}
+.primary{border:0;background:var(--dark);color:white;border-radius:8px;padding:7px 11px;font-size:11px}.primary:hover{background:#292e2b}.ghost{border:0;background:transparent;color:#747a76;border-radius:7px;padding:6px 8px;font-size:10px}.ghost:hover{background:var(--hover)}
+.toolbar{border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 0}.toolbarLeft,.toolbarRight,.segmented{display:flex;align-items:center;gap:3px}.toolbar button{border:0;background:transparent;color:#7d827f;padding:5px 8px;border-radius:6px;font-size:10px}.toolbar button:hover{background:var(--hover)}
+.searchPseudo{min-width:115px;text-align:left!important;background:#efefeb!important;color:#a4a9a5!important}.segmented{background:#ecece8;border-radius:7px;padding:2px}.segmented button.active{background:white;color:#383e3a;box-shadow:0 1px 2px rgba(0,0,0,.04)}
+.tableWrap{overflow:auto;background:var(--panel);border-bottom:1px solid var(--line)}table{border-collapse:collapse;width:100%;min-width:850px}th{font-size:9px;font-weight:500;color:#9ba09d;text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);white-space:nowrap;background:#f8f8f5}td{font-size:10px;color:#666c68;padding:10px;border-bottom:1px solid rgba(42,47,44,.045);white-space:nowrap}tbody tr{cursor:pointer}tbody tr:hover{background:#f0f0ec}.primaryCell{font-weight:620;color:#343936}.muted{color:#a0a5a1}.pill,.status{display:inline-block;background:#ecece7;color:#747976;border-radius:999px;padding:3px 7px;font-size:9px}
+.cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:12px}.card{border:1px solid rgba(42,47,44,.06);background:var(--panel);border-radius:12px;padding:16px;text-align:left;color:#424844}.card:hover{border-color:rgba(42,47,44,.14);transform:translateY(-1px)}.cardTop{display:flex;justify-content:space-between;gap:12px}.card h3{font-size:12px;margin:8px 0 14px}.miniProps{display:flex;flex-wrap:wrap;gap:6px}.miniProps span{font-size:9px;background:#efefeb;color:#777d79;border-radius:5px;padding:4px 6px}
+.tabs{display:flex;gap:3px;margin:10px 0}.tabs button{border:0;background:transparent;color:#858a87;padding:6px 9px;border-radius:7px;font-size:10px}.tabs button:hover{background:var(--hover)}.tabs button.active{background:#fff;color:#393f3b;box-shadow:0 1px 2px rgba(0,0,0,.04)}
+.editorPage,.detailPage{min-height:calc(100vh - 48px);background:var(--panel)}.detailTop,.editorTop{display:flex;justify-content:space-between;align-items:center;padding:14px 24px;color:#999e9b;font-size:10px}.back,.detailTop button,.editorTop button{border:0;background:transparent;color:#757b77;padding:5px 7px;border-radius:6px;font-size:10px}.detailTop button:hover,.editorTop button:hover{background:var(--hover)}.actions{display:flex;align-items:center;gap:7px}
+.editorHeader{width:min(840px,calc(100% - 64px));margin:26px auto 4px}.sampleCode{font-size:29px;font-weight:700;letter-spacing:-.03em}.sampleName{border:0;background:transparent;outline:none;width:min(560px,80vw);font-size:13px;color:#878d89;padding:5px 0}
+.editorShell{width:min(840px,100%);margin:0 auto;padding:14px 32px 30px}.record{margin:13px 0}.recordMain{display:flex;align-items:flex-start;gap:8px;font-size:15px;line-height:1.75}.fold{width:18px;border:0;background:transparent;color:#a0a5a1;padding:1px 0}.recordText{flex:1}.details{margin-left:30px;margin-top:4px;display:grid;gap:3px}.detailLine{font-size:13px;line-height:1.65;color:#717672}.ref{display:inline;border-radius:4px;padding:0 3px;font-weight:620;white-space:nowrap}.material{background:#f1efe9;color:#55534d}.equipment{background:#ecefeb;color:#526058}.sampleRef{background:#eceff2;color:#52616b}.process{background:#f0ece7;color:#665b50}.semantic{background:transparent;padding:0;color:#72818a;font-weight:620}.claimRef{color:#806d82}
+.editorComposer{margin:18px 0 0 28px;border-top:1px solid var(--line);padding-top:13px}.composerRow{display:flex;gap:8px}.composerInput{flex:1;border:0;background:transparent;outline:none;font-size:14px;padding:7px 0;color:#353a37}.composerHint{font-size:9px;color:#a6aba7;margin-top:6px}
+.editorFooter{width:min(760px,calc(100% - 64px));margin:0 auto 26px;border-top:1px solid var(--line);padding-top:11px;display:flex;gap:14px;color:#a3a8a4;font-size:9px}kbd{background:#ecece8;border-radius:4px;padding:1px 4px}
+.detailHero{width:min(980px,calc(100% - 80px));margin:34px auto 24px}.eyebrow{font-size:9px;letter-spacing:.08em;color:#a7aca8}.detailHero h1{font-size:30px;line-height:1.2;letter-spacing:-.03em;margin:7px 0 8px}.metaLine{display:flex;flex-wrap:wrap;align-items:center;gap:10px;color:#929794;font-size:10px}.metaLine button{border:0;background:transparent;color:#717773;text-decoration:underline;text-decoration-color:#ddd;font-size:10px;padding:0}
+.analysisTitle{width:100%;border:0;background:transparent;outline:none;font-size:31px;font-weight:690;letter-spacing:-.03em;color:#303532;padding:4px 0}.analysisQuestion{width:100%;border:0;background:transparent;outline:none;resize:none;min-height:58px;color:#838985;font-size:12px;line-height:1.6;padding:4px 0}
+.analysisToolbar,.analysisGrid,.contentArea,.resourceDetailGrid,.claimLayout{width:min(980px,calc(100% - 80px));margin-left:auto;margin-right:auto}.analysisToolbar{display:flex;gap:4px;margin-bottom:12px}.analysisToolbar button{border:0;background:transparent;color:#777d79;padding:6px 8px;border-radius:6px;font-size:10px}.analysisToolbar button:hover{background:var(--hover)}.analysisToolbar .primary{background:var(--dark);color:white}
+.analysisGrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:70px}.block{background:#f4f4f0;border:1px solid rgba(42,47,44,.05);border-radius:12px;padding:15px}.span2{grid-column:span 2}.blockTitle{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;font-size:10px;color:#8d928f}.blockTitle button{border:0;background:transparent;color:#939895;font-size:9px}.entityChips,.propertyTokens{display:flex;flex-wrap:wrap;gap:6px}.entityChips button,.propertyTokens span{border:0;background:#eaeae6;color:#646a66;border-radius:7px;padding:5px 7px;font-size:9px}
+.compareTable{min-width:0}.compareTable th,.compareTable td{font-size:9px;padding:7px 8px}.assetRow{width:100%;display:flex;justify-content:space-between;align-items:center;border:0;background:transparent;padding:8px 2px;text-align:left;color:#4e5450}.assetRow:hover{background:#ecece8;border-radius:7px}.assetRow div{display:flex;flex-direction:column;gap:2px}.assetRow b{font-size:10px}.assetRow small{font-size:8px;color:#9da29e}.chart{height:180px;border-radius:8px;background:linear-gradient(180deg,rgba(88,96,91,.02),rgba(88,96,91,.06));position:relative;overflow:hidden}.chart svg{width:100%;height:100%;color:#626965}
+.claimCard{width:100%;display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;border:0;background:#efefeb;border-radius:9px;padding:11px;text-align:left}.claimCard b{font-size:10px;color:#484e4a}.claimCard small{font-size:8px;color:#999e9b}
+.contentArea{margin-bottom:70px}.dataBox{background:#f4f4f0;border-radius:14px;padding:24px}.dataBox p{font-size:15px;line-height:1.8;color:#4f5551;max-width:760px}.dataBox svg{width:100%;height:300px;color:#616864}.infoGrid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:10px}.infoCard{background:#f4f4f0;border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:6px}.infoCard label{font-size:8px;color:#9ca19d}.infoCard span,.infoCard button{font-size:9px;color:#555b57}.infoCard button{border:0;background:transparent;padding:0;text-align:left;text-decoration:underline;text-decoration-color:#ddd}
+.claimHero{width:min(860px,calc(100% - 80px));margin:44px auto 28px}.claimHero h1{font-size:30px;line-height:1.2;letter-spacing:-.03em;margin:8px 0}.claimHero p{font-size:11px;color:#929794;line-height:1.6;max-width:680px}.claimLayout{display:grid;grid-template-columns:minmax(0,1fr) 240px;gap:14px;margin-bottom:70px}.evidenceColumn{display:grid;gap:8px}.evidenceCard{border:1px solid rgba(42,47,44,.06);background:#f6f6f2;border-radius:10px;padding:13px;text-align:left;display:flex;flex-direction:column;gap:4px}.evidenceCard:hover{border-color:rgba(42,47,44,.13)}.evidenceCard b{font-size:10px}.evidenceCard span{font-size:8px;color:#9ca09d}.evidenceCard p{font-size:9px;line-height:1.5;color:#737975}.addLink{border:0;background:transparent;color:#777d79;font-size:9px;text-align:left;padding:7px 2px}
+.resourceDetailGrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:70px}.detailCard{background:#f4f4f0;border-radius:12px;padding:15px}.propertyRows{display:grid;gap:8px;margin-top:12px}.propertyRows div{display:flex;justify-content:space-between;gap:16px;border-bottom:1px solid rgba(42,47,44,.05);padding-bottom:7px}.propertyRows span{font-size:9px;color:#9ca19d}.propertyRows b{font-size:9px;font-weight:560}.unitList{display:grid;gap:5px;margin-top:10px}.unitList div{display:flex;justify-content:space-between;background:#eaeae6;border-radius:7px;padding:7px 9px}.unitList b,.unitList span{font-size:9px}.unitList span{color:#9ca09d}
+.overlay{position:fixed;inset:0;background:rgba(30,34,31,.18);z-index:100;display:flex;align-items:flex-start;justify-content:center;padding-top:12vh}.modal{width:min(620px,calc(100% - 32px));background:#fbfbf8;border:1px solid rgba(42,47,44,.08);border-radius:14px;box-shadow:var(--shadow);overflow:hidden}.modalHeader{display:flex;justify-content:space-between;align-items:center;padding:15px 17px;border-bottom:1px solid var(--line)}.modalHeader b{font-size:12px}.close{border:0;background:transparent;color:#858b87}.modalBody{padding:16px}.modalFooter{padding:12px 16px;border-top:1px solid var(--line);display:flex;justify-content:flex-end;gap:7px}.field{display:grid;gap:6px;margin-bottom:12px}.field label{font-size:9px;color:#969b98}.field input,.field textarea,.field select{border:1px solid rgba(42,47,44,.10);background:white;border-radius:8px;padding:8px 9px;color:#464c48;font-size:10px}.field textarea{min-height:80px;resize:vertical}.checkGrid{display:grid;grid-template-columns:1fr 1fr;gap:7px}.check{display:flex;align-items:center;gap:7px;background:#f1f1ed;border-radius:8px;padding:8px;font-size:10px;color:#636965}.check input{accent-color:#3c423e}
+.drawer{position:fixed;top:48px;right:0;bottom:0;width:360px;background:#fbfbf8;border-left:1px solid var(--line);box-shadow:-12px 0 32px rgba(39,44,41,.08);z-index:90;display:flex;flex-direction:column}.drawerHeader{padding:15px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center}.drawerHeader b{font-size:12px}.drawerBody{padding:15px;overflow:auto}.historyItem{padding:10px 0;border-bottom:1px solid var(--line)}.historyItem b{display:block;font-size:10px;margin-bottom:4px}.historyItem span{font-size:9px;color:#9da29e}.historyItem p{font-size:9px;color:#737975;line-height:1.5}
+.popover{position:fixed;z-index:110;width:230px;background:#fbfbf8;border:1px solid rgba(42,47,44,.08);border-radius:10px;box-shadow:var(--shadow);padding:5px}.menuItem{width:100%;border:0;background:transparent;text-align:left;border-radius:7px;padding:8px 9px;color:#565c58;font-size:10px}.menuItem:hover{background:#efefeb}.menuItem.danger{color:#9a6262}.menuSep{height:1px;background:var(--line);margin:4px}
+.toast{position:fixed;bottom:24px;right:24px;background:#343936;color:white;border-radius:9px;padding:9px 12px;font-size:10px;z-index:150;box-shadow:var(--shadow)}
+.globalSearch{width:min(680px,calc(100% - 32px))}.searchInput{width:100%;border:0;background:transparent;outline:none;padding:16px 18px;font-size:15px;border-bottom:1px solid var(--line)}.searchResults{padding:8px;max-height:430px;overflow:auto}.result{width:100%;border:0;background:transparent;border-radius:8px;padding:10px;text-align:left;display:grid;grid-template-columns:80px 1fr auto;gap:10px;align-items:center}.result:hover{background:#efefeb}.resultType{font-size:9px;color:#9ea39f}.result b{font-size:10px}.result small{font-size:8px;color:#a1a6a2}
+.emptyState{padding:60px 20px;text-align:center;color:#9aa09c}.emptyState b{display:block;color:#5f6561;font-size:12px;margin-bottom:6px}.emptyState p{font-size:10px}
+@media(max-width:980px){.app{grid-template-columns:60px minmax(0,1fr)}.brand{font-size:0}.brand:after{content:"RD";font-size:10px}.navItem{justify-content:center}.navItem span:last-child{display:none}.sideBottom{display:none}.page{padding:30px 20px 60px}.cards{grid-template-columns:1fr 1fr}.analysisGrid,.resourceDetailGrid{grid-template-columns:1fr}.span2{grid-column:span 1}.infoGrid{grid-template-columns:1fr 1fr}.claimLayout{grid-template-columns:1fr}.drawer{width:min(360px,90vw)}}
+@media(max-width:640px){.app{grid-template-columns:1fr}.sidebar,.topbar{display:none}.page{padding:24px 16px 50px}.cards{grid-template-columns:1fr}.detailHero,.analysisToolbar,.analysisGrid,.contentArea,.claimHero,.claimLayout,.resourceDetailGrid{width:calc(100% - 30px)}.infoGrid{grid-template-columns:1fr}}
+
+/* v0.9: semantic tokens, Data attachment children, unobtrusive design-note drawer */
+.pageHeaderActions{display:flex;align-items:center;gap:7px}
+.designNoteBtn{border:0;background:transparent;color:#9aa09c;border-radius:7px;padding:6px 7px;font-size:9px}
+.designNoteBtn:hover{background:var(--hover);color:#626864}
+.ref{border-radius:5px;padding:1px 5px}
+.semanticBadge{display:inline-flex;align-items:center;height:18px;border-radius:5px;padding:0 5px;margin-right:5px;font-size:9px;font-weight:650;vertical-align:1px}
+.dataBadge{background:#e9eff1;color:#61747e}.claimBadge{background:#f0ebf0;color:#776879}
+.dataLine{display:flex;align-items:center;min-height:24px;flex-wrap:wrap}.dataLineText{color:#59615d}.dataMetaSep{color:#b0b5b1;margin:0 3px}
+.dataChildren{margin:2px 0 3px 27px;display:grid;gap:2px}.fileBullet{display:flex;align-items:center;min-height:24px;color:#a3a8a4;font-size:11px}
+.fileChip{height:22px;max-width:245px;border:0;background:#eceeea;color:#59605c;border-radius:5px;padding:0 6px 0 4px;display:inline-flex;align-items:center;gap:5px;vertical-align:middle}.fileChip:hover{background:#e5e8e3}
+.fileIcon{width:20px;height:16px;border-radius:4px;background:#f8f8f5;display:inline-flex;align-items:center;justify-content:center;font-size:7px;font-weight:700;color:#7c837e;flex:0 0 auto}
+.fileName{font-size:9px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.fileJoin{display:inline-block;width:22px;border-top:1px dashed #b9beb9;margin:0 6px}
+.componentList{display:grid;gap:7px;margin-top:12px}.componentRow{display:grid;grid-template-columns:92px 1fr auto;gap:10px;align-items:center;background:#eceee9;border-radius:8px;padding:8px 9px}
+.componentKind{font-size:8px;color:#929894}.componentMain{font-size:9px;color:#535a56;min-width:0}.componentMain b{display:block;font-size:9px;color:#444a46;margin-bottom:2px}.componentMain span{color:#8d938f;font-size:8px}.componentRole{font-size:8px;color:#9ca19d}
+.noteDrawer{width:430px}.noteIntro{font-size:10px;line-height:1.65;color:#68706b;margin:0 0 12px}.noteSection{padding:12px 0;border-top:1px solid var(--line)}.noteSection:first-of-type{border-top:0}.noteSection h4{font-size:10px;margin:0 0 7px;color:#4c534f}.noteSection p,.noteSection li{font-size:9px;line-height:1.65;color:#747b77}.noteSection ul{padding-left:16px;margin:6px 0}.noteCode{white-space:pre-wrap;background:#efefeb;border-radius:8px;padding:9px;font:8px/1.55 ui-monospace,SFMono-Regular,Menlo,monospace;color:#626965;overflow:auto}
+.inlineNoteBtn{border:0!important;background:transparent!important;color:#a2a7a3!important;padding:1px 4px!important;font-size:8px!important}.inlineNoteBtn:hover{color:#69706c!important;background:#ecece8!important}
+
+
+/* v1.0 */
+.selectCol{width:32px;text-align:center}
+.rowCheck{opacity:0;pointer-events:none;transition:opacity .12s}
+.dbRow:hover .rowCheck,.tableWrap.hasSelection .rowCheck{opacity:1;pointer-events:auto}
+.bulkBar{display:flex;align-items:center;gap:7px;padding:8px 10px;margin:0 0 8px;background:#eeeeea;border-radius:9px;color:#656b67;font-size:9px}
+.bulkBar strong{font-size:9px;margin-right:auto}
+.bulkBar button{border:0;background:transparent;color:#696f6b;border-radius:6px;padding:5px 7px;font-size:9px}
+.bulkBar button:hover{background:#e5e5e0}
+.groupHead{text-align:center!important;color:#777d79!important;border-left:1px solid rgba(42,47,44,.035)}
+.subHead{cursor:pointer;user-select:none}
+.subHead:hover{background:#f0f0ec}
+.sortMark{margin-left:4px;color:#646b67;font-size:8px}
+.codeTitle{font-size:30px;font-weight:700;letter-spacing:-.03em;min-width:160px;outline:none;display:inline-block;padding:2px 0}
+.codeTitle:focus{background:#f3f3ef;border-radius:6px}
+.directEditor{width:min(840px,100%);margin:0 auto;padding:16px 32px 55px}
+.editableRecord{outline:none;border-radius:5px;padding:1px 3px}
+.editableRecord:focus{background:#f4f4f0}
+.blankRecord{display:flex;gap:8px;align-items:flex-start;margin-top:12px}
+.blankBullet{color:#727874;line-height:1.75}
+.blankEdit{min-height:28px;flex:1;outline:none;font-size:15px;line-height:1.75}
+.blankEdit:empty:before{content:attr(data-placeholder);color:#b0b5b1}
+.analysisCards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:12px}
+.analysisCard{border:1px solid rgba(42,47,44,.06);background:var(--panel);border-radius:12px;padding:16px;text-align:left;color:#424844;min-height:135px}
+.analysisCard:hover{border-color:rgba(42,47,44,.14);transform:translateY(-1px)}
+.analysisCard .eyebrow{margin-bottom:8px}.analysisCard h3{font-size:13px;line-height:1.45;margin:0 0 18px}
+.cardStats{display:flex;gap:12px;color:#8f9591;font-size:9px}.cardStats b{color:#555b57;font-weight:620}
+.conversionTable{width:100%;min-width:0;margin-top:10px}.conversionTable th,.conversionTable td{font-size:9px;padding:7px 8px}
+.formula{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:8px;color:#6d746f;background:#ecece8;border-radius:5px;padding:2px 5px}
+@media(max-width:980px){.analysisCards{grid-template-columns:1fr 1fr}}
+@media(max-width:640px){.analysisCards{grid-template-columns:1fr}}
+
+
+/* v1.1 */
+.centerHead,.centerCell{text-align:center!important}
+.singlePropHead{cursor:grab;user-select:none;text-align:center!important;white-space:nowrap}
+.singlePropHead:active{cursor:grabbing}
+.objToken{display:inline-block;background:#eceeea;color:#676d69;border-radius:5px;padding:2px 5px;margin-right:4px;font-size:8px;vertical-align:1px}
+.propText{color:#8a908c;font-size:8px}
+.dragHint{display:inline-block;margin-left:4px;color:#b1b6b2;font-size:7px}
+.draggingHead{opacity:.45}
+.dropHead{background:#ecece8!important}
+.dataRowCheck{opacity:0;pointer-events:none;transition:opacity .12s}
+.dataDbRow:hover .dataRowCheck,.tableWrap.hasDataSelection .dataRowCheck{opacity:1;pointer-events:auto}
+.fileBullet{gap:0}
+.fileChildWrap{display:grid;gap:2px;margin-left:27px}
+.fileChildRow{display:flex;align-items:center;min-height:24px;color:#a3a8a4;font-size:11px}
+
+
+/* v1.2 */
+.truncateHead{
+  display:inline-block;
+  max-width:115px;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  vertical-align:middle;
+}
+.longObjToken{
+  display:inline-block;
+  max-width:92px;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  vertical-align:middle;
+}
+.longPropText{
+  display:inline-block;
+  max-width:88px;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  vertical-align:middle;
+}
+.batchPage{padding:34px 34px 72px;max-width:1600px;margin:0 auto}
+.batchHero{display:flex;justify-content:space-between;align-items:flex-start;gap:20px;margin-bottom:20px}
+.batchHero h1{font-size:26px;margin:0 0 7px;letter-spacing:-.025em}
+.batchHero p{font-size:10px;color:#929794;margin:0;line-height:1.6}
+.batchActions{display:flex;gap:7px}
+.batchTableWrap{overflow:auto;background:var(--panel);border:1px solid var(--line);border-radius:10px}
+.batchTable{min-width:1150px}
+.batchTable th,.batchTable td{text-align:center}
+.batchInput{
+  width:100%;
+  min-width:86px;
+  border:0;
+  background:transparent;
+  text-align:center;
+  color:#505652;
+  font-size:10px;
+  padding:4px 3px;
+  outline:none;
+}
+.batchInput:focus{background:#f0f0ec;border-radius:5px}
+.rowNumber{color:#a1a6a2;font-size:9px}
+.batchAddRow{margin-top:10px}
+.templateNote{display:flex;gap:7px;align-items:center;background:#efefeb;border-radius:8px;padding:8px 10px;color:#747a76;font-size:9px;margin-bottom:10px}
+.templateNote b{color:#505652}
+@media(max-width:640px){.batchPage{padding:20px 14px 60px}}
+
+
+/* v1.3 */
+.hoverTooltip{
+  position:fixed;z-index:220;max-width:360px;pointer-events:none;
+  background:#303532;color:#fff;border-radius:6px;padding:5px 7px;
+  font-size:8px;line-height:1.4;box-shadow:0 4px 12px rgba(20,24,21,.16)
+}
+.liveBulletArea{margin-top:10px}
+.liveBulletLine{display:flex;align-items:flex-start;gap:8px;min-height:29px}
+.liveBulletLine[data-level="2"]{margin-left:30px}
+.liveBulletLine[data-level="3"]{margin-left:58px}
+.liveBulletDot{width:12px;color:#717773;font-size:13px;line-height:1.8;text-align:center;flex:0 0 12px}
+.liveBulletEdit{
+  flex:1;min-height:28px;outline:none;border-radius:5px;padding:2px 3px;
+  font-size:15px;line-height:1.7;color:#363b38
+}
+.liveBulletLine[data-level="2"] .liveBulletEdit{font-size:13px;color:#707672}
+.liveBulletLine[data-level="3"] .liveBulletEdit{font-size:11px;color:#7e8480}
+.liveBulletEdit:focus{background:#f4f4f0}
+.liveBulletEdit:empty:before{content:attr(data-placeholder);color:#b0b5b1}
+.claimComposer{margin-top:10px;border-top:1px solid rgba(42,47,44,.055);padding-top:10px}
+.claimComposerRow{display:flex;gap:7px;align-items:flex-start}
+.claimComposerInput{
+  flex:1;border:0;background:transparent;outline:none;font-size:10px;line-height:1.65;
+  padding:6px 2px;color:#4c524e
+}
+.claimComposerHint{font-size:8px;color:#9ca19d;line-height:1.55;margin-top:5px}
+.evidenceChips{display:flex;flex-wrap:wrap;gap:5px;margin-top:7px}
+.evidenceChoice{display:flex;align-items:center;gap:4px;background:#ecece8;border-radius:6px;padding:4px 6px;font-size:8px;color:#717773}
+.freshDataTitle{
+  border:0;background:transparent;outline:none;width:100%;font-size:30px;font-weight:680;
+  line-height:1.2;letter-spacing:-.03em;color:#303532;padding:5px 0
+}
+.dataDropZone{
+  border:1px dashed #c8cdc8;border-radius:10px;padding:22px;text-align:center;
+  color:#999f9a;font-size:9px;background:#f6f6f2
+}
+.dataDropZone button{border:0;background:#eaeae6;color:#646a66;border-radius:7px;padding:6px 9px;font-size:9px;margin-top:7px}
+.claimInlineList{display:grid;gap:7px;margin-top:9px}
+.claimInlineItem{background:#efefeb;border-radius:8px;padding:9px 10px;font-size:9px;color:#505652}
+.claimInlineItem small{display:block;color:#999e9a;font-size:8px;margin-top:4px}
+
+
+/* v1.4 */
+
+/* Drag grip only appears on hover */
+.dragHint{opacity:0;transition:opacity .12s ease}
+.singlePropHead:hover .dragHint{opacity:1}
+
+/* Embedded Claim editor */
+.claimEditor{
+  display:grid;
+  gap:4px;
+}
+.claimEditorLine{
+  display:flex;
+  align-items:flex-start;
+  gap:8px;
+  min-height:27px;
+}
+.claimEditorLine.child{
+  margin-left:31px;
+}
+.claimBullet{
+  width:12px;
+  flex:0 0 12px;
+  color:#777d79;
+  line-height:1.75;
+  font-size:12px;
+  text-align:center;
+}
+.claimEditorText{
+  flex:1;
+  min-height:25px;
+  padding:2px 3px;
+  border-radius:5px;
+  outline:none;
+  font-size:10px;
+  line-height:1.65;
+  color:#4c524e;
+}
+.claimEditorLine.child .claimEditorText{
+  font-size:9px;
+  color:#777d79;
+}
+.claimEditorText:focus{background:#ecece8}
+.claimEditorText:empty:before{content:attr(data-placeholder);color:#a9aeaa}
+.claimDirectNote{
+  font-size:8px;
+  color:#9aa09c;
+  margin-top:6px;
+  line-height:1.55;
+}
+.claimEditorBadge{
+  display:inline-flex;
+  align-items:center;
+  height:18px;
+  margin-right:5px;
+  padding:0 5px;
+  border-radius:5px;
+  background:#f0ebf0;
+  color:#776879;
+  font-size:8px;
+  font-weight:650;
+  vertical-align:1px;
+}
+
+/* Copy indicator */
+.copyOrigin{
+  display:inline-block;
+  margin-top:7px;
+  padding:3px 6px;
+  border-radius:5px;
+  background:#efefeb;
+  color:#8b918d;
+  font-size:8px;
+}
+
+/* UI theme switcher */
+.themeSwitch{
+  display:flex;
+  align-items:center;
+  gap:2px;
+  padding:2px;
+  border-radius:7px;
+  background:#ecece8;
+}
+.themeSwitch button{
+  border:0;
+  background:transparent;
+  color:#8a908c;
+  padding:4px 6px;
+  border-radius:5px;
+  font-size:8px;
+}
+.themeSwitch button.active{
+  background:#fff;
+  color:#3e4440;
+  box-shadow:0 1px 2px rgba(0,0,0,.04);
+}
+
+/* Modern minimal = current baseline */
+.theme-minimal{
+  --bg:#f5f5f2;
+  --panel:#fafaf7;
+  --side:#ececea;
+  --line:rgba(42,47,44,.075);
+  --text:#2f3431;
+  --muted:#8f9591;
+}
+
+/* Paper */
+.theme-paper{
+  --bg:#efe9dd;
+  --panel:#f8f3e9;
+  --side:#e8e0d3;
+  --line:rgba(82,67,49,.10);
+  --text:#383128;
+  --muted:#8e8478;
+  background:
+    radial-gradient(circle at 25% 20%,rgba(255,255,255,.16),transparent 28%),
+    radial-gradient(circle at 75% 80%,rgba(102,83,60,.03),transparent 32%),
+    #efe9dd;
+}
+.theme-paper .topbar,
+.theme-paper .editorPage,
+.theme-paper .detailPage,
+.theme-paper .tableWrap,
+.theme-paper .card,
+.theme-paper .analysisCard{
+  background:rgba(248,243,233,.96);
+}
+.theme-paper .sidebar{background:#e8e0d3}
+.theme-paper .ref,
+.theme-paper .objToken{
+  background:#ede5d8;
+}
+.theme-paper .block,
+.theme-paper .detailCard,
+.theme-paper .dataBox,
+.theme-paper .infoCard{
+  background:#f1eadf;
+}
+
+/* Glass */
+.theme-glass{
+  --bg:#e9eef0;
+  --panel:rgba(255,255,255,.58);
+  --side:rgba(242,246,247,.54);
+  --line:rgba(78,92,98,.12);
+  --text:#273034;
+  --muted:#7d8a8f;
+  background:
+    radial-gradient(circle at 12% 10%,rgba(190,218,228,.42),transparent 32%),
+    radial-gradient(circle at 88% 22%,rgba(224,207,235,.34),transparent 30%),
+    linear-gradient(135deg,#eaf0f2,#f0eef4);
+}
+.theme-glass .sidebar,
+.theme-glass .topbar,
+.theme-glass .editorPage,
+.theme-glass .detailPage,
+.theme-glass .tableWrap,
+.theme-glass .card,
+.theme-glass .analysisCard,
+.theme-glass .block,
+.theme-glass .detailCard,
+.theme-glass .dataBox,
+.theme-glass .infoCard{
+  background:rgba(255,255,255,.48);
+  backdrop-filter:blur(18px) saturate(1.12);
+  -webkit-backdrop-filter:blur(18px) saturate(1.12);
+}
+.theme-glass .sidebar{
+  box-shadow:8px 0 28px rgba(62,76,82,.05);
+}
+.theme-glass .card,
+.theme-glass .analysisCard,
+.theme-glass .block,
+.theme-glass .detailCard{
+  box-shadow:0 8px 28px rgba(63,77,83,.06);
+}
+.theme-glass .navItem.active,
+.theme-glass .segmented button.active,
+.theme-glass .themeSwitch button.active{
+  background:rgba(255,255,255,.72);
+}
+
+
+/* ===== v1.5 interaction refinements ===== */
+.singlePropHead{
+  position:relative;
+  transition:background .14s ease, opacity .14s ease, box-shadow .14s ease;
+}
+.singlePropHead:hover{
+  background:rgba(94,108,101,.07);
+}
+.colHoverCell{
+  background:rgba(94,108,101,.035)!important;
+}
+.dragColumnSource{
+  opacity:.32!important;
+}
+.dragTargetBefore::before,
+.dragTargetAfter::after{
+  content:"";
+  position:absolute;
+  top:3px;bottom:3px;
+  width:2px;
+  border-radius:999px;
+  background:currentColor;
+  opacity:.55;
+}
+.dragTargetBefore::before{left:0}
+.dragTargetAfter::after{right:0}
+.columnGhost{
+  position:fixed;
+  left:-9999px;top:-9999px;
+  width:150px;
+  padding:9px 10px;
+  border-radius:10px;
+  background:rgba(252,252,249,.95);
+  border:1px solid rgba(42,47,44,.10);
+  box-shadow:0 14px 38px rgba(39,44,41,.16);
+  color:#4a504c;
+  font-size:9px;
+  z-index:9999;
+}
+.columnGhost strong{display:block;font-size:9px;margin-bottom:7px}
+.columnGhost span{display:block;padding:4px 0;border-top:1px solid rgba(42,47,44,.06);text-align:center;color:#777d79}
+
+.claimEditor{display:grid;gap:3px}
+.claimInputRow{
+  display:grid;
+  grid-template-columns:14px auto minmax(0,1fr);
+  align-items:start;
+  gap:6px;
+  min-height:28px;
+}
+.claimPropertyRow{
+  margin-left:31px;
+  display:grid;
+  grid-template-columns:14px minmax(0,1fr);
+  align-items:center;
+  gap:6px;
+  min-height:24px;
+}
+.claimTextArea{
+  width:100%;
+  min-height:25px;
+  resize:none;
+  overflow:hidden;
+  border:0;
+  outline:none;
+  background:transparent;
+  color:#4d534f;
+  font-size:10px;
+  line-height:1.65;
+  padding:3px 4px;
+  border-radius:5px;
+}
+.claimTextArea:focus{background:rgba(91,102,96,.055)}
+.claimPropertyInput{
+  width:100%;
+  border:0;
+  outline:none;
+  background:transparent;
+  color:#7c827e;
+  font-size:9px;
+  line-height:1.5;
+  padding:3px 4px;
+  border-radius:5px;
+}
+.claimPropertyInput:focus{background:rgba(91,102,96,.05)}
+.claimInputRow .claimEditorBadge{margin-top:3px}
+.claimInputRow .claimBullet{margin-top:2px}
+.newClaimText::placeholder{color:#a7aca8}
+.claimDirectNote{font-size:8px;color:#999f9b;margin-top:7px;line-height:1.55}
+
+/* ===== Theme system: same layout & actions, different component language ===== */
+.themeSwitch{
+  max-width:360px;
+  overflow:auto;
+  scrollbar-width:none;
+}
+.themeSwitch::-webkit-scrollbar{display:none}
+
+/* 1. Scientific Precision / Precision Glass */
+.theme-precision{
+  --bg:#f3f5f5;
+  --panel:#fbfcfb;
+  --side:rgba(241,244,244,.72);
+  --line:rgba(43,54,50,.075);
+  --text:#27302d;
+  --muted:#8b9490;
+  --hover:rgba(65,82,76,.055);
+  --dark:#313a37;
+  background:
+    radial-gradient(circle at 3% 0%,rgba(187,216,222,.18),transparent 28%),
+    radial-gradient(circle at 92% 8%,rgba(211,205,230,.14),transparent 25%),
+    #f3f5f5;
+}
+.theme-precision .sidebar,
+.theme-precision .topbar{
+  background:rgba(246,249,249,.64);
+  backdrop-filter:blur(22px) saturate(1.18);
+  -webkit-backdrop-filter:blur(22px) saturate(1.18);
+}
+.theme-precision .sidebar{
+  box-shadow:8px 0 26px rgba(44,58,53,.035);
+}
+.theme-precision .topbar{
+  box-shadow:0 5px 22px rgba(44,58,53,.035);
+}
+.theme-precision .navItem.active,
+.theme-precision .segmented button.active,
+.theme-precision .themeSwitch button.active{
+  background:rgba(255,255,255,.84);
+  box-shadow:0 1px 2px rgba(37,47,43,.05), inset 0 0 0 1px rgba(255,255,255,.7);
+}
+.theme-precision .primary{
+  background:rgba(42,52,48,.92);
+  box-shadow:0 4px 12px rgba(38,47,43,.09);
+}
+.theme-precision .modal,
+.theme-precision .drawer,
+.theme-precision .popover{
+  background:rgba(250,252,251,.82);
+  backdrop-filter:blur(24px) saturate(1.2);
+  -webkit-backdrop-filter:blur(24px) saturate(1.2);
+  border-color:rgba(70,87,81,.10);
+  box-shadow:0 20px 54px rgba(39,52,47,.13);
+}
+.theme-precision .block,
+.theme-precision .detailCard{
+  background:#f5f7f5;
+  border:1px solid rgba(55,72,65,.055);
+}
+.theme-precision .card,
+.theme-precision .analysisCard{
+  background:#fbfcfb;
+  border-radius:11px;
+  box-shadow:0 1px 1px rgba(39,50,46,.025);
+}
+
+/* 2. Graphite / Linear-like tool style */
+.theme-graphite{
+  --bg:#111315;
+  --panel:#171a1c;
+  --side:#141719;
+  --line:rgba(225,233,229,.075);
+  --text:#e8ecea;
+  --muted:#8d9792;
+  --muted2:#727c77;
+  --hover:rgba(255,255,255,.055);
+  --dark:#dfe6e2;
+  color:#e8ecea;
+  background:#111315;
+}
+.theme-graphite .sidebar,
+.theme-graphite .topbar,
+.theme-graphite .editorPage,
+.theme-graphite .detailPage,
+.theme-graphite .tableWrap,
+.theme-graphite .card,
+.theme-graphite .analysisCard,
+.theme-graphite .modal,
+.theme-graphite .drawer,
+.theme-graphite .popover{
+  background:#16191b;
+  color:#e3e8e5;
+}
+.theme-graphite .topbar{background:rgba(18,21,23,.92);backdrop-filter:blur(18px)}
+.theme-graphite .pageHeader h1,
+.theme-graphite .detailHero h1,
+.theme-graphite .claimHero h1,
+.theme-graphite .sampleCode,
+.theme-graphite .codeTitle,
+.theme-graphite .analysisTitle,
+.theme-graphite .primaryCell,
+.theme-graphite .card h3,
+.theme-graphite .analysisCard h3{
+  color:#edf1ef!important;
+}
+.theme-graphite td,
+.theme-graphite th,
+.theme-graphite .recordText,
+.theme-graphite .detailLine,
+.theme-graphite .claimTextArea,
+.theme-graphite .claimPropertyInput{
+  color:#aeb7b2;
+}
+.theme-graphite th{background:#15181a}
+.theme-graphite tbody tr:hover{background:#1c2022}
+.theme-graphite .block,
+.theme-graphite .detailCard,
+.theme-graphite .dataBox,
+.theme-graphite .infoCard{
+  background:#1a1e20;
+  border-color:rgba(230,237,233,.055);
+  border-radius:7px;
+}
+.theme-graphite .card,
+.theme-graphite .analysisCard,
+.theme-graphite .modal,
+.theme-graphite .drawer,
+.theme-graphite .popover{
+  border-radius:7px;
+  box-shadow:none;
+}
+.theme-graphite .navItem,
+.theme-graphite .sideAction,
+.theme-graphite .ghost,
+.theme-graphite .toolbar button{border-radius:5px}
+.theme-graphite .navItem.active,
+.theme-graphite .segmented button.active,
+.theme-graphite .themeSwitch button.active{
+  background:#222628;color:#f1f4f2;box-shadow:none;
+}
+.theme-graphite .themeSwitch{background:#1c2022}
+.theme-graphite .primary{
+  background:#e4e9e6;color:#151817;border-radius:5px;box-shadow:none;
+}
+.theme-graphite .ref,
+.theme-graphite .objToken,
+.theme-graphite .fileChip,
+.theme-graphite .status,
+.theme-graphite .pill{
+  background:#24292b;color:#c6cfca;
+}
+.theme-graphite .semanticBadge.dataBadge{background:#1d2b31;color:#9bc8da}
+.theme-graphite .semanticBadge.claimBadge,
+.theme-graphite .claimEditorBadge{background:#29222d;color:#c8a9cc}
+
+/* 3. Paper Lab */
+.theme-paperlab{
+  --bg:#efede7;
+  --panel:#fbfaf6;
+  --side:#ebe8df;
+  --line:rgba(76,68,56,.095);
+  --text:#332f29;
+  --muted:#898278;
+  --muted2:#a39b90;
+  --hover:rgba(78,69,57,.05);
+  --dark:#3c3832;
+  background:
+    linear-gradient(rgba(96,83,65,.018) 1px,transparent 1px),
+    #efede7;
+  background-size:100% 28px;
+}
+.theme-paperlab .sidebar{background:#e9e5dc}
+.theme-paperlab .topbar,
+.theme-paperlab .editorPage,
+.theme-paperlab .detailPage{
+  background:rgba(251,250,246,.95);
+}
+.theme-paperlab .pageHeader h1,
+.theme-paperlab .detailHero h1,
+.theme-paperlab .sampleCode,
+.theme-paperlab .codeTitle{
+  font-family:ui-serif,Georgia,"Songti SC",serif;
+  letter-spacing:-.015em;
+}
+.theme-paperlab .card,
+.theme-paperlab .analysisCard,
+.theme-paperlab .block,
+.theme-paperlab .detailCard,
+.theme-paperlab .dataBox,
+.theme-paperlab .infoCard{
+  background:#fbfaf6;
+  border-radius:6px;
+  border-color:rgba(83,72,57,.09);
+  box-shadow:none;
+}
+.theme-paperlab .tableWrap{background:#fbfaf6}
+.theme-paperlab th{background:#f5f2eb}
+.theme-paperlab tbody tr:hover{background:#f4f0e8}
+.theme-paperlab .primary,
+.theme-paperlab .ghost,
+.theme-paperlab .toolbar button,
+.theme-paperlab .navItem,
+.theme-paperlab .tabs button{
+  border-radius:5px;
+}
+.theme-paperlab .primary{background:#3f3a33;box-shadow:none}
+.theme-paperlab .navItem.active,
+.theme-paperlab .segmented button.active,
+.theme-paperlab .themeSwitch button.active{
+  background:#f9f7f1;
+  box-shadow:inset 0 0 0 1px rgba(83,72,57,.07);
+}
+.theme-paperlab .themeSwitch{background:#e5e0d6}
+.theme-paperlab .ref,
+.theme-paperlab .objToken,
+.theme-paperlab .fileChip{
+  background:#eee9df;color:#61594f;border-radius:4px;
+}
+.theme-paperlab .modal,
+.theme-paperlab .drawer,
+.theme-paperlab .popover{
+  background:#fbfaf5;
+  border-radius:7px;
+  box-shadow:0 14px 34px rgba(70,59,45,.10);
+}
+
+/* 4. Dark Instrument */
+.theme-instrument{
+  --bg:#0b1012;
+  --panel:#101719;
+  --side:#0d1416;
+  --line:rgba(158,210,207,.11);
+  --text:#dce8e6;
+  --muted:#738a87;
+  --muted2:#607572;
+  --hover:rgba(115,201,192,.065);
+  --dark:#98ddd3;
+  background:
+    linear-gradient(rgba(115,201,192,.025) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(115,201,192,.018) 1px,transparent 1px),
+    #0b1012;
+  background-size:24px 24px;
+}
+.theme-instrument .sidebar,
+.theme-instrument .topbar,
+.theme-instrument .editorPage,
+.theme-instrument .detailPage,
+.theme-instrument .tableWrap,
+.theme-instrument .modal,
+.theme-instrument .drawer,
+.theme-instrument .popover{
+  background:#0f1618;
+  color:#d7e5e2;
+}
+.theme-instrument .pageHeader h1,
+.theme-instrument .detailHero h1,
+.theme-instrument .claimHero h1,
+.theme-instrument .sampleCode,
+.theme-instrument .codeTitle,
+.theme-instrument .analysisTitle,
+.theme-instrument .primaryCell{
+  color:#e0eeeb!important;
+}
+.theme-instrument td,
+.theme-instrument th,
+.theme-instrument .recordText,
+.theme-instrument .detailLine,
+.theme-instrument .claimTextArea,
+.theme-instrument .claimPropertyInput{
+  color:#a6bbb7;
+}
+.theme-instrument th{
+  background:#11191b;
+  font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+  letter-spacing:.02em;
+}
+.theme-instrument tbody tr:hover{background:#142023}
+.theme-instrument .block,
+.theme-instrument .detailCard,
+.theme-instrument .dataBox,
+.theme-instrument .infoCard,
+.theme-instrument .card,
+.theme-instrument .analysisCard{
+  background:#111a1c;
+  border-radius:4px;
+  border:1px solid rgba(130,196,190,.10);
+  box-shadow:inset 0 0 0 1px rgba(6,10,11,.22);
+}
+.theme-instrument .primary{
+  background:#80cfc4;color:#08110f;border-radius:4px;box-shadow:none;
+}
+.theme-instrument .ghost,
+.theme-instrument .navItem,
+.theme-instrument .toolbar button,
+.theme-instrument .tabs button{border-radius:3px}
+.theme-instrument .navItem.active,
+.theme-instrument .segmented button.active,
+.theme-instrument .themeSwitch button.active{
+  background:#162326;
+  color:#a8e7de;
+  box-shadow:inset 2px 0 0 #75cabe;
+}
+.theme-instrument .themeSwitch{background:#111d20}
+.theme-instrument .ref,
+.theme-instrument .objToken,
+.theme-instrument .fileChip,
+.theme-instrument .status,
+.theme-instrument .pill{
+  background:#162326;color:#a9d8d2;border-radius:3px;
+}
+.theme-instrument .semanticBadge.dataBadge{background:#12282e;color:#85d4e4}
+.theme-instrument .semanticBadge.claimBadge,
+.theme-instrument .claimEditorBadge{background:#241a29;color:#d6a8dd}
+.theme-instrument .chart,
+.theme-instrument svg{color:#79cfc4}
+.theme-instrument .eyebrow,
+.theme-instrument .muted{
+  color:#6f918c!important;
+}
+
+
+/* v1.6: original visual baseline + shared Bullet Editor */
+.claimSharedArea{margin-top:2px}
+.claimSharedArea .liveBulletLine[data-level="1"]{
+  display:grid;
+  grid-template-columns:12px auto minmax(0,1fr);
+  gap:7px;
+  align-items:start;
+}
+.claimSharedArea .liveBulletLine[data-level="2"]{
+  display:grid;
+  grid-template-columns:12px minmax(0,1fr);
+  gap:7px;
+}
+.claimSharedArea .liveBulletLine[data-level="1"] .liveBulletEdit{
+  font-size:10px;
+  color:#4d534f;
+}
+.claimSharedArea .liveBulletLine[data-level="2"] .liveBulletEdit{
+  font-size:9px;
+  color:#7d837f;
+}
+.claimSharedArea .claimEditorBadge{
+  margin-top:4px;
+  height:18px;
+  display:inline-flex;
+  align-items:center;
+  padding:0 5px;
+  border-radius:5px;
+  background:#f0ebf0;
+  color:#776879;
+  font-size:8px;
+  font-weight:650;
+}
+
+
+/* v1.7 — document-first parsing + unified @ Object Picker */
+.objectPicker{position:fixed;width:360px;max-height:360px;overflow:auto;z-index:240;background:#fbfbf8;border:1px solid rgba(42,47,44,.08);border-radius:10px;box-shadow:0 14px 36px rgba(39,44,41,.13);padding:5px}
+.objectPickerHeader{padding:7px 9px 5px;color:#9ca19d;font-size:8px;display:flex;justify-content:space-between;gap:10px}.objectPickerQuery{color:#555b57;font-weight:620}
+.objectResult{width:100%;border:0;background:transparent;border-radius:7px;padding:8px 9px;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center;text-align:left;color:#4e5450}.objectResult:hover{background:#efefeb}
+.objectResultMain{min-width:0;display:flex;flex-direction:column;gap:2px}.objectResultName{font-size:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.objectResultMeta{font-size:8px;color:#9ca19d}
+.roleTag{display:inline-flex;align-items:center;height:18px;padding:0 6px;border-radius:999px;background:#eceeea;color:#777d79;font-size:8px;white-space:nowrap}.deprecatedTag{background:#f0ece9;color:#9a8177}.createTag{background:#eceff0;color:#68777d}.objectPickerSep{height:1px;background:rgba(42,47,44,.07);margin:4px 5px}
+.parseStatus{display:inline-flex;align-items:center;gap:5px;color:#9aa09c;font-size:8px}.parseDot{width:6px;height:6px;border-radius:50%;background:#7f9b8c}.parseStatus.pending .parseDot{background:#b8a57d}
+.docParseNote{margin-top:10px;padding:9px 10px;border-radius:8px;background:#f0f0ec;color:#858b87;font-size:8px;line-height:1.6}
+
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+const state={
+  page:{type:'list',nav:'samples'}, activeNav:'samples', viewMode:'table', resourceTab:'原料',
+  filterOpen:false,sortOpen:false,propsOpen:false,modal:null,drawer:null,popover:null,toast:null,
+  searchText:'', hiddenColumns:new Set(), analysisLayout:'grid', selectedSamples:new Set(), selectedData:new Set(), sortKey:'createdAt', sortDir:'desc', history:[], objectPicker:null, parseState:'ready', sampleColumnOrder:['poa','waterTemp','waterAmount','hpmc','stir','ftirRes','polymerMw'], analysisSeed:null, sampleScrollLeft:0, freshDataName:'2026-09-10-数据', uiTheme:'precision'
+};
+
+const designNotes={
+'samples-list':{title:'样品数据库 · 设计说明',intro:'样品是日常记录的主入口。列表负责浏览、检索，以及把编辑器里已经结构化的对象属性投影成可比较列。',sections:[
+['底层设计','一个 Sample 对应一份 Sample Document。样品编号稳定，名称可编辑。水/温度、搅拌/转速等列来自 ReferenceOccurrence + PropertyValue 的投影。'],
+['前端想法','采用数据库式列表。默认只显示少量通用列，用户可选择任意“对象 / 属性”组合；表格和卡片只是显示方式。'],
+['数据结构','Sample { id, code, metadata, document_id, created_at }\\nProjectionColumn { target_id?, property_definition_id?, aggregation? }\\nReferenceOccurrence { id, target_id, record_unit_id, raw_properties[] }'],
+['写入方法','用户只在编辑器记录过程和属性，列表投影自动更新。同一对象多次出现时默认显示多值，不自动求和。']
+]},
+'sample-editor':{title:'样品编辑器 · 设计说明',intro:'编辑器优先保证自然记录。@、@data 是 Sample Editor 的输入语法；确认后用轻量 token 和语义行表达。Claim 只在 Analysis/Data 的 Claim Editor 中创建。原始文档是事实源，结构化关系由文档异步解析得到。',sections:[
+['文档层级','一级 bullet 是 RecordUnit，用来描述一次操作或测试。二级 bullet 记录父项已声明对象/过程的属性，以及 Data。Data 允许一个特殊附件子行；视觉上可通过 Tab 进入更深一级，但它只承载 DataComponent/File，不开放成通用科研层级。'],
+['Data 推荐写法','快速：@data 红外测试结果\\n可带元数据：@data 红外测试结果｜编号: FTIR-260910-01\\n显式写法也可支持：@data｜名称:红外测试结果｜编号:FTIR-260910-01\\n默认推荐第一种，减少输入负担。'],
+['Data 行语义','@data 后的自由文本作为 primary text component，同时作为默认 display name。若显式“名称”存在则覆盖 display name；自由文本仍保留。不同 Data 必须分行，一行只对应一个 Data 对象。'],
+['文件写入','在 Data 行后 Enter + Tab，或直接把文件拖到 Data 行，创建附件子行。同一附件子行可放多个文件 token；长文件名省略，文件类型用小图标，多个文件用虚线分隔。'],
+['BlockNote 改动评估','属于中等、局部改动，不需要替换或 fork BlockNote。需要：Data 行稳定 dataId；Data 二级项可拥有 attachment child；新增 FileInline/Attachment token；Tab/Enter/drop 上下文校验；保存时把附件子行归一化到 Data.components。真正复杂的是对象生命周期和文件上传事务，而不是渲染。'],
+['对象引用','普通 @对象 确认后显示为不带 @ 的轻量 token。底层保留 target_id/type/occurrence_id。父 RecordUnit 必须先声明子属性行使用的对象/过程。']
+]},
+'analysis-list':{title:'分析数据库 · 设计说明',intro:'“分析”对应 View，是保存的科研分析上下文，不表示一次实验执行。',sections:[
+['底层设计','View 只引用 Sample / Data / Claim / Resource / Process 及必要 revision，不拥有这些对象。'],
+['前端想法','列表页和样品数据库同构；点进去进入专用分析页。可按关联样品数、Data 数、Claim 数筛选。'],
+['数据结构','View { id, title, question, items[], layout, artifacts[] }\\nViewItem { entity_type, entity_id, revision_id?, order }'],
+['边界','View 可以跨多个样品、测试和日期；这正是它与 Data 的区别。']
+]},
+'analysis-detail':{title:'分析页 · 设计说明',intro:'分析页把多个独立科研对象放到同一个问题上下文中查看、比较、作图并形成论点。',sections:[
+['前端想法','上下文、参数比较、Data、Artifact、Claim 是可组合模块。第一版不做无限画布，先做稳定的增删和顺序。'],
+['Data 与 Artifact','Data 是可追溯科学数据单元；Artifact 是分析中的展示/派生产物，例如叠图、比较表。需要独立复用时再提升为 DataComponent 或独立资产。'],
+['Claim','分析页可以创建或引用 Claim。证据关系应固定 Data revision，而不是只引用截图。'],
+['AI','外接 AI 可读取 View context，生成比较、图、描述或 Claim 建议；AI 派生内容记录 provenance，不能静默改原始 Data。']
+]},
+'data-list':{title:'数据数据库 · 设计说明',intro:'Data 是一个具有独立科学意义、可以被引用和讨论的数据单元；它不等同于一个文件或一个数值。',sections:[
+['核心边界','一个 Data 可以包含多个值、序列、图片、文件和不同表示，只要它们共同表达一个主要科学语义。例如一次 FTIR 测试结果可同时包含 raw CSV、处理图和趋势描述。'],
+['与 View 的区别','Data 内部的多个 component 是同一科学数据单元的组成/表示；View 组织多个彼此独立的 Sample/Data/Claim/Resource。'],
+['创建入口','Data 主要从 Sample Editor 的 @data 创建，也允许从 Data 数据库点击“导入数据”直接进入一个新的 Data 详情页。该 Data 默认命名为“YYYY-MM-DD-数据”，避免机器文件名成为对象名；用户可在详情页修改名称、上传文件和补 About/来源上下文。']
+]},
+'data-detail':{title:'Data 详情 · 设计说明',intro:'Data 详情展示一个科学数据单元的全部 component、来源和派生关系，同时把描述数据与结论严格分开。',sections:[
+['推荐数据结构','Data {\\n  id, display_name, code?, about_sample_ids[],\\n  source_record_unit_id?, provenance,\\n  components: DataComponent[]\\n}\\nDataComponent {\\n  id, kind: text|file|table|series|image|plot,\\n  role: primary_description|raw|processed|preview|ai_description,\\n  text?, file_id?, derived_from_component_ids[],\\n  creator: user|ai|import, provenance\\n}'],
+['人工写入','@data 行产生 primary text component；附件子行产生 file component。文件是 Data 的载荷，不直接等同 Data。'],
+['AI 派生','AI 可基于 raw CSV 新增 processed plot、结构化 series、趋势描述等 component。派生 component 保留 derived_from 和模型/版本信息，不覆盖 raw。'],
+['描述 vs 论点','“1200 cm⁻¹ 附近峰强增加”可以是 Data description；“该峰说明发生某种反应机理”属于 Claim。AI 生成趋势描述时要受这一边界约束。'],
+['Provenance','Data 默认 About 当前 Sample；父 RecordUnit 的设备、Process、条件作为采集上下文固定到对应 revision。设备/Process 不自动都成为 Data subject。']
+]},
+'claims-list':{title:'论点数据库 · 设计说明',intro:'Claim 是解释、判断、假设或结论层对象，和描述性 Data 分开管理。',sections:[
+['底层设计','Claim 可引用多个 Data、View、文献证据等；支持状态、置信度和 provenance。Claim 数据库只负责浏览，不提供全局“新建”。Claim 只在 Analysis 或 Data 详情中创建，以确保至少存在来源上下文；从 Data 创建时自动引用当前 Data 作为来源与证据上下文。'],
+['前端想法','列表快速看论点、状态、证据数量和上下文。编辑器内只保持一行轻量 Claim block。'],
+['边界','趋势、峰位、颜色等可观察事实留在 Data；因果解释和“说明什么”进入 Claim。']
+]},
+'claim-detail':{title:'论点详情 · 设计说明',intro:'论点详情解决“这个判断由什么支持、来自哪里、当前可信到什么程度”。',sections:[
+['证据关系','Claim 直接引用其创建位置的 Analysis/View 或 Data 作为来源与证据上下文；若需要历史可追溯，可在该引用上固定对应 revision。'],
+['AI','AI 可建议 Claim、支持/反证关系和置信度，但要显示来源与人工确认状态。'],
+['编辑器关系','@claim 行创建 Claim；其所在 RecordUnit 可成为上下文来源，但不会把父项所有对象自动设为证据。']
+]},
+'resources-list':{title:'资源 · 设计说明',intro:'资源页统一管理原料、设备、过程、属性、量纲和单位；一级导航保持简单。',sections:[
+['对象模型','原料和设备可共享 ResearchObject 底层模型，通过 role/tag 区分；Process 保留独立语义能力，但编辑器统一使用 @。'],
+['Sample 例外','已有 Sample 可以被 @ 引用，但不能通过 @ 内联创建。外购基材/粉体等未在工作台产生的实体按原料/资源处理。'],
+['Property Definition','属性字典保持轻量：中文名、英文名、aliases、dimension、preferred unit。自由属性始终允许保存。'],
+['单位','单位集中挂在 dimension/unit registry，不在每个属性里重复定义换算；℃↔K 等仿射换算单独处理。']
+]},
+'resource-detail':{title:'资源详情 · 设计说明',intro:'资源详情区分对象固有属性与“被过程引用时常用的过程属性”，减少模板约束同时提高录入速度。',sections:[
+['属性归属原则','属性跟着“它在区分谁”走。设备型号/档位属于设备使用状态；rpm/时间属于搅拌 Process；添加量属于本次原料 occurrence。'],
+['推荐属性','推荐属性是提示，不是 schema gate。用户仍可直接输入新属性。'],
+['归一化','AI 可以发现“用量/添加量/amount”等可能同义，必须先询问用户；确认后增加 alias mapping，不改写历史 raw key/value。']
+]}
+};
+
+const allObjects=[
+{id:'obj-water',name:'水',role:'原料',deprecated:false,aliases:['去离子水','纯水']},
+{id:'obj-diw',name:'去离子水',role:'原料',deprecated:false,aliases:['DI water']},
+{id:'obj-2poa',name:'2-苯氧基苯胺',role:'原料',deprecated:false,aliases:['2-POA','2-phoa']},
+{id:'obj-hpmc',name:'HPMC',role:'原料',deprecated:false,aliases:['羟丙基甲基纤维素']},
+{id:'obj-stirrer',name:'磁力搅拌器',role:'设备',deprecated:false,aliases:['搅拌器']},
+{id:'obj-ftir',name:'傅里叶变换红外光谱仪',role:'设备',deprecated:false,aliases:['FTIR','红外光谱仪']},
+{id:'obj-stir',name:'搅拌',role:'过程',deprecated:false,aliases:['混合搅拌']},
+{id:'obj-ftir-test',name:'红外测试',role:'过程',deprecated:false,aliases:['FTIR测试','红外光谱测试']},
+{id:'S260909-01',name:'S260909-01',role:'样品',deprecated:false,aliases:[]},
+{id:'S260909-02',name:'S260909-02',role:'样品',deprecated:false,aliases:[]},
+{id:'obj-old-stirrer',name:'旧磁力搅拌器',role:'设备',deprecated:true,aliases:['老搅拌器']},
+{id:'obj-old-water',name:'实验室纯水-旧批次',role:'原料',deprecated:true,aliases:['旧纯水']}
+];
+
+const samples=[
+  {id:'S260909-01',name:'',poa:'2 g',waterTemp:'60 ℃',waterAmount:'98 g',hpmc:'2 g',stir:'300 rpm',ftirRes:'4 cm⁻¹',polymerMw:'86,000',createdAt:'2026-09-09 14:12',updated:'14:12'},
+  {id:'S260909-02',name:'',poa:'2 g',waterTemp:'60 ℃',waterAmount:'98 g',hpmc:'1 g',stir:'300 rpm',ftirRes:'8 cm⁻¹',polymerMw:'86,000',createdAt:'2026-09-09 13:46',updated:'13:46'},
+  {id:'S260908-04',name:'',poa:'2 g',waterTemp:'55 ℃',waterAmount:'98 g',hpmc:'2 g',stir:'600 rpm',ftirRes:'4 cm⁻¹',polymerMw:'120,000',createdAt:'2026-09-08 17:20',updated:'昨天'},
+  {id:'S260908-03',name:'',poa:'2 g',waterTemp:'60 ℃',waterAmount:'98 g',hpmc:'—',stir:'300 rpm',ftirRes:'—',polymerMw:'—',createdAt:'2026-09-08 15:08',updated:'昨天'}
+];
+const analyses=[
+  {id:'A-260909-01',title:'HPMC 添加量对乳液稳定性的影响',samples:4,data:9,claims:2,updated:'今天 15:04'},
+  {id:'A-260908-03',title:'不同搅拌转速对液滴状态的影响',samples:6,data:11,claims:3,updated:'昨天'},
+  {id:'A-260907-02',title:'Cl₂ 与 O₃ 显色差异',samples:8,data:16,claims:4,updated:'09-07'}
+];
+const dataRows=[
+  {id:'D-260909-08',name:'反射率曲线 260909-01',type:'曲线',about:'S260909-01',source:'色差仪',updated:'今天'},
+  {id:'D-260909-09',name:'滴加后白色液滴',type:'描述',about:'S260909-01',source:'编辑器',updated:'今天'},
+  {id:'D-260909-06',name:'静置 24 h 外观',type:'图片',about:'S260909-02',source:'附件',updated:'今天'},
+  {id:'D-FTIR-260910-01',name:'红外测试结果',type:'复合 Data',about:'S260909-01',source:'红外测试',updated:'今天'}
+];
+const claims=[
+  {id:'C-260909-03',text:'HPMC 可能抑制液滴聚并',status:'待验证',evidence:'4 条',context:'HPMC 稳定性分析'},
+  {id:'C-260908-04',text:'高湿度条件下蓝绿色显色增强',status:'支持',evidence:'6 条',context:'Cl₂ 显色'},
+  {id:'C-260907-06',text:'臭氧显色整体深于氯气',status:'支持',evidence:'8 条',context:'Cl₂ / O₃ 对比'}
+];
+const resourceData={
+  '原料':[
+    {id:'m-2poa',name:'2-苯氧基苯胺',role:'原料',identity:'CAS 2688-84-8',usage:'添加量 · 批次 · 纯度'},
+    {id:'m-water',name:'水',role:'原料',identity:'去离子水',usage:'温度 · 添加量 · pH'},
+    {id:'m-hpmc',name:'HPMC',role:'原料',identity:'HPMC-400',usage:'添加量 · 分子量 · 取代类型'}
+  ],
+  '设备':[
+    {id:'e-stirrer',name:'磁力搅拌器',role:'设备',identity:'MS-01',usage:'型号 · 档位 · 转子尺寸'},
+    {id:'e-rod',name:'玻璃棒',role:'设备',identity:'实验室常规',usage:'长度 · 直径'}
+  ],
+  '过程':[
+    {id:'p-stir',name:'搅拌',role:'过程',identity:'Process',usage:'转速 · 时间 · 温度 · 方式'},
+    {id:'p-heat',name:'加热',role:'过程',identity:'Process',usage:'温度 · 时间 · 升温速率'},
+    {id:'p-dry',name:'烘干',role:'过程',identity:'Process',usage:'温度 · 时间 · 气氛'}
+  ],
+  '属性':[
+    {id:'prop-temp',name:'温度',role:'Temperature',identity:'temperature',usage:'℃ · K · °F'},
+    {id:'prop-amount',name:'添加量',role:'Amount',identity:'mass',usage:'mg · g · kg'},
+    {id:'prop-speed',name:'转速',role:'Rotation speed',identity:'rotational_speed',usage:'rpm'},
+    {id:'prop-time',name:'时间',role:'Time',identity:'time',usage:'s · min · h'}
+  ],
+  '量纲与单位':[
+    {id:'dim-mass',name:'质量',role:'Mass',identity:'dimension',usage:'mg · g · kg · t'},
+    {id:'dim-temp',name:'温度',role:'Temperature',identity:'dimension',usage:'℃ · K · °F'},
+    {id:'dim-time',name:'时间',role:'Time',identity:'dimension',usage:'s · min · h'},
+    {id:'dim-speed',name:'转速',role:'Rotation speed',identity:'dimension',usage:'rpm'}
+  ]
+};
+
+function esc(s){return String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
+function fuzzyScore(q,obj){
+ const query=(q||'').trim().toLowerCase(),name=obj.name.toLowerCase(),aliases=(obj.aliases||[]).map(x=>x.toLowerCase());
+ let s=0;
+ if(!query)s=70; else if(name===query)s=100; else if(name.startsWith(query))s=92; else if(aliases.some(a=>a===query))s=88; else if(name.includes(query))s=82; else if(aliases.some(a=>a.includes(query)||query.includes(a)))s=74; else {let hit=0,idx=0;for(const ch of query){const n=name.indexOf(ch,idx);if(n>=0){hit++;idx=n+1}}s=query.length?Math.round(hit/query.length*55):0}
+ if(obj.deprecated)s-=45;
+ return s;
+}
+function objectPickerResults(q){return [...allObjects].map(o=>({...o,score:fuzzyScore(q,o)})).filter(o=>o.score>5).sort((a,b)=>b.score-a.score||Number(a.deprecated)-Number(b.deprecated)||a.name.localeCompare(b.name,'zh-CN'))}
+function createOptions(q){const name=(q||'').trim();return name?[{role:'原料',name},{role:'设备',name},{role:'过程',name}]:[]}
+
+function btn(label,action,cls='ghost'){return `<button class="${cls}" data-action="${action}">${label}</button>`}
+function toast(msg){state.toast=msg;render();setTimeout(()=>{state.toast=null;render()},1400)}
+function navForPage(p){return p.type==='list'?p.nav:(p.type==='sample'||p.type==='batch-samples')?'samples':p.type==='analysis'?'analysis':p.type==='data-detail'?'data':p.type==='claim-detail'?'claims':'resources'}
+function pageLabel(p){
+ if(!p)return '';
+ if(p.type==='list')return {samples:'样品',analysis:'分析',data:'数据',claims:'论点',resources:'资源'}[p.nav]||'返回';
+ if(p.type==='sample')return p.id;
+ if(p.type==='batch-samples')return '批量新建';
+ if(p.type==='analysis')return '分析';
+ if(p.type==='data-detail')return '数据';
+ if(p.type==='claim-detail')return '论点';
+ return '资源';
+}
+function goList(nav){state.history=[];state.page={type:'list',nav};state.activeNav=nav;state.modal=state.drawer=state.popover=null;render()}
+function goPage(page,nav,push=true){
+ if(push)state.history.push({...state.page});
+ state.page=page;state.activeNav=nav;state.modal=state.drawer=state.popover=null;render()
+}
+function goBack(fallbackNav){
+ const prev=state.history.pop();
+ if(prev){state.page=prev;state.activeNav=navForPage(prev);state.modal=state.drawer=state.popover=null;render()}
+ else goList(fallbackNav)
+}
+function backLabel(fallback){return state.history.length?pageLabel(state.history[state.history.length-1]):fallback}
+
+function shell(content){
+return `<div class="app">
+<aside class="sidebar">
+  <div class="brand">科研工作台</div>
+  <div class="nav">
+    ${[['samples','◇','样品'],['analysis','◫','分析'],['data','▥','数据'],['claims','◌','论点'],['resources','⌘','资源']].map(([k,i,l])=>`<button class="navItem ${state.activeNav===k?'active':''}" data-nav="${k}"><span class="icon">${i}</span><span>${l}</span></button>`).join('')}
+  </div>
+  <div class="sideBottom">
+    <button class="sideAction" data-action="global-search">⌕ 搜索</button>
+    <button class="sideAction" data-action="settings">⚙ 设置</button>
+  </div>
+</aside>
+<main class="main">
+<header class="topbar"><div class="topLeft"><span>Scientific R&D Workspace</span></div><div class="topRight"><span>本地 · 已同步</span><button data-action="global-search">⌘K</button><button data-action="help">?</button></div></header>
+${content}
+</main>
+${renderOverlay()}
+${state.drawer?renderDrawer():''}
+${state.popover?renderPopover():''}
+${state.objectPicker?renderObjectPicker():''}
+${state.toast?`<div class="toast">${esc(state.toast)}</div>`:''}
+</div>`;
+}
+
+function toolbar(title,desc,newAction,newLabel='新建',withView=true){
+ const noteKey=title==='样品'?'samples-list':title==='分析'?'analysis-list':title==='数据'?'data-list':title==='论点'?'claims-list':title==='资源'?'resources-list':null;
+return `<div class="pageHeader"><div><h1>${title}</h1><p>${desc}</p></div><div class="pageHeaderActions">${noteKey?`<button class="designNoteBtn" data-note="${noteKey}">ⓘ 设计说明</button>`:''}${newAction?`<button class="primary" data-action="${newAction}">＋ ${newLabel}</button>`:''}</div></div>
+<div class="toolbar"><div class="toolbarLeft">
+<button class="searchPseudo" data-action="inline-search">搜索</button>
+<button data-action="filter">筛选</button><button data-action="sort">排序</button><button data-action="columns">属性</button>
+</div>${withView?`<div class="segmented"><button class="${state.viewMode==='table'?'active':''}" data-action="view-table">表格</button><button class="${state.viewMode==='cards'?'active':''}" data-action="view-cards">卡片</button></div>`:''}</div>`;
+}
+
+function filtered(rows,keys){
+ const q=state.searchText.trim().toLowerCase();
+ if(!q)return rows;
+ return rows.filter(r=>keys.some(k=>String(r[k]).toLowerCase().includes(q)));
+}
+
+function samplesPage(){
+ let rows=filtered(samples,['id']);
+ const dir=state.sortDir==='asc'?1:-1;
+ rows=[...rows].sort((a,b)=>{
+   const av=a[state.sortKey]??'', bv=b[state.sortKey]??'';
+   const an=parseFloat(String(av).replace(/[^\d.-]/g,'')), bn=parseFloat(String(bv).replace(/[^\d.-]/g,''));
+   if(!Number.isNaN(an)&&!Number.isNaN(bn)&&state.sortKey!=='createdAt'&&state.sortKey!=='id')return (an-bn)*dir;
+   return String(av).localeCompare(String(bv),'zh-CN')*dir;
+ });
+ const defs={
+   poa:{obj:'2-POA',prop:'添加量'},
+   waterTemp:{obj:'水',prop:'温度'},
+   waterAmount:{obj:'水',prop:'添加量'},
+   hpmc:{obj:'HPMC',prop:'添加量'},
+   stir:{obj:'搅拌',prop:'转速'},
+   ftirRes:{obj:'傅里叶变换红外光谱仪',prop:'光谱分辨率'},
+   polymerMw:{obj:'聚羟丙基甲基纤维素高黏度等级',prop:'重均分子量'}
+ };
+ const cols=state.sampleColumnOrder.filter(k=>!state.hiddenColumns.has(k));
+ const selected=state.selectedSamples.size;
+ const sortMark=k=>state.sortKey===k?`<span class="sortMark">${state.sortDir==='asc'?'↑':'↓'}</span>`:'';
+ let body='';
+ if(state.viewMode==='table'){
+   body=`${selected?`<div class="bulkBar"><strong>已选择 ${selected} 个样品</strong><button data-action="selected-samples-to-view">新建分析</button><button data-action="bulk-export">导出</button><button data-action="clear-selection">取消选择</button></div>`:''}
+   <div class="tableWrap ${selected?'hasSelection':''}" id="sampleTableWrap"><table><thead><tr>
+   <th class="selectCol"></th>
+   <th class="subHead centerHead" data-sort="id">编号${sortMark('id')}</th>
+   ${cols.map(k=>`<th class="singlePropHead" draggable="true" data-col-key="${k}" data-sort="${k}" data-full-label="${defs[k].obj} · ${defs[k].prop}" title="${defs[k].obj} · ${defs[k].prop}"><span class="objToken longObjToken" data-full-label="${defs[k].obj}">${defs[k].obj}</span><span class="propText longPropText" data-full-label="${defs[k].prop}">${defs[k].prop}</span>${sortMark(k)}</th>`).join('')}
+   <th class="subHead centerHead" data-sort="createdAt">创建时间${sortMark('createdAt')}</th>
+   </tr></thead><tbody>
+   ${rows.map(r=>`<tr class="dbRow" data-open-sample="${r.id}"><td class="selectCol centerCell"><input class="rowCheck" type="checkbox" data-sample-check="${r.id}" ${state.selectedSamples.has(r.id)?'checked':''}></td><td class="primaryCell centerCell">${r.id}</td>${cols.map(k=>`<td class="centerCell" data-col-cell="${k}">${r[k]}</td>`).join('')}<td class="muted centerCell">${r.createdAt}</td></tr>`).join('')}
+   </tbody></table></div>`;
+ }else{
+   body=`${selected?`<div class="bulkBar"><strong>已选择 ${selected} 个样品</strong><button data-action="selected-samples-to-view">新建分析</button><button data-action="clear-selection">取消选择</button></div>`:''}
+   <div class="cards">${rows.map(r=>`<button class="card" data-open-sample="${r.id}"><div class="cardTop"><b>${r.id}</b><span class="muted">${r.createdAt}</span></div><div class="miniProps" style="margin-top:18px"><span>水温 ${r.waterTemp}</span><span>HPMC ${r.hpmc}</span><span>搅拌 ${r.stir}</span></div></button>`).join('')}</div>`;
+ }
+ if(!rows.length)body=`<div class="emptyState"><b>没有匹配的样品</b><p>调整搜索或筛选条件。</p></div>`;
+ return `<section class="page">${toolbar('样品','一个样品对应一个文档；编号就是文档标题。默认按创建时间倒序。','new-sample','新建样品')}${body}</section>`;
+}
+function sampleEditor(id,fresh=false,copiedFrom=null){
+ const s=samples.find(x=>x.id===id)||{id};
+ const code=fresh?'S260910-01':s.id;
+ return `<section class="editorPage">
+ <div class="editorTop"><button class="back" data-action="back-smart">← ${backLabel('样品')}</button><div class="actions">
+ <button class="designNoteBtn" data-note="sample-editor">ⓘ 设计说明</button>
+ ${btn('数据 3','sample-data')} ${btn('论点 1','sample-claims')}
+ <span class="parseStatus ${state.parseState}"><span class="parseDot"></span>${state.parseState==='pending'?'待解析':'结构已同步'}</span><span>已保存</span>${btn('历史','history')}${btn('•••','sample-more')}
+ </div></div>
+ <div class="editorHeader"><div class="codeTitle" contenteditable="true" spellcheck="false">${code}</div>${copiedFrom?`<div class="copyOrigin">复制自 ${copiedFrom}</div>`:''}</div>
+ <div class="directEditor">
+ ${fresh&&!copiedFrom?`<div class="liveBulletArea sharedBulletArea" data-editor-mode="sample"><div class="liveBulletLine" data-level="1"><span class="liveBulletDot">•</span><div class="liveBulletEdit" contenteditable="true" data-placeholder="直接开始记录……输入 @ 引用对象，@data 创建数据"></div></div></div>`:`
+ <div class="record">
+   <div class="recordMain"><button class="fold" data-action="toggle-fold" data-target="d1">⌄</button><div class="recordText editableRecord" contenteditable="true">将 <span class="ref material" contenteditable="false">2-苯氧基苯胺</span> 熔化后滴加到 <span class="ref material" contenteditable="false">水</span> 中，并使用 <span class="ref equipment" contenteditable="false">磁力搅拌器</span> 持续 <span class="ref process" contenteditable="false">搅拌</span>。</div></div>
+   <div class="details" id="d1">
+     <div class="detailLine editableRecord" contenteditable="true"><span class="ref material" contenteditable="false">2-苯氧基苯胺</span>｜添加量: 2 g</div>
+     <div class="detailLine editableRecord" contenteditable="true"><span class="ref material" contenteditable="false">水</span>｜温度: 60 ℃｜添加量: 98 g</div>
+     <div class="detailLine editableRecord" contenteditable="true"><span class="ref equipment" contenteditable="false">磁力搅拌器</span>｜型号: MS-01｜档位: 4</div>
+     <div class="detailLine editableRecord" contenteditable="true"><span class="ref process" contenteditable="false">搅拌</span>｜转速: 300 rpm｜时间: 30 min</div>
+     <div class="detailLine dataLine editableRecord" contenteditable="true"><span class="semanticBadge dataBadge" contenteditable="false">数据</span><span class="dataLineText">滴加后形成明显白色液滴。</span></div>
+   </div>
+ </div>
+ <div class="record">
+   <div class="recordMain"><button class="fold" data-action="toggle-fold" data-target="d2">⌄</button><div class="recordText editableRecord" contenteditable="true">继续加入 <span class="ref material" contenteditable="false">HPMC</span>，并继续 <span class="ref process" contenteditable="false">搅拌</span>。</div></div>
+   <div class="details" id="d2"><div class="detailLine editableRecord" contenteditable="true"><span class="ref material" contenteditable="false">HPMC</span>｜添加量: 2 g｜型号: HPMC-400</div><div class="detailLine editableRecord" contenteditable="true"><span class="ref process" contenteditable="false">搅拌</span>｜转速: 300 rpm</div></div>
+ </div>
+ <div class="record">
+   <div class="recordMain"><button class="fold" data-action="toggle-fold" data-target="d3">⌄</button><div class="recordText editableRecord" contenteditable="true">使用 <span class="ref equipment" contenteditable="false">傅里叶变换红外光谱仪</span> 对当前样品进行 <span class="ref process" contenteditable="false">红外测试</span>。</div></div>
+   <div class="details" id="d3">
+     <div class="detailLine editableRecord" contenteditable="true"><span class="ref equipment" contenteditable="false">傅里叶变换红外光谱仪</span>｜型号: Nicolet iS20</div>
+     <div class="detailLine editableRecord" contenteditable="true"><span class="ref process" contenteditable="false">红外测试</span>｜范围: 400–4000 cm⁻¹｜分辨率: 4 cm⁻¹</div>
+     <div class="detailLine dataLine editableRecord" contenteditable="true"><span class="semanticBadge dataBadge" contenteditable="false">数据</span><span class="dataLineText">红外测试结果</span><span class="dataMetaSep">｜</span><span class="dataLineText">编号: FTIR-260910-01</span></div>
+     <div class="fileChildWrap">
+  <div class="fileChildRow">•&nbsp;&nbsp;<button class="fileChip" data-action="preview-file"><span class="fileIcon">CSV</span><span class="fileName">8F2A_001_20260910.csv</span></button></div>
+  <div class="fileChildRow">•&nbsp;&nbsp;<button class="fileChip" data-action="preview-file"><span class="fileIcon">PNG</span><span class="fileName">FTIR_processed_overlay.png</span></button></div>
+</div>
+   </div>
+ </div>
+ <div class="liveBulletArea sharedBulletArea" data-editor-mode="sample"><div class="liveBulletLine" data-level="1"><span class="liveBulletDot">•</span><div class="liveBulletEdit" contenteditable="true" data-placeholder="继续记录……"></div></div></div>`}
+ </div>
+ <div class="editorFooter"><span><kbd>@</kbd> 对象补全</span><span><kbd>|</kbd> 属性补全</span><span><kbd>@data</kbd> 数据标记</span><span><kbd>Tab</kbd> Data 附件</span></div><div class="docParseNote">原始文档始终是事实源。@ 与属性选择只帮助标准化输入；原文先保存，结构化对象与关系在空闲 / 保存 / 离开页面时统一解析。</div>
+ </section>`;
+}
+
+function batchSamplesPage(sourceId='S260909-01'){
+ const cols=[
+   ['waterTemp','水 · 温度'],
+   ['waterAmount','水 · 添加量'],
+   ['hpmc','HPMC · 添加量'],
+   ['stir','搅拌 · 转速'],
+   ['ftirRes','傅里叶变换红外光谱仪 · 光谱分辨率'],
+   ['polymerMw','聚羟丙基甲基纤维素高黏度等级 · 重均分子量']
+ ];
+ const rows=[
+   {code:'S260910-02',waterTemp:'60 ℃',waterAmount:'98 g',hpmc:'1.0 g',stir:'300 rpm',ftirRes:'4 cm⁻¹',polymerMw:'86,000'},
+   {code:'S260910-03',waterTemp:'60 ℃',waterAmount:'98 g',hpmc:'1.5 g',stir:'300 rpm',ftirRes:'4 cm⁻¹',polymerMw:'86,000'},
+   {code:'S260910-04',waterTemp:'60 ℃',waterAmount:'98 g',hpmc:'2.0 g',stir:'300 rpm',ftirRes:'4 cm⁻¹',polymerMw:'86,000'}
+ ];
+ return `<section class="batchPage">
+ <div class="batchHero">
+   <div><button class="back" data-action="back-smart">← ${backLabel(sourceId)}</button><h1>批量新建样品</h1><p>以 ${sourceId} 的文档结构为模板。每一行会生成一个独立 Sample + Document；这里快速修改结构化属性值。</p></div>
+   <div class="batchActions"><button class="ghost" data-action="batch-cancel">取消</button><button class="primary" data-action="batch-create-all">创建 ${rows.length} 个样品</button></div>
+ </div>
+ <div class="templateNote"><span>模板</span><b>${sourceId}</b><span>· 复制文档结构和引用关系，生成新的 Sample / Document；原样品不受影响。</span></div>
+ <div class="batchTableWrap"><table class="batchTable"><thead><tr><th>#</th><th>样品编号</th>${cols.map(([k,l])=>`<th title="${l}"><span class="truncateHead">${l}</span></th>`).join('')}<th></th></tr></thead><tbody>
+ ${rows.map((r,i)=>`<tr><td class="rowNumber">${i+1}</td><td><input class="batchInput" value="${r.code}"/></td>${cols.map(([k])=>`<td><input class="batchInput" value="${r[k]}"/></td>`).join('')}<td><button class="ghost" data-action="delete-batch-row">删除</button></td></tr>`).join('')}
+ </tbody></table></div>
+ <div class="batchAddRow"><button class="ghost" data-action="add-batch-row">＋ 添加一行</button></div>
+ </section>`;
+}
+
+function analysisList(){
+ const rows=filtered(analyses,['id','title']);
+ const table=`<div class="tableWrap"><table><thead><tr><th>编号</th><th>标题</th><th>样品</th><th>数据</th><th>论点</th><th>更新</th></tr></thead><tbody>${rows.map(r=>`<tr data-open-analysis="${r.id}"><td class="muted">${r.id}</td><td class="primaryCell">${r.title}</td><td>${r.samples}</td><td>${r.data}</td><td>${r.claims}</td><td class="muted">${r.updated}</td></tr>`).join('')}</tbody></table></div>`;
+ const cards=`<div class="analysisCards">${rows.map(r=>`<button class="analysisCard" data-open-analysis="${r.id}"><div class="eyebrow">${r.id} · ${r.updated}</div><h3>${r.title}</h3><div class="cardStats"><span><b>${r.samples}</b> 样品</span><span><b>${r.data}</b> 数据</span><span><b>${r.claims}</b> 论点</span></div></button>`).join('')}</div>`;
+ return `<section class="page">${toolbar('分析','保存一个科研分析上下文，把任意样品、数据、资源和论点组织到一起查看、比较与解释。','new-analysis','新建分析')}${state.viewMode==='cards'?cards:table}</section>`;
+}
+function analysisDetail(id,fresh=false){
+ return `<section class="detailPage">
+ <div class="detailTop"><button class="back" data-action="back-smart">← ${backLabel("分析")}</button><div class="actions"><button class="designNoteBtn" data-note="analysis-detail">ⓘ 设计说明</button><span>已保存</span>${btn('共享','share-analysis')}${btn('•••','analysis-more')}</div></div>
+ <div class="detailHero"><div class="eyebrow">${fresh?'NEW ANALYSIS':id}</div><input class="analysisTitle" value="${fresh?'未命名分析':'HPMC 添加量对乳液稳定性的影响'}"/><textarea class="analysisQuestion">${fresh?'写下这个分析想回答的问题……':'比较不同 HPMC 添加量下的液滴状态、静置稳定性与反射率变化，并形成可追溯论点。'}</textarea>${fresh&&state.analysisSeed?`<div class="bulkBar" style="margin-top:10px"><strong>已从${state.analysisSeed.kind==='samples'?'样品':'数据'}创建</strong><span>${state.analysisSeed.ids.length} 项已加入当前分析</span></div>`:''}</div>
+ <div class="analysisToolbar"><button class="primary" data-action="add-analysis-content">＋ 添加内容</button><button data-action="analysis-filter">筛选</button><button data-action="analysis-layout">布局</button><button data-action="analysis-export">导出</button></div>
+ <div class="analysisGrid" id="analysisGrid">
+   <section class="block"><div class="blockTitle"><span>上下文</span><button data-action="add-analysis-context">＋</button></div><div class="entityChips">
+     <button data-open-sample="S260909-01">◇ S260909-01</button><button data-open-sample="S260909-02">◇ S260909-02</button><button>◇ S260908-03</button><button data-open-resource="原料|m-hpmc">⌘ HPMC</button><button data-open-resource="过程|p-stir">⌘ 搅拌</button>
+   </div></section>
+   <section class="block span2"><div class="blockTitle"><span>参数比较</span><button data-action="compare-more">•••</button></div><table class="compareTable"><thead><tr><th>样品</th><th>HPMC / 添加量</th><th>水 / 温度</th><th>搅拌 / 转速</th><th>观察</th></tr></thead><tbody>
+     <tr data-open-sample="S260909-01"><td>S260909-01</td><td>2 g</td><td>60 ℃</td><td>300 rpm</td><td>白色液滴</td></tr>
+     <tr data-open-sample="S260909-02"><td>S260909-02</td><td>1 g</td><td>60 ℃</td><td>300 rpm</td><td>液滴较大</td></tr>
+     <tr><td>S260908-03</td><td>—</td><td>60 ℃</td><td>300 rpm</td><td>快速聚并</td></tr>
+   </tbody></table></section>
+   <section class="block"><div class="blockTitle"><span>数据</span><button data-action="add-data-to-analysis">＋</button></div>
+      <button class="assetRow" data-open-data="D-260909-08"><div><b>反射率曲线 260909-01</b><small>曲线 · S260909-01</small></div><span>↗</span></button>
+      <button class="assetRow" data-open-data="D-260909-09"><div><b>滴加后白色液滴</b><small>描述 · S260909-01</small></div><span>↗</span></button>
+   </section>
+   <section class="block"><div class="blockTitle"><span>Artifact · 反射率比较</span><button data-action="artifact-more">•••</button></div><div class="chart"><svg viewBox="0 0 420 170"><path d="M30 125 C80 105,120 112,160 82 S260 62,390 45" fill="none" stroke="currentColor" stroke-width="2"/><path d="M30 138 C100 128,135 102,190 100 S290 85,390 78" fill="none" stroke="currentColor" stroke-width="1.5" opacity=".45"/><line x1="30" y1="145" x2="395" y2="145" stroke="currentColor" opacity=".18"/><line x1="30" y1="20" x2="30" y2="145" stroke="currentColor" opacity=".18"/></svg></div></section>
+   <section class="block span2">
+<div class="blockTitle"><span>论点</span><span>复用 Bullet Editor · 当前 Analysis/View</span></div>
+<div class="liveBulletArea sharedBulletArea claimSharedArea" data-editor-mode="claim" data-claim-host="analysis">
+  <div class="liveBulletLine" data-level="1">
+    <span class="liveBulletDot">•</span>
+    <span class="claimEditorBadge">论点</span>
+    <div class="liveBulletEdit" contenteditable="true">HPMC 可能抑制液滴聚并，并改善静置稳定性。</div>
+  </div>
+  <div class="liveBulletLine" data-level="2">
+    <span class="liveBulletDot">•</span>
+    <div class="liveBulletEdit" contenteditable="true">状态: 待验证｜置信度: Medium</div>
+  </div>
+  <div class="liveBulletLine" data-level="1">
+    <span class="liveBulletDot">•</span>
+    <span class="claimEditorBadge">论点</span>
+    <div class="liveBulletEdit" contenteditable="true">高 HPMC 条件下液滴聚并速度可能降低。</div>
+  </div>
+  <div class="liveBulletLine" data-level="2">
+    <span class="liveBulletDot">•</span>
+    <div class="liveBulletEdit" contenteditable="true">状态: 待验证</div>
+  </div>
+  <div class="liveBulletLine" data-level="1">
+    <span class="liveBulletDot">•</span>
+    <span class="claimEditorBadge">论点</span>
+    <div class="liveBulletEdit" contenteditable="true" data-placeholder="输入新的论点……"></div>
+  </div>
+</div>
+<div class="claimDirectNote">这里和样品编辑器使用同一套 Bullet Editor 逻辑。一级 bullet 自动映射为 Claim；二级 bullet 映射为 Claim 属性；当前 Analysis/View 自动成为 Claim 的来源 / 上下文引用。</div>
+</section>
+ </div></section>`;
+}
+
+function dataList(){
+ let rows=filtered(dataRows,['id','name','type','about']);
+ const selected=state.selectedData.size;
+ return `<section class="page">${toolbar('数据','描述性记录、曲线、图片、附件和其他可独立引用的科研数据资产。','import-data','导入数据')}
+ ${selected?`<div class="bulkBar"><strong>已选择 ${selected} 个数据</strong><button data-action="selected-data-to-view">新建分析</button><button data-action="bulk-data-export">导出</button><button data-action="clear-data-selection">取消选择</button></div>`:''}
+ <div class="tableWrap ${selected?'hasDataSelection':''}"><table><thead><tr><th class="selectCol"></th><th class="centerHead">编号</th><th class="centerHead">名称</th><th class="centerHead">类型</th><th class="centerHead">关于</th><th class="centerHead">来源</th><th class="centerHead">更新</th></tr></thead><tbody>
+ ${rows.map(r=>`<tr class="dataDbRow" data-open-data="${r.id}"><td class="selectCol centerCell"><input class="dataRowCheck" type="checkbox" data-data-check="${r.id}" ${state.selectedData.has(r.id)?'checked':''}></td><td class="muted centerCell">${r.id}</td><td class="primaryCell centerCell">${r.name}</td><td class="centerCell">${r.type}</td><td class="centerCell">${r.about}</td><td class="centerCell">${r.source}</td><td class="muted centerCell">${r.updated}</td></tr>`).join('')}
+ </tbody></table></div></section>`;
+}
+function dataDetail(id,fresh=false){
+ const descriptive=id==='D-260909-09';
+ const ftir=id==='D-FTIR-260910-01';
+ const title=fresh?state.freshDataName:ftir?'红外测试结果':descriptive?'滴加后白色液滴':'反射率曲线 260909-01';
+ return `<section class="detailPage"><div class="detailTop"><button class="back" data-action="back-smart">← ${backLabel("数据")}</button><div class="actions"><button class="designNoteBtn" data-note="data-detail">ⓘ 设计说明</button>${btn('下载','download-data')}${btn('•••','data-more')}</div></div>
+ <div class="detailHero"><div class="eyebrow">${fresh?'NEW DATA':ftir?'D-FTIR-260910-01':id}</div>${fresh?`<input class="freshDataTitle" id="freshDataTitle" value="${state.freshDataName}"/>`:`<h1>${title}</h1>`}<div class="metaLine"><span>${fresh?'待添加数据':ftir?'FTIR 数据':descriptive?'描述数据':'曲线数据'}</span>${fresh?'':`<button data-open-sample="S260909-01">关于 S260909-01 ↗</button>`}<span>来源：${fresh?'数据页直接创建':ftir?'红外测试 RecordUnit':descriptive?'编辑器 @data':'色差仪导入'}</span></div></div>
+ <div class="contentArea">
+ ${fresh?`<div class="dataDropZone">拖入 CSV、Excel、图片、PDF 或仪器文件<br/><button data-action="fake-add-data-file">＋ 添加文件</button></div>`:ftir?`<div class="dataBox"><div class="eyebrow">DATA COMPONENTS</div><div class="componentList">
+   <div class="componentRow"><span class="componentKind">文本 · 人工</span><div class="componentMain"><b>红外测试结果</b><span>来自编辑器 @data 主行；同时作为默认 display name。</span></div><span class="componentRole">primary_description</span></div>
+   <div class="componentRow"><span class="componentKind">文件 · RAW</span><div class="componentMain"><b>8F2A_001_20260910.csv</b><span>原始导出文件 · SHA-256 已记录</span></div><span class="componentRole">raw</span></div>
+   <div class="componentRow"><span class="componentKind">图 · 派生</span><div class="componentMain"><b>FTIR_processed_overlay.png</b><span>由 CSV 派生的处理图；derived_from → raw CSV</span></div><span class="componentRole">processed</span></div>
+   <div class="componentRow"><span class="componentKind">描述 · AI</span><div class="componentMain"><b>1200 cm⁻¹ 附近峰强增加，基线整体稳定。</b><span>只描述数据趋势，不解释机理；derived_from → raw CSV</span></div><span class="componentRole">ai_description</span></div>
+ </div></div>`:descriptive?`<div class="dataBox"><div class="eyebrow">DESCRIPTION</div><p>滴加熔化的 2-苯氧基苯胺后形成明显白色液滴，继续搅拌后液滴尺寸逐渐减小。</p></div>`:`<div class="dataBox"><svg viewBox="0 0 760 300"><path d="M55 235 C150 220,190 180,270 175 S420 120,515 104 S650 72,720 54" fill="none" stroke="currentColor" stroke-width="3"/><line x1="55" y1="250" x2="725" y2="250" stroke="currentColor" opacity=".18"/><line x1="55" y1="30" x2="55" y2="250" stroke="currentColor" opacity=".18"/></svg></div>`}
+ <div class="infoGrid"><div class="infoCard"><label>关于</label>${fresh?`<button data-action="set-data-about">＋ 选择 Sample</button>`:`<button data-open-sample="S260909-01">S260909-01 ↗</button>`}</div><div class="infoCard"><label>采集上下文</label><span>${fresh?'未绑定':ftir?'红外测试 · Nicolet iS20':'当前 RecordUnit'}</span></div><div class="infoCard"><label>版本</label><button data-action="data-version">${fresh?'尚未固定':'v1 · pinned'}</button></div><div class="infoCard"><label>关联论点</label><span>${fresh?'0 条':'1 条'}</span></div></div>
+ <section class="block" style="margin-top:10px">
+<div class="blockTitle"><span>论点</span><span>复用 Bullet Editor · 当前 Data</span></div>
+<div class="liveBulletArea sharedBulletArea claimSharedArea" data-editor-mode="claim" data-claim-host="data">
+  ${fresh?'':`
+  <div class="liveBulletLine" data-level="1">
+    <span class="liveBulletDot">•</span>
+    <span class="claimEditorBadge">论点</span>
+    <div class="liveBulletEdit" contenteditable="true">HPMC 可能抑制液滴聚并。</div>
+  </div>
+  <div class="liveBulletLine" data-level="2">
+    <span class="liveBulletDot">•</span>
+    <div class="liveBulletEdit" contenteditable="true">状态: 待验证｜置信度: Medium</div>
+  </div>`}
+  <div class="liveBulletLine" data-level="1">
+    <span class="liveBulletDot">•</span>
+    <span class="claimEditorBadge">论点</span>
+    <div class="liveBulletEdit" contenteditable="true" data-placeholder="基于当前 Data 输入新的论点……"></div>
+  </div>
+</div>
+<div class="claimDirectNote">一级 bullet 自动映射为 Claim；二级 bullet 是 Claim 属性。当前 Data 自动成为来源 / 上下文引用。</div>
+</section>
+ </div></section>`;
+}
+
+function claimsList(){
+ const rows=filtered(claims,['id','text','status','context']);
+ return `<section class="page">${toolbar('论点','从数据与分析中形成的判断、解释、主张与待验证假设。',null,'',true)}
+ <div class="tableWrap"><table><thead><tr><th>编号</th><th>论点</th><th>状态</th><th>证据</th><th>上下文</th></tr></thead><tbody>
+ ${rows.map(r=>`<tr data-open-claim="${r.id}"><td class="muted">${r.id}</td><td class="primaryCell">${r.text}</td><td><span class="status">${r.status}</span></td><td>${r.evidence}</td><td>${r.context}</td></tr>`).join('')}
+ </tbody></table></div></section>`;
+}
+
+function claimDetail(id){
+ return `<section class="detailPage"><div class="detailTop"><button class="back" data-action="back-smart">← ${backLabel("论点")}</button><div class="actions"><button class="designNoteBtn" data-note="claim-detail">ⓘ 设计说明</button>${btn('编辑','edit-claim')}${btn('•••','claim-more')}</div></div>
+ <div class="claimHero"><div class="eyebrow">${id}</div><span class="status">待验证</span><h1>HPMC 可能抑制液滴聚并，并改善静置稳定性。</h1><p>该论点来自 HPMC 稳定性分析，当前由 4 条数据支持，尚无明确反证。</p></div>
+ <div class="claimLayout"><section class="evidenceColumn"><div class="blockTitle"><span>支持证据</span><button data-action="add-evidence">＋</button></div>
+ <button class="evidenceCard" data-open-data="D-260909-09"><b>滴加后白色液滴</b><span>描述数据 · S260909-01</span><p>2 g HPMC 条件下，继续搅拌后液滴尺寸逐渐减小。</p></button>
+ <button class="evidenceCard" data-open-data="D-260909-08"><b>反射率曲线 260909-01</b><span>曲线数据 · S260909-01</span><p>高 HPMC 组在目标区间表现出更稳定的响应趋势。</p></button>
+ <button class="addLink" data-action="add-evidence">＋ 添加证据</button></section>
+ <aside><div class="infoCard"><label>上下文</label><button data-open-analysis="A-260909-01">HPMC 稳定性分析 ↗</button></div><div class="infoCard"><label>相关样品</label><button data-open-sample="S260909-01">S260909-01 ↗</button></div><div class="infoCard"><label>作者来源</label><span>人工记录</span></div><div class="infoCard"><label>置信度</label><button data-action="confidence">Medium</button></div></aside></div></section>`;
+}
+
+function resourcesList(){
+ const rows=resourceData[state.resourceTab];
+ return `<section class="page">${toolbar('资源','管理可在编辑器中引用和复用的原料、设备、过程，以及属性字典和量纲单位。','new-resource','新建',false)}
+ <div class="tabs">${Object.keys(resourceData).map(t=>`<button class="${state.resourceTab===t?'active':''}" data-resource-tab="${t}">${t}</button>`).join('')}</div>
+ <div class="tableWrap"><table><thead><tr><th>名称</th><th>${state.resourceTab==='属性'||state.resourceTab==='量纲与单位'?'英文名':'Role'}</th><th>${state.resourceTab==='属性'||state.resourceTab==='量纲与单位'?'量纲/类型':'标识信息'}</th><th>${state.resourceTab==='属性'||state.resourceTab==='量纲与单位'?'常用单位':'常用过程属性'}</th></tr></thead><tbody>
+ ${rows.map(r=>`<tr data-open-resource="${state.resourceTab}|${r.id}"><td class="primaryCell">${r.name}</td><td>${r.role}</td><td>${r.identity}</td><td>${r.usage}</td></tr>`).join('')}
+ </tbody></table></div></section>`;
+}
+
+function resourceDetail(kind,id){
+ const r=(resourceData[kind]||[]).find(x=>x.id===id)||resourceData['原料'][0];
+ const prop=kind==='属性',dim=kind==='量纲与单位';
+ return `<section class="detailPage"><div class="detailTop"><button class="back" data-action="back-smart">← ${backLabel("资源")}</button><div class="actions"><button class="designNoteBtn" data-note="resource-detail">ⓘ 设计说明</button>${btn('编辑','edit-resource')}${btn('•••','resource-more')}</div></div>
+ <div class="detailHero"><div class="eyebrow">${kind.toUpperCase()}</div><h1>${r.name}</h1><div class="metaLine"><span>${r.role}</span><span>${r.identity}</span></div></div>
+ <div class="resourceDetailGrid">
+ ${!prop&&!dim?`<section class="detailCard"><div class="blockTitle"><span>对象属性</span></div><div class="propertyRows"><div><span>名称</span><b>${r.name}</b></div><div><span>Role</span><b>${r.role}</b></div><div><span>标识信息</span><b>${r.identity}</b></div></div></section>
+ <section class="detailCard"><div class="blockTitle"><span>使用时推荐属性</span><button data-action="add-recommended-prop">＋</button></div><div class="propertyTokens">${r.usage.split(' · ').map(x=>`<span>${x}</span>`).join('')}</div><button class="addLink" data-action="add-recommended-prop">＋ 添加推荐属性</button></section>
+ <section class="detailCard span2"><div class="blockTitle"><span>近期被引用</span></div><table class="compareTable"><thead><tr><th>样品</th><th>使用属性</th><th>更新时间</th></tr></thead><tbody><tr data-open-sample="S260909-01"><td>S260909-01</td><td>${r.usage.split(' · ').slice(0,2).join(' · ')}</td><td>今天</td></tr><tr data-open-sample="S260909-02"><td>S260909-02</td><td>${r.usage.split(' · ')[0]}</td><td>今天</td></tr></tbody></table></section>`:''}
+ ${prop?`<section class="detailCard"><div class="blockTitle"><span>Property Definition</span></div><div class="propertyRows"><div><span>中文名</span><b>${r.name}</b></div><div><span>英文名</span><b>${r.role}</b></div><div><span>量纲</span><b>${r.identity}</b></div><div><span>推荐单位</span><b>${r.usage}</b></div></div></section><section class="detailCard"><div class="blockTitle"><span>相似名</span><button data-action="add-alias">＋</button></div><div class="propertyTokens"><span>用量</span><span>加入量</span><span>amount</span><span>dose</span></div><button class="addLink" data-action="normalize-alias">AI 建议归一化</button></section>`:''}
+ ${dim?`<section class="detailCard"><div class="blockTitle"><span>量纲</span></div><div class="propertyRows"><div><span>中文名</span><b>${r.name}</b></div><div><span>英文名</span><b>${r.role}</b></div><div><span>类型</span><b>${r.identity}</b></div><div><span>基准单位</span><b>${r.name==='温度'?'K':r.name==='质量'?'g':r.name==='时间'?'s':'rpm'}</b></div></div></section>
+<section class="detailCard"><div class="blockTitle"><span>单位与换算</span><button data-action="add-unit">＋</button></div>
+<table class="conversionTable"><thead><tr><th>单位</th><th>scale</th><th>offset</th></tr></thead><tbody>
+${r.name==='温度'?`<tr><td>K</td><td>1</td><td>0</td></tr><tr><td>℃</td><td>1</td><td>273.15</td></tr><tr><td>°F</td><td>5/9</td><td>255.3722</td></tr>`:
+r.name==='质量'?`<tr><td>g</td><td>1</td><td>0</td></tr><tr><td>mg</td><td>0.001</td><td>0</td></tr><tr><td>kg</td><td>1000</td><td>0</td></tr>`:
+r.name==='时间'?`<tr><td>s</td><td>1</td><td>0</td></tr><tr><td>min</td><td>60</td><td>0</td></tr><tr><td>h</td><td>3600</td><td>0</td></tr>`:
+`<tr><td>rpm</td><td>1</td><td>0</td></tr>`}
+</tbody></table><p style="font-size:8px;color:#999e9a;line-height:1.55">统一公式：<span class="formula">base = value × scale + offset</span></p><button class="addLink" data-action="add-unit">＋ 添加单位 / 换算</button></section>`:''}
+ </div></section>`;
+}
+
+function renderObjectPicker(){
+ const p=state.objectPicker;if(!p)return '';
+ const q=p.query||'',results=objectPickerResults(q),creates=createOptions(q);
+ return `<div class="objectPicker" style="left:${p.x}px;top:${p.y}px"><div class="objectPickerHeader"><span>所有 Object · 按匹配度排序</span><span class="objectPickerQuery">@${esc(q)}</span></div>${results.length?results.map(o=>`<button class="objectResult" data-object-id="${o.id}" data-object-name="${esc(o.name)}"><span class="objectResultMain"><span class="objectResultName">${esc(o.name)}</span><span class="objectResultMeta">${o.deprecated?'已废弃 · 仍可引用':'已有对象'}</span></span><span class="roleTag ${o.deprecated?'deprecatedTag':''}">${esc(o.role)}${o.deprecated?' · 已废弃':''}</span></button>`).join(''):'<div class="objectPickerHeader">没有匹配的已有对象</div>'}${creates.length?`<div class="objectPickerSep"></div>${creates.map(c=>`<button class="objectResult" data-create-role="${c.role}" data-create-name="${esc(c.name)}"><span class="objectResultMain"><span class="objectResultName">使用「${esc(c.name)}」创建${c.role}</span><span class="objectResultMeta">创建意图将在文档解析阶段提交</span></span><span class="roleTag createTag">创建${c.role}</span></button>`).join('')}`:''}</div>`;
+}
+
+function renderMain(){
+ const p=state.page;
+ if(p.type==='list'){
+   if(p.nav==='samples')return samplesPage();
+   if(p.nav==='analysis')return analysisList();
+   if(p.nav==='data')return dataList();
+   if(p.nav==='claims')return claimsList();
+   if(p.nav==='resources')return resourcesList();
+ }
+ if(p.type==='sample')return sampleEditor(p.id,p.fresh,p.copiedFrom);
+ if(p.type==='batch-samples')return batchSamplesPage(p.sourceId);
+ if(p.type==='analysis')return analysisDetail(p.id,p.fresh);
+ if(p.type==='data-detail')return dataDetail(p.id,p.fresh);
+ if(p.type==='claim-detail')return claimDetail(p.id);
+ if(p.type==='resource-detail')return resourceDetail(p.kind,p.id);
+ return '';
+}
+
+function modal(title,body,footer=''){
+ return `<div class="overlay" data-action="overlay-close"><div class="modal" onclick="event.stopPropagation()"><div class="modalHeader"><b>${title}</b><button class="close" data-action="close-modal">✕</button></div><div class="modalBody">${body}</div>${footer?`<div class="modalFooter">${footer}</div>`:''}</div></div>`;
+}
+function renderOverlay(){
+ if(!state.modal)return '';
+ const m=state.modal;
+ if(m==='search')return `<div class="overlay" data-action="overlay-close"><div class="modal globalSearch" onclick="event.stopPropagation()"><input id="globalSearchInput" class="searchInput" placeholder="搜索样品、分析、数据、论点、资源…"/><div class="searchResults">
+ ${[
+ ['样品','S260909-01','2-POA / HPMC 乳液体系','open-search-sample'],
+ ['分析','A-260909-01','HPMC 添加量对乳液稳定性的影响','open-search-analysis'],
+ ['数据','D-260909-08','反射率曲线 260909-01','open-search-data'],
+ ['论点','C-260909-03','HPMC 可能抑制液滴聚并','open-search-claim'],
+ ['资源','HPMC','原料 · m-hpmc','open-search-resource']
+ ].map(x=>`<button class="result" data-action="${x[3]}"><span class="resultType">${x[0]}</span><b>${x[1]}</b><small>${x[2]}</small></button>`).join('')}
+ </div></div></div>`;
+ if(m==='filter')return modal('筛选',`<div class="field"><label>创建时间</label><select><option>任意时间</option><option>今天</option><option>最近 7 天</option></select></div><div class="field"><label>存在属性</label><div class="checkGrid"><label class="check"><input type="checkbox"/> 水 / 温度</label><label class="check"><input type="checkbox"/> HPMC / 添加量</label><label class="check"><input type="checkbox"/> 搅拌 / 转速</label></div><p style="font-size:8px;color:#999e9a">默认“任一满足（OR）”：返回包含任意一个所选属性的样品；高级条件可切换为“全部满足（AND）”。</p></div>`,`<button class="ghost" data-action="clear-filter">清除</button><button class="primary" data-action="apply-filter">应用筛选</button>`);
+ if(m==='sort')return modal('排序',`<div class="field"><label>排序字段</label><select><option>更新时间</option><option>名称</option><option>编号</option></select></div><div class="field"><label>顺序</label><select><option>降序</option><option>升序</option></select></div>`,`<button class="primary" data-action="apply-sort">应用排序</button>`);
+ if(m==='columns')return modal('显示属性',`<p style="font-size:8px;color:#999e9a;line-height:1.55">这里只控制“显示哪些列”，不会筛掉样品。同一对象的多个属性会在表头自动分组。</p><div class="checkGrid">${[['poa','2-POA / 添加量'],['waterTemp','水 / 温度'],['waterAmount','水 / 添加量'],['hpmc','HPMC / 添加量'],['stir','搅拌 / 转速']].map(([k,l])=>`<label class="check"><input type="checkbox" data-col="${k}" ${state.hiddenColumns.has(k)?'':'checked'}/> ${l}</label>`).join('')}</div><div class="field" style="margin-top:12px"><label>更多属性</label><input placeholder="搜索对象 / 属性，例如 水 / pH"/></div>`,`<button class="ghost" data-action="reset-columns">重置</button><button class="primary" data-action="save-columns">完成</button>`);
+ if(m==='batch-create')return modal('批量新建样品',`<p style="font-size:10px;line-height:1.65;color:#686f6b">将为当前选中的 ${state.selectedSamples.size} 个样品各创建一个新样品，并复制其文档内容作为起点。新样品获得新的编号和独立文档。</p><div class="field"><label>编号规则</label><input value="S260910-##"/></div>`,`<button class="ghost" data-action="close-modal">取消</button><button class="primary" data-action="confirm-batch-create">创建 ${state.selectedSamples.size} 个样品</button>`);
+ if(m==='new-sample')return modal('新建样品',`<div class="field"><label>样品编号</label><input value="S260909-05"/></div><div class="field"><label>名称</label><input value="未命名样品"/></div><div class="field"><label>从已有样品复制</label><select><option>不复制</option><option>S260909-01</option><option>S260909-02</option></select></div>`,`<button class="ghost" data-action="close-modal">取消</button><button class="primary" data-action="create-sample">创建并编辑</button>`);
+ if(m==='new-analysis')return modal('新建分析',`<div class="field"><label>标题</label><input value="未命名分析"/></div><div class="field"><label>研究问题</label><textarea placeholder="这个分析想回答什么问题？"></textarea></div>`,`<button class="ghost" data-action="close-modal">取消</button><button class="primary" data-action="create-analysis">创建分析</button>`);
+ if(m==='new-claim')return modal('新建论点',`<div class="field"><label>论点</label><textarea placeholder="写下一个可以被证据支持或反驳的判断…"></textarea></div><div class="field"><label>状态</label><select><option>待验证</option><option>支持</option><option>反驳</option></select></div>`,`<button class="ghost" data-action="close-modal">取消</button><button class="primary" data-action="create-claim">创建论点</button>`);
+ if(m==='import-data')return modal('导入数据',`<div class="field"><label>文件</label><input value="reflection_260909.csv"/></div><div class="field"><label>关于样品</label><select><option>S260909-01</option><option>S260909-02</option></select></div><div class="field"><label>数据类型</label><select><option>表格 / 曲线</option><option>图片</option><option>描述</option></select></div>`,`<button class="ghost" data-action="close-modal">取消</button><button class="primary" data-action="finish-import">继续映射字段</button>`);
+ if(m==='import-map')return modal('映射字段',`<div class="field"><label>X 轴</label><select><option>Wavelength (nm)</option></select></div><div class="field"><label>Y 轴</label><select><option>Reflectance (%)</option></select></div><div class="field"><label>单位</label><input value="%"/></div>`,`<button class="ghost" data-action="close-modal">取消</button><button class="primary" data-action="save-import">完成导入</button>`);
+ if(m==='file-preview')return modal('文件预览',`<div class="dataBox" style="padding:16px"><div class="eyebrow">FILE</div><p style="font-size:11px">8F2A_001_20260910.csv</p><div class="componentList"><div class="componentRow"><span class="componentKind">类型</span><div class="componentMain"><b>CSV</b><span>同一 Data 对象的 raw component</span></div><span class="componentRole">raw</span></div></div></div>`,`<button class="ghost" data-action="close-modal">关闭</button><button class="primary" data-action="open-ftir-data">打开 Data</button>`);
+ if(m==='settings')return modal('设置',`<div class="field"><label>语言</label><select><option>简体中文</option><option>English</option></select></div><div class="field"><label>默认样品编号规则</label><input value="SYYMMDD-##"/></div><div class="field"><label>编辑器</label><label class="check"><input type="checkbox" checked/> 自动保存</label><label class="check"><input type="checkbox" checked/> RecordUnit 默认可折叠</label></div>`,`<button class="primary" data-action="save-settings">保存设置</button>`);
+ if(m==='help')return modal('快捷说明',`<div class="propertyRows"><div><span>@对象</span><b>引用原料 / 设备 / 过程 / 样品</b></div><div><span>|属性:值</span><b>记录引用对象的属性</b></div><div><span>@data</span><b>记录观察或数据</b></div><div><span>@claim</span><b>记录论点</b></div></div>`,`<button class="primary" data-action="close-modal">知道了</button>`);
+ if(m==='inline-search')return modal('搜索当前列表',`<div class="field"><label>关键词</label><input id="inlineSearchValue" value="${esc(state.searchText)}" placeholder="输入名称、编号、状态…"/></div>`,`<button class="ghost" data-action="clear-inline-search">清除</button><button class="primary" data-action="apply-inline-search">搜索</button>`);
+ if(m==='analysis-add')return modal('添加到分析',`<div class="tabs"><button class="active">样品</button><button>数据</button><button>资源</button><button>论点</button></div><div class="checkGrid"><label class="check"><input type="checkbox" checked/> S260909-01</label><label class="check"><input type="checkbox"/> S260909-02</label><label class="check"><input type="checkbox"/> HPMC</label><label class="check"><input type="checkbox"/> 反射率曲线</label></div>`,`<button class="primary" data-action="confirm-analysis-add">添加 1 项</button>`);
+ if(m==='share-analysis')return modal('共享分析',`<div class="field"><label>权限</label><select><option>仅自己</option><option>项目成员可查看</option><option>项目成员可编辑</option></select></div><div class="field"><label>链接</label><input value="workspace.local/a/A-260909-01" readonly/></div>`,`<button class="ghost" data-action="copy-link">复制链接</button><button class="primary" data-action="close-modal">完成</button>`);
+ if(m==='export-analysis')return modal('导出分析',`<div class="checkGrid"><label class="check"><input type="radio" name="x" checked/> PDF</label><label class="check"><input type="radio" name="x"/> CSV</label><label class="check"><input type="radio" name="x"/> Markdown</label><label class="check"><input type="radio" name="x"/> JSON</label></div>`,`<button class="primary" data-action="do-export">导出</button>`);
+ if(m==='new-resource')return modal(`新建${state.resourceTab}`,`<div class="field"><label>名称</label><input placeholder="名称"/></div><div class="field"><label>Role / 类型</label><input value="${state.resourceTab}"/></div><div class="field"><label>标识信息</label><input placeholder="CAS、型号、canonical key…"/></div>`,`<button class="ghost" data-action="close-modal">取消</button><button class="primary" data-action="create-resource">创建</button>`);
+ if(m==='edit-resource')return modal('编辑资源',`<div class="field"><label>名称</label><input value="HPMC"/></div><div class="field"><label>标识信息</label><input value="HPMC-400"/></div><div class="field"><label>备注</label><textarea>常用增稠剂。</textarea></div>`,`<button class="ghost" data-action="close-modal">取消</button><button class="primary" data-action="save-resource">保存</button>`);
+ if(m==='add-prop')return modal('添加推荐属性',`<div class="field"><label>属性</label><select><option>温度</option><option>时间</option><option>添加量</option><option>转速</option></select></div>`,`<button class="primary" data-action="confirm-add-prop">添加</button>`);
+ if(m==='add-alias')return modal('添加相似名',`<div class="field"><label>相似名 / Alias</label><input placeholder="例如：加液量"/></div>`,`<button class="primary" data-action="confirm-alias">添加</button>`);
+ if(m==='normalize')return modal('AI 属性归一化建议',`<p style="font-size:10px;line-height:1.7;color:#6e7470">发现「添加量」「用量」「加液量」「amount」可能表达同一属性。确认后只新增别名映射，不修改历史原始记录。</p><div class="checkGrid"><label class="check"><input type="checkbox" checked/> 用量</label><label class="check"><input type="checkbox" checked/> 加液量</label><label class="check"><input type="checkbox" checked/> amount</label></div>`,`<button class="ghost" data-action="close-modal">稍后</button><button class="primary" data-action="confirm-normalize">确认映射</button>`);
+ if(m==='add-unit')return modal('添加单位',`<div class="field"><label>单位符号</label><input placeholder="例如 mg"/></div><div class="field"><label>换算到基准单位</label><input placeholder="例如 × 0.001"/></div>`,`<button class="primary" data-action="confirm-unit">添加单位</button>`);
+ if(m==='edit-claim')return modal('编辑论点',`<div class="field"><label>论点</label><textarea>HPMC 可能抑制液滴聚并，并改善静置稳定性。</textarea></div><div class="field"><label>状态</label><select><option>待验证</option><option>支持</option><option>反驳</option></select></div>`,`<button class="primary" data-action="save-claim">保存</button>`);
+ if(m==='add-evidence')return modal('添加证据',`<div class="checkGrid"><label class="check"><input type="checkbox"/> D-260909-08 · 反射率曲线</label><label class="check"><input type="checkbox"/> D-260909-09 · 白色液滴</label><label class="check"><input type="checkbox"/> S260909-02 · 静置 24h</label></div>`,`<button class="primary" data-action="confirm-evidence">添加证据</button>`);
+ if(m==='confidence')return modal('置信度',`<div class="field"><label>当前置信度</label><select><option>Low</option><option selected>Medium</option><option>High</option></select></div><div class="field"><label>说明</label><textarea>根据当前支持证据数量和一致性人工判断。</textarea></div>`,`<button class="primary" data-action="save-confidence">保存</button>`);
+ if(m==='data-version')return modal('数据版本',`<div class="propertyRows"><div><span>v1</span><b>当前固定版本 · 14:08</b></div><div><span>来源</span><b>reflection_260909.csv</b></div><div><span>SHA-256</span><b>9b3…71a</b></div></div>`,`<button class="primary" data-action="close-modal">关闭</button>`);
+ if(m==='composer-ref')return modal('引用对象',`<div class="field"><label>搜索</label><input value="${esc(m.query||'')}"/></div><div class="checkGrid"><button class="menuItem" data-action="insert-ref-water">@水 · 原料</button><button class="menuItem" data-action="insert-ref-hpmc">@HPMC · 原料</button><button class="menuItem" data-action="insert-ref-stir">@搅拌 · 过程</button><button class="menuItem" data-action="insert-ref-device">@磁力搅拌器 · 设备</button></div>`,`<button class="ghost" data-action="close-modal">取消</button>`);
+ return '';
+}
+function renderDrawer(){
+ if(state.drawer==='history')return `<aside class="drawer"><div class="drawerHeader"><b>修订历史</b><button class="close" data-action="close-drawer">✕</button></div><div class="drawerBody">
+ <div class="historyItem"><b>v5 · 当前</b><span>今天 14:12 · 自动保存</span><p>加入 HPMC 使用属性，新增一条 Claim。</p></div>
+ <div class="historyItem"><b>v4</b><span>今天 14:03</span><p>更新搅拌转速为 300 rpm。</p><button class="addLink" data-action="restore-v4">恢复此版本</button></div>
+ <div class="historyItem"><b>v3</b><span>今天 13:56</span><p>创建样品记录。</p></div></div></aside>`;
+ if(state.drawer&&state.drawer.startsWith('note:')){
+   const key=state.drawer.slice(5),note=designNotes[key];
+   if(!note)return '';
+   return `<aside class="drawer noteDrawer"><div class="drawerHeader"><b>${note.title}</b><button class="close" data-action="close-drawer">✕</button></div><div class="drawerBody"><p class="noteIntro">${note.intro}</p>${note.sections.map(([h,b])=>`<section class="noteSection"><h4>${h}</h4>${b.includes('\\n')?`<div class="noteCode">${esc(b.replaceAll('\\n','\n'))}</div>`:`<p>${b}</p>`}</section>`).join('')}</div></aside>`;
+ }
+ return '';
+}
+
+function renderPopover(){
+ const p=state.popover;
+ if(!p)return '';
+ const style=`left:${p.x}px;top:${p.y}px`;
+ const items=p.kind==='sample'?[
+  ['复制当前样品并新建','duplicate-sample'],
+  ['批量新建样品','open-batch-samples'],
+  ['导出 Markdown','export-sample'],
+  ['','sep'],
+  ['删除样品','delete-sample','danger']
+ ]:p.kind==='analysis'?[
+  ['复制分析','duplicate-analysis'],['固定为模板','template-analysis'],['','sep'],['删除分析','delete-analysis','danger']
+ ]:p.kind==='data'?[
+  ['复制引用','copy-data-ref'],['查看来源','source-data'],['','sep'],['删除数据','delete-data','danger']
+ ]:p.kind==='claim'?[
+  ['复制引用','copy-claim-ref'],['标记为支持','mark-supported'],['标记为反驳','mark-refuted'],['','sep'],['删除论点','delete-claim','danger']
+ ]:[
+  ['复制引用','copy-resource-ref'],['查看使用位置','resource-usage'],['','sep'],['删除资源','delete-resource','danger']
+ ];
+ return `<div class="popover" style="${style}">${items.map(it=>it[1]==='sep'?'<div class="menuSep"></div>':`<button class="menuItem ${it[2]||''}" data-action="${it[1]}">${it[0]}</button>`).join('')}</div>`;
+}
+
+function render(){document.getElementById('app').innerHTML=shell(renderMain());bindSpecial()}
+function bindSpecial(){
+ const wrap=document.getElementById('sampleTableWrap');if(wrap){wrap.scrollLeft=state.sampleScrollLeft||0;wrap.addEventListener('scroll',()=>state.sampleScrollLeft=wrap.scrollLeft,{passive:true})}
+ const makeLine=(mode,level,placeholder='')=>{const line=document.createElement('div');line.className='liveBulletLine';line.dataset.level=String(level);const badge=(mode==='claim'&&level===1)?'<span class="claimEditorBadge">论点</span>':'';line.innerHTML=`<span class="liveBulletDot">•</span>${badge}<div class="liveBulletEdit" contenteditable="true" data-placeholder="${placeholder}"></div>`;return line};
+ const closePicker=()=>{state.objectPicker=null;const old=document.querySelector('.objectPicker');if(old)old.remove()};
+ const showPicker=(edit)=>{const text=edit.textContent||'',sel=window.getSelection(),offset=(sel&&sel.anchorNode&&edit.contains(sel.anchorNode))?sel.anchorOffset:text.length,prefix=text.slice(0,offset),m=prefix.match(/@([^\\s@｜|]*)$/);if(!m){closePicker();return}const r=edit.getBoundingClientRect();state.objectPicker={query:m[1]||'',x:Math.min(window.innerWidth-372,Math.max(178,r.left+28)),y:Math.min(window.innerHeight-370,r.bottom+5),editor:edit};const old=document.querySelector('.objectPicker');if(old)old.remove();const h=document.createElement('div');h.innerHTML=renderObjectPicker();if(h.firstElementChild)document.body.appendChild(h.firstElementChild)};
+ document.querySelectorAll('.sharedBulletArea').forEach(area=>{const mode=area.dataset.editorMode||'sample';const bindLine=line=>{const edit=line.querySelector('.liveBulletEdit');if(!edit||edit.dataset.bound)return;edit.dataset.bound='1';edit.addEventListener('input',()=>{state.parseState='pending';if(mode==='sample')showPicker(edit)});edit.addEventListener('keydown',e=>{if(e.key==='Escape'&&state.objectPicker){closePicker();return}if(e.key==='Enter'){closePicker();e.preventDefault();const level=Number(line.dataset.level||1),ph=mode==='claim'?(level===1?'输入新的论点……':'输入 Claim 属性……'):(level===1?'继续记录……':'记录属性 / Data……'),next=makeLine(mode,level,ph);line.after(next);bindLine(next);next.querySelector('.liveBulletEdit').focus()}else if(e.key==='Tab'){e.preventDefault();const level=Number(line.dataset.level||1),nl=e.shiftKey?Math.max(1,level-1):Math.min(2,level+1);line.dataset.level=String(nl);const badge=line.querySelector('.claimEditorBadge');if(mode==='claim'&&nl===1&&!badge){const b=document.createElement('span');b.className='claimEditorBadge';b.textContent='论点';line.insertBefore(b,edit)}else if(mode==='claim'&&nl===2&&badge)badge.remove()}});edit.addEventListener('blur',()=>{if((edit.textContent||'').trim()){state.parseState='ready';setTimeout(closePicker,120);toast(mode==='claim'?'论点已保存并解析（原型）':'原文已保存，结构解析完成（原型）')}})};area.querySelectorAll('.liveBulletLine').forEach(bindLine)});
+ document.querySelectorAll('[contenteditable="true"]').forEach(el=>{if(!el.classList.contains('liveBulletEdit'))el.addEventListener('blur',()=>toast('已自动保存（原型）'))});
+ const ft=document.getElementById('freshDataTitle');if(ft)ft.addEventListener('input',()=>state.freshDataName=ft.value||'2026-09-10-数据');
+}
+function replaceAtQuery(edit,name){if(!edit)return;const text=edit.textContent||'',m=text.match(/@([^\\s@｜|]*)$/);if(!m)return;edit.textContent=text.slice(0,text.length-m[0].length)+name;const range=document.createRange();range.selectNodeContents(edit);range.collapse(false);const sel=window.getSelection();sel.removeAllRanges();sel.addRange(range);state.objectPicker=null;state.parseState='pending';const old=document.querySelector('.objectPicker');if(old)old.remove()}
+
+function openPopover(kind,anchor){const r=anchor.getBoundingClientRect();state.popover={kind,x:Math.max(8,r.right-230),y:r.bottom+5};render()}
+
+document.addEventListener('click',e=>{
+ const obj=e.target.closest('[data-object-id]');if(obj){const edit=state.objectPicker&&state.objectPicker.editor;replaceAtQuery(edit,obj.dataset.objectName);toast('已补全文本；结构将在解析阶段同步');return}
+ const create=e.target.closest('[data-create-role]');if(create){const edit=state.objectPicker&&state.objectPicker.editor;replaceAtQuery(edit,create.dataset.createName);toast(`已记录“创建${create.dataset.createRole}”意图；保存/离开时解析提交`);return}
+ const check=e.target.closest('[data-sample-check]');if(check){e.stopPropagation();const id=check.dataset.sampleCheck;if(check.checked)state.selectedSamples.add(id);else state.selectedSamples.delete(id);render();return}
+ const dcheck=e.target.closest('[data-data-check]');if(dcheck){e.stopPropagation();const id=dcheck.dataset.dataCheck;if(dcheck.checked)state.selectedData.add(id);else state.selectedData.delete(id);render();return}
+ const sort=e.target.closest('[data-sort]');if(sort){const wrap=document.getElementById('sampleTableWrap');if(wrap)state.sampleScrollLeft=wrap.scrollLeft;const k=sort.dataset.sort;if(state.sortKey===k)state.sortDir=state.sortDir==='asc'?'desc':'asc';else{state.sortKey=k;state.sortDir=k==='createdAt'?'desc':'asc'};render();return}
+ const note=e.target.closest('[data-note]');if(note){state.drawer='note:'+note.dataset.note;state.modal=null;state.popover=null;render();return}
+ const nav=e.target.closest('[data-nav]');if(nav){goList(nav.dataset.nav);return}
+ const rowS=e.target.closest('[data-open-sample]');if(rowS){goPage({type:'sample',id:rowS.dataset.openSample},'samples');return}
+ const rowA=e.target.closest('[data-open-analysis]');if(rowA){goPage({type:'analysis',id:rowA.dataset.openAnalysis},'analysis');return}
+ const rowD=e.target.closest('[data-open-data]');if(rowD){goPage({type:'data-detail',id:rowD.dataset.openData},'data');return}
+ const rowC=e.target.closest('[data-open-claim]');if(rowC){goPage({type:'claim-detail',id:rowC.dataset.openClaim},'claims');return}
+ const rowR=e.target.closest('[data-open-resource]');if(rowR){const [kind,id]=rowR.dataset.openResource.split('|');goPage({type:'resource-detail',kind,id},'resources');return}
+ const tab=e.target.closest('[data-resource-tab]');if(tab){state.resourceTab=tab.dataset.resourceTab;render();return}
+ const col=e.target.closest('[data-col]');if(col){if(col.checked)state.hiddenColumns.delete(col.dataset.col);else state.hiddenColumns.add(col.dataset.col);return}
+ const a=e.target.closest('[data-action]');if(!a)return;
+ const act=a.dataset.action;
+ if(act==='global-search'){state.modal='search';render()}
+ else if(act==='settings'){state.modal='settings';render()}
+ else if(act==='help'){state.modal='help';render()}
+ else if(act==='filter'){state.modal='filter';render()}
+ else if(act==='sort'){state.modal='sort';render()}
+ else if(act==='columns'){state.modal='columns';render()}
+ else if(act==='inline-search'){state.modal='inline-search';render()}
+ else if(act==='view-table'){state.viewMode='table';render()}
+ else if(act==='view-cards'){state.viewMode='cards';render()}
+ else if(act==='new-sample'){goPage({type:'sample',id:'S260910-01',fresh:true},'samples')}
+ else if(act==='new-analysis'){goPage({type:'analysis',id:'A-260910-01',fresh:true},'analysis')}
+ else if(act==='new-claim'){toast('请在分析或数据详情中创建论点')}
+ else if(act==='import-data'){goPage({type:'data-detail',id:'D-260910-NEW',fresh:true},'data')}
+ else if(act==='new-resource'){state.modal='new-resource';render()}
+ else if(['close-modal','overlay-close'].includes(act)){state.modal=null;render()}
+ else if(act==='close-drawer'){state.drawer=null;render()}
+ else if(act==='apply-filter'||act==='apply-sort'){state.modal=null;toast('已应用')}
+ else if(act==='clear-filter'){state.modal=null;toast('筛选已清除')}
+ else if(act==='reset-columns'){state.hiddenColumns.clear();render()}
+ else if(act==='save-columns'){state.modal=null;render();toast('显示属性已更新')}
+ else if(act==='apply-inline-search'){state.searchText=document.getElementById('inlineSearchValue')?.value||'';state.modal=null;render()}
+ else if(act==='clear-inline-search'){state.searchText='';state.modal=null;render()}
+ else if(act==='create-sample'){goPage({type:'sample',id:'S260909-05',fresh:true},'samples');toast('已创建样品')}
+ else if(act==='create-analysis'){goPage({type:'analysis',id:'A-260909-04',fresh:true},'analysis');toast('已创建分析')}
+ else if(act==='create-claim'){state.modal=null;goPage({type:'claim-detail',id:'C-260909-10'},'claims');toast('已创建论点')}
+ else if(act==='finish-import'){state.modal='import-map';render()}
+ else if(act==='save-import'){state.modal=null;goPage({type:'data-detail',id:'D-260909-11'},'data');toast('数据已导入')}
+ else if(act==='save-settings'){state.modal=null;toast('设置已保存')}
+ else if(act==='back-smart'){goBack(state.activeNav)}
+ else if(act==='back-samples'){goBack('samples')}
+ else if(act==='back-analysis'){goBack('analysis')}
+ else if(act==='back-data'){goBack('data')}
+ else if(act==='back-claims'){goBack('claims')}
+ else if(act==='back-resources'){goBack('resources')}
+ else if(act==='history'){state.drawer='history';render()}
+ else if(act==='restore-v4'){state.drawer=null;toast('已将 v4 恢复为新的当前版本')}
+ else if(act==='sample-more'){openPopover('sample',a)}
+ else if(act==='analysis-more'){openPopover('analysis',a)}
+ else if(act==='data-more'){openPopover('data',a)}
+ else if(act==='claim-more'){openPopover('claim',a)}
+ else if(act==='resource-more'){openPopover('resource',a)}
+ else if(act==='selected-samples-to-view'){
+   state.analysisSeed={kind:'samples',ids:[...state.selectedSamples]};
+   state.selectedSamples.clear();
+   goPage({type:'analysis',id:'A-260910-SEL',fresh:true},'analysis');
+   toast('已用所选样品创建分析');
+ }
+ else if(act==='selected-data-to-view'){
+   state.analysisSeed={kind:'data',ids:[...state.selectedData]};
+   state.selectedData.clear();
+   goPage({type:'analysis',id:'A-260910-DATA',fresh:true},'analysis');
+   toast('已用所选数据创建分析');
+ }
+ else if(act==='clear-data-selection'){state.selectedData.clear();render()}
+ else if(act==='bulk-data-export'){toast('已导出所选数据（原型）')}
+
+ else if(act==='confirm-batch-create'){state.modal=null;state.selectedSamples.clear();goPage({type:'sample',id:'S260910-01',fresh:true},'samples');toast('批量样品已创建（原型）')}
+ else if(act==='clear-selection'){state.selectedSamples.clear();render()}
+ else if(act==='selected-to-analysis'){state.modal='analysis-add';render()}
+ else if(act==='bulk-export'){toast('已导出所选样品（原型）')}
+ else if(act==='sample-data'){goPage({type:'data-detail',id:'D-260909-08'},'data')}
+ else if(act==='sample-claims'){goPage({type:'claim-detail',id:'C-260909-03'},'claims')}
+ else if(act==='toggle-fold'){const el=document.getElementById(a.dataset.target);if(el){el.hidden=!el.hidden;a.textContent=el.hidden?'›':'⌄'}}
+ else if(act==='add-record'){const input=document.getElementById('composer');if(input&&input.value.trim()){const hint=document.getElementById('blankHint');if(hint)hint.remove();input.value='';toast('记录已添加（原型）')}else toast('先输入一条记录')}
+ else if(act==='share-analysis'){state.modal='share-analysis';render()}
+ else if(act==='analysis-export'){state.modal='export-analysis';render()}
+ else if(['add-analysis-content','add-analysis-context','add-data-to-analysis'].includes(act)){state.modal='analysis-add';render()}
+ else if(act==='analysis-filter'){state.modal='filter';render()}
+ else if(act==='analysis-layout'){state.analysisLayout=state.analysisLayout==='grid'?'compact':'grid';toast(state.analysisLayout==='compact'?'已切换为紧凑布局':'已切换为卡片布局')}
+ else if(act==='compare-more'){toast('比较表可继续添加/删除列')}
+ else if(act==='artifact-more'){toast('Artifact 可重命名、复制或删除')}
+ else if(act==='confirm-analysis-add'){state.modal=null;toast('已添加到分析')}
+ else if(act==='copy-link'){toast('链接已复制')}
+ else if(act==='do-export'){state.modal=null;toast('已生成导出文件（原型）')}
+ else if(act==='download-data'){toast('已开始下载（原型）')}
+ else if(act==='preview-file'){state.modal='file-preview';render()}
+ else if(act==='open-ftir-data'){state.modal=null;goPage({type:'data-detail',id:'D-FTIR-260910-01'},'data')}
+ else if(act==='data-version'){state.modal='data-version';render()}
+
+ else if(act==='fake-add-data-file'){toast('文件已作为 Data component 添加（原型）')}
+ else if(act==='set-data-about'){toast('可从已有 Sample 中选择（原型）')}
+ else if(act==='edit-claim'){state.modal='edit-claim';render()}
+ else if(act==='add-evidence'){state.modal='add-evidence';render()}
+ else if(act==='confidence'){state.modal='confidence';render()}
+ else if(act==='save-claim'||act==='save-confidence'||act==='confirm-evidence'){state.modal=null;toast('已保存')}
+ else if(act==='edit-resource'){state.modal='edit-resource';render()}
+ else if(act==='save-resource'){state.modal=null;toast('资源已保存')}
+ else if(act==='create-resource'){state.modal=null;toast(`${state.resourceTab}已创建`)}
+ else if(act==='add-recommended-prop'){state.modal='add-prop';render()}
+ else if(act==='confirm-add-prop'){state.modal=null;toast('推荐属性已添加')}
+ else if(act==='add-alias'){state.modal='add-alias';render()}
+ else if(act==='confirm-alias'){state.modal=null;toast('相似名已添加')}
+ else if(act==='normalize-alias'){state.modal='normalize';render()}
+ else if(act==='confirm-normalize'){state.modal=null;toast('已建立别名映射，历史记录未修改')}
+ else if(act==='add-unit'){state.modal='add-unit';render()}
+ else if(act==='confirm-unit'){state.modal=null;toast('单位已添加')}
+ else if(act.startsWith('insert-ref-')){state.modal=null;render();toast('已插入引用（原型）')}
+ else if(act==='open-search-sample'){goPage({type:'sample',id:'S260909-01'},'samples')}
+ else if(act==='open-search-analysis'){goPage({type:'analysis',id:'A-260909-01'},'analysis')}
+ else if(act==='open-search-data'){goPage({type:'data-detail',id:'D-260909-08'},'data')}
+ else if(act==='open-search-claim'){goPage({type:'claim-detail',id:'C-260909-03'},'claims')}
+ else if(act==='open-search-resource'){goPage({type:'resource-detail',kind:'原料',id:'m-hpmc'},'resources')}
+ else if(act==='duplicate-sample'){
+   const currentId=state.page.type==='sample'?state.page.id:'S260909-01';
+   state.popover=null;
+   goPage({type:'sample',id:'S260910-01',fresh:false,copiedFrom:currentId},'samples');
+   toast('已复制当前样品并新建');
+ }
+ else if(act==='open-batch-samples'){
+   state.popover=null;
+   const currentId=state.page.type==='sample'?state.page.id:'S260909-01';
+   goPage({type:'batch-samples',sourceId:currentId},'samples');
+ }
+ else if(act==='batch-create-all'){
+   goPage({type:'sample',id:'S260910-02',fresh:true},'samples');
+   toast('已创建 3 个样品，当前打开第一个');
+ }
+ else if(act==='batch-cancel'){goBack('samples')}
+ else if(act==='add-batch-row'){toast('已添加一行（原型）')}
+ else if(act==='delete-batch-row'){toast('已删除该行（原型）')}
+ else if(['export-sample','duplicate-analysis','template-analysis','copy-data-ref','source-data','copy-claim-ref','mark-supported','mark-refuted','copy-resource-ref','resource-usage'].includes(act)){state.popover=null;toast('操作已执行（原型）')}
+ else if(['delete-sample','delete-analysis','delete-data','delete-claim','delete-resource'].includes(act)){state.popover=null;toast('已移至回收站（原型）')}
+ else if(act==='analysis-filter'){state.modal='filter';render()}
+ else if(act==='clear-inline-search'){state.searchText='';state.modal=null;render()}
+});
+
+document.addEventListener('keydown',e=>{
+ if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='k'){e.preventDefault();state.modal='search';render()}
+ if(e.key==='Escape'&&(state.modal||state.drawer||state.popover)){state.modal=state.drawer=state.popover=null;render()}
+});
+
+
+let tooltipEl=null;
+document.addEventListener('mouseover',e=>{
+ const target=e.target.closest('[data-full-label]');
+ if(!target)return;
+ const text=target.dataset.fullLabel;
+ if(!text)return;
+ if(tooltipEl)tooltipEl.remove();
+ tooltipEl=document.createElement('div');
+ tooltipEl.className='hoverTooltip';tooltipEl.textContent=text;
+ document.body.appendChild(tooltipEl);
+ const r=target.getBoundingClientRect();
+ tooltipEl.style.left=Math.min(window.innerWidth-tooltipEl.offsetWidth-8,Math.max(8,r.left+r.width/2-tooltipEl.offsetWidth/2))+'px';
+ tooltipEl.style.top=Math.min(window.innerHeight-tooltipEl.offsetHeight-8,r.bottom+6)+'px';
+});
+document.addEventListener('mouseout',e=>{
+ const target=e.target.closest('[data-full-label]');
+ if(!target)return;
+ const related=e.relatedTarget;
+ if(related&&target.contains(related))return;
+ if(tooltipEl){tooltipEl.remove();tooltipEl=null}
+});
+
+let dragColKey=null;
+let dragGhost=null;
+
+function clearColumnDragVisuals(){
+ document.querySelectorAll('.dragColumnSource,.dragTargetBefore,.dragTargetAfter,.colHoverCell').forEach(el=>{
+   el.classList.remove('dragColumnSource','dragTargetBefore','dragTargetAfter','colHoverCell');
+ });
+ if(dragGhost){dragGhost.remove();dragGhost=null}
+}
+function highlightColumn(key,on=true){
+ document.querySelectorAll(`[data-col-key="${key}"],[data-col-cell="${key}"]`).forEach(el=>{
+   el.classList.toggle('colHoverCell',on);
+ });
+}
+
+document.addEventListener('mouseover',e=>{
+ const th=e.target.closest('[data-col-key]');
+ if(!th||dragColKey)return;
+ highlightColumn(th.dataset.colKey,true);
+});
+document.addEventListener('mouseout',e=>{
+ const th=e.target.closest('[data-col-key]');
+ if(!th||dragColKey)return;
+ const related=e.relatedTarget;
+ if(related&&th.contains(related))return;
+ highlightColumn(th.dataset.colKey,false);
+});
+
+document.addEventListener('dragstart',e=>{
+ const th=e.target.closest('[data-col-key]');
+ if(!th)return;
+ dragColKey=th.dataset.colKey;
+
+ clearColumnDragVisuals();
+ document.querySelectorAll(`[data-col-key="${dragColKey}"],[data-col-cell="${dragColKey}"]`).forEach(el=>el.classList.add('dragColumnSource'));
+
+ const cells=[...document.querySelectorAll(`[data-col-cell="${dragColKey}"]`)].slice(0,4);
+ dragGhost=document.createElement('div');
+ dragGhost.className='columnGhost';
+ dragGhost.innerHTML=`<strong>${th.dataset.fullLabel||th.textContent.trim()}</strong>${cells.map(c=>`<span>${c.textContent.trim()}</span>`).join('')}`;
+ document.body.appendChild(dragGhost);
+ if(e.dataTransfer){
+   e.dataTransfer.effectAllowed='move';
+   e.dataTransfer.setDragImage(dragGhost,72,18);
+   e.dataTransfer.setData('text/plain',dragColKey);
+ }
+});
+
+document.addEventListener('dragover',e=>{
+ const th=e.target.closest('[data-col-key]');
+ if(!th||!dragColKey)return;
+ e.preventDefault();
+ document.querySelectorAll('.dragTargetBefore,.dragTargetAfter').forEach(x=>x.classList.remove('dragTargetBefore','dragTargetAfter'));
+ const r=th.getBoundingClientRect();
+ const before=e.clientX < r.left+r.width/2;
+ th.classList.add(before?'dragTargetBefore':'dragTargetAfter');
+ if(e.dataTransfer)e.dataTransfer.dropEffect='move';
+});
+
+document.addEventListener('drop',e=>{
+ const th=e.target.closest('[data-col-key]');
+ if(!th||!dragColKey){clearColumnDragVisuals();dragColKey=null;return}
+ e.preventDefault();
+
+ const target=th.dataset.colKey;
+ const r=th.getBoundingClientRect();
+ const before=e.clientX < r.left+r.width/2;
+
+ if(target!==dragColKey){
+   const arr=[...state.sampleColumnOrder];
+   const from=arr.indexOf(dragColKey);
+   let to=arr.indexOf(target);
+   if(from>=0&&to>=0){
+     arr.splice(from,1);
+     to=arr.indexOf(target);
+     arr.splice(before?to:to+1,0,dragColKey);
+     state.sampleColumnOrder=arr;
+   }
+ }
+ clearColumnDragVisuals();
+ dragColKey=null;
+ render();
+ toast('列顺序已更新');
+});
+
+document.addEventListener('dragend',()=>{
+ clearColumnDragVisuals();
+ dragColKey=null;
+});
+render();
+</script>
+</body>
+</html>

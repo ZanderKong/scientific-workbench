@@ -1,0 +1,324 @@
+/* Business-only extensions. Original dimensions live in prototype.css. */
+.modal {
+  display: flex;
+  max-height: 76vh;
+  flex-direction: column;
+}
+.modalHeader,
+.modalFooter {
+  flex: 0 0 auto;
+}
+.modalBody {
+  overflow: auto;
+}
+.componentOpen {
+  border: 0;
+  padding: 0;
+  text-align: left;
+  background: transparent;
+}
+.attachmentImage {
+  max-width: 100%;
+  max-height: 60vh;
+  object-fit: contain;
+}
+.attachmentPdf {
+  width: 100%;
+  height: 60vh;
+  border: 0;
+}
+.claimComposer {
+  margin-top: 10px;
+}
+.claimTextInput {
+  width: 100%;
+  min-height: 100px;
+  border: 1px solid var(--line);
+  background: transparent;
+  font: inherit;
+  font-size: 26px;
+  color: inherit;
+}
+.claimTextLink {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+}
+.claimDraft {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  padding-left: 20px;
+}
+.claimDraft .researchEditor {
+  flex: 1;
+}
+.researchEditor .ProseMirror {
+  outline: none;
+}
+.researchEditor .ProseMirror > ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.researchEditor .ProseMirror > ul > li {
+  position: relative;
+  margin: 13px 0;
+  padding: 0;
+  font-size: 15px;
+  line-height: 1.75;
+}
+.researchEditor .ProseMirror > ul > li > p {
+  margin-left: 26px;
+}
+.researchEditor .ProseMirror li p {
+  margin: 0;
+}
+.researchEditor .ProseMirror li ul {
+  list-style: none;
+  padding: 0;
+  margin: 4px 0 0 30px;
+}
+.researchEditor .ProseMirror > ul > li:not(:has(ul))::before {
+  content: "•";
+  position: absolute;
+  left: 3px;
+  color: #717773;
+  font-size: 13px;
+}
+.unitHint {
+  color: #a3a8a4;
+  pointer-events: none;
+  user-select: none;
+}
+.unresolvedReference {
+  text-decoration: underline dotted #aaa;
+  text-underline-offset: 3px;
+}
+.researchEditor .ProseMirror li li {
+  margin: 3px 0;
+  font-size: 13px;
+  line-height: 1.65;
+  color: #717672;
+}
+.researchFold {
+  position: absolute;
+  left: 0;
+  top: 0;
+}
+.researchEditor .researchFolded > ul {
+  display: none;
+}
+.literalLine {
+  white-space: pre-wrap;
+  min-height: 1em;
+}
+.objectResult[aria-selected="true"] {
+  background: #efefeb;
+}
+.errorNotice {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 250;
+  background: #343936;
+  color: #fff;
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-size: 12px;
+  max-width: 520px;
+}
+.errorNotice button {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  margin-left: 12px;
+}
+.markdown-editor .ProseMirror {
+  outline: none;
+}
+.markdown-editor .ProseMirror p {
+  margin: 0;
+}
+.asyncStatus {
+  font-size: 10px;
+  color: var(--muted);
+}
+/* Empty operation follows the prototype's liveBulletArea/liveBulletLine values. */
+.researchEditor .ProseMirror > ul > li.emptyResearchLine {
+  margin: 10px 0 0;
+  min-height: 29px;
+}
+.researchEditor .ProseMirror > ul > li.emptyResearchLine > p {
+  margin-left: 20px;
+  min-height: 28px;
+  padding: 2px 3px;
+  line-height: 1.7;
+  color: #363b38;
+}
+.researchEditor .ProseMirror > ul > li.emptyResearchLine::before {
+  width: 12px;
+  left: 0;
+  text-align: center;
+  line-height: 1.8;
+}
+.researchEditor .emptyResearchLine > p::before {
+  content: attr(data-placeholder);
+  color: #b0b5b1;
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
+/* Editable Data title has the frozen existing-title metrics, not the new-data input padding. */
+.dataDetailPage .dataTitle {
+  display: block;
+  margin: 7px 0 8px;
+  padding: 0;
+  height: 36px;
+}
+.dataDescription .literalLine {
+  font-size: 15px;
+  line-height: 1.8;
+  color: #4f5551;
+  max-width: 760px;
+  margin: 15px 0;
+}
+.dataDetailPage .infoCard .aboutEdit {
+  font: inherit;
+  color: inherit;
+  padding: 0;
+  text-decoration: none;
+}
+.dataDetailPage .contentArea > .dataBox + .dataBox {
+  margin-top: 10px;
+}
+.claimSharedArea .claimTextLink {
+  font-size: 10px;
+  line-height: 1.7;
+  padding: 2px 3px;
+}
+.claimSharedArea .claimDraft {
+  position: relative;
+  display: block;
+  padding: 0;
+}
+.claimSharedArea .claimDraft > .claimEditorBadge {
+  position: absolute;
+  left: 19px;
+  top: 0;
+}
+.claimSharedArea .researchEditor .ProseMirror > ul > li {
+  margin: 10px 0 0;
+  min-height: 29px;
+  font-size: 10px;
+}
+.claimSharedArea .researchEditor .ProseMirror > ul > li > p,
+.claimSharedArea .researchEditor .ProseMirror > ul > li.emptyResearchLine > p {
+  margin-left: 57px;
+  font-size: 10px;
+  line-height: 1.7;
+  padding: 2px 3px;
+}
+.claimSharedArea .researchEditor .ProseMirror > ul > li::before {
+  font-size: 13px;
+}
+
+.hostedClaimComposer {
+  margin-top: 10px;
+}
+.claimSharedArea .researchEditor .ProseMirror > ul > li,
+.claimSharedArea .researchEditor .ProseMirror > ul > li.emptyResearchLine {
+  margin: 0;
+}
+
+.dataDetailPage .componentRole {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  text-align: right;
+}
+
+.analysisGrid .artifactPreview {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+}
+.analysisGrid .artifactPreview img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.analysisGrid .hostedClaimComposer {
+  margin-top: 0;
+}
+
+.detailPage .legacyEvidenceWarning {
+  width: min(860px, calc(100% - 80px));
+  margin: 0 auto 20px;
+  color: #777d79;
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.researchEditor [data-file-id] + [data-file-id]::before {
+  content: "";
+  display: inline-block;
+  width: 22px;
+  border-top: 1px dashed #b9beb9;
+  margin: 0 6px;
+  vertical-align: middle;
+}
+
+/* Sample bullet nodes reproduce recordMain/editableRecord/details/fileChildWrap. */
+.editorPage .researchEditor .ProseMirror li p {
+  padding: 1px 3px;
+  border-radius: 5px;
+}
+.editorPage .researchEditor .ProseMirror li ul {
+  display: grid;
+  gap: 3px;
+}
+.editorPage .researchEditor .ProseMirror li li {
+  margin: 0;
+}
+.editorPage .researchEditor .ProseMirror p.researchDataLine {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  min-height: 24px;
+  color: #59615d;
+}
+.editorPage .researchEditor .ProseMirror li li > ul {
+  margin: 3px 0 0 27px;
+  gap: 2px;
+}
+.editorPage .researchEditor .ProseMirror li li li > p {
+  display: flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0;
+  color: #a3a8a4;
+  font-size: 11px;
+}
+.editorPage .researchEditor .ProseMirror li li li > p::before {
+  content: "•\00a0\00a0";
+  flex: 0 0 auto;
+}
+
+.editorPage .researchEditor .ProseMirror li.researchFolded > ul {
+  display: none;
+}
+
+.editorPage .researchEditor .ProseMirror li li li {
+  position: relative;
+}
+.editorPage .researchEditor .attachmentPrompt {
+  position: absolute;
+  left: 11.578125px;
+  top: 1px;
+}

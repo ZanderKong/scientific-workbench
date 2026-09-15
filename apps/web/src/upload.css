@@ -1,0 +1,13 @@
+.upload-button {
+  display: block;
+  border: 1px solid #3d424e;
+  border-radius: 7px;
+  padding: 9px 10px;
+  text-align: center;
+  color: #d2a15d;
+  cursor: pointer;
+  margin-bottom: 10px;
+}
+.upload-button:hover {
+  border-color: #d2a15d;
+}

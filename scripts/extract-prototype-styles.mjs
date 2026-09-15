@@ -1,0 +1,10 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import crypto from 'node:crypto';
+const root = path.resolve(import.meta.dirname, '..');
+const html = fs.readFileSync(path.join(root, 'prototype/reference.html'), 'utf8');
+const manifest = JSON.parse(fs.readFileSync(path.join(root, 'prototype/manifest.json'), 'utf8'));
+if (crypto.createHash('sha256').update(html).digest('hex') !== manifest.sha256) throw new Error('Prototype changed');
+const styles = [...html.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/g)].map(match => match[1]).join('\n');
+fs.writeFileSync(path.join(root, 'apps/web/src/prototype.css'), `/* Generated verbatim from frozen prototype ${manifest.sha256}. */\n${styles}`);
+console.log('Extracted original styles without changing selectors or values.');

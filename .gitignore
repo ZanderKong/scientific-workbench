@@ -1,0 +1,11 @@
+node_modules
+dist
+*.tsbuildinfo
+.vite
+data
+demo/workspace
+*.db
+*.db-*
+.DS_Store
+playwright-report
+test-results

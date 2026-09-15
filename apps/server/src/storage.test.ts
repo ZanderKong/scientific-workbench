@@ -1,0 +1,44 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import os from 'node:os';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { WorkbenchStore } from './store';
+import { StorageService } from './storage';
+const roots: string[] = [], stores: WorkbenchStore[] = [], services: StorageService[] = [];
+afterEach(async () => { for (const service of services.splice(0)) await service.stopScheduler(); for (const store of stores.splice(0)) store.close(); for (const root of roots.splice(0)) fs.rmSync(root, { recursive: true, force: true }); });
+const setup = () => { const root = fs.mkdtempSync(path.join(os.tmpdir(), 'swb-storage-')); roots.push(root); const store = new WorkbenchStore({ dataDir: root }); stores.push(store); let time = Date.now(); const service = new StorageService(store, () => time); services.push(service); return { root, store, service, setTime: (value: number) => { time = value; } }; };
+describe('persistent S3 scheduling', () => {
+  it('uses strict size and inclusive fifteen-day boundaries, persisting retry deadlines across restart', async () => {
+    const { root, store, service, setTime } = setup();
+    expect(service.config()).toMatchObject({ enabled: false, thresholdBytes: 100000000, minAgeDays: 15, keepLocal: true });
+    const exact = store.saveAttachment(Buffer.alloc(10, 1), 'equal.bin', 'application/octet-stream');
+    const large = store.saveAttachment(Buffer.alloc(11, 2), 'larger.bin', 'application/octet-stream');
+    service.configure({ enabled: true, thresholdBytes: 10, bucket: 'test' });
+    const uploaded = vi.spyOn(service, 'upload').mockRejectedValue(new Error('网络中断'));
+    const due = Date.parse(large.createdAt) + 15 * 86400000;
+    setTime(due - 1); await service.scanDue(); expect(uploaded).not.toHaveBeenCalled();
+    setTime(due); await service.scanDue(); expect(uploaded).toHaveBeenCalledTimes(1);
+    const first = store.listJobs().find(job => job.type === 's3-upload')!;
+    expect(first.payload.attachmentId).toBe(large.id); expect(first.payload.attachmentId).not.toBe(exact.id);
+    expect(first.status).toBe('failed'); expect(first.payload.nextAttemptAt).toBe(due + 60000);
+    setTime(due + 59999); await service.scanDue(); expect(uploaded).toHaveBeenCalledTimes(1);
+    await service.stopScheduler(); services.splice(services.indexOf(service), 1); store.close(); stores.splice(stores.indexOf(store), 1);
+    const reopened = new WorkbenchStore({ dataDir: root }); stores.push(reopened);
+    expect(reopened.listJobs()[0].payload).toEqual(first.payload);
+    const resumed = new StorageService(reopened, () => due + 60000); services.push(resumed);
+    const retry = vi.spyOn(resumed, 'upload').mockRejectedValue(new Error('再次中断'));
+    await resumed.scanDue(); expect(retry).toHaveBeenCalledTimes(1);
+    expect(reopened.listJobs()[0].payload.nextAttemptAt).toBe(due + 60000 + 300000);
+    expect(fs.existsSync(large.localPath)).toBe(true);
+  });
+  it('runs at most two upload tasks concurrently', async () => {
+    const { store, service, setTime } = setup();
+    const files = [1, 2, 3, 4].map(value => store.saveAttachment(Buffer.alloc(11, value), `${value}.bin`, 'application/octet-stream'));
+    setTime(Math.max(...files.map(file => Date.parse(file.createdAt))) + 15 * 86400000);
+    service.configure({ enabled: true, thresholdBytes: 10, bucket: 'test' });
+    let active = 0, maximum = 0;
+    vi.spyOn(service, 'upload').mockImplementation(async file => { active++; maximum = Math.max(maximum, active); await new Promise(resolve => setTimeout(resolve, 10)); active--; return { id: file.id, key: 'test' }; });
+    expect(await service.scanDue()).toEqual({ uploaded: 4, skipped: 0 });
+    expect(maximum).toBe(2); expect(store.listJobs().every(job => job.status === 'succeeded')).toBe(true);
+  });
+});

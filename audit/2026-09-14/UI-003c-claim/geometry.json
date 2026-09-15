@@ -1,0 +1,122 @@
+[
+  {
+    "selector": ".detailTop",
+    "expected": {
+      "x": 168,
+      "y": 48,
+      "width": 1272,
+      "height": 52
+    },
+    "actual": {
+      "x": 168,
+      "y": 48,
+      "width": 1272,
+      "height": 52
+    }
+  },
+  {
+    "selector": ".claimHero",
+    "expected": {
+      "x": 374,
+      "y": 144,
+      "width": 860,
+      "height": 104.59375
+    },
+    "actual": {
+      "x": 374,
+      "y": 144,
+      "width": 860,
+      "height": 104.59375
+    }
+  },
+  {
+    "selector": ".claimHero h1",
+    "expected": {
+      "x": 374,
+      "y": 184,
+      "width": 860,
+      "height": 36
+    },
+    "actual": {
+      "x": 374,
+      "y": 184,
+      "width": 860,
+      "height": 36
+    }
+  },
+  {
+    "selector": ".claimLayout",
+    "expected": {
+      "x": 314,
+      "y": 276.59375,
+      "width": 980,
+      "height": 263
+    },
+    "actual": {
+      "x": 314,
+      "y": 276.59375,
+      "width": 980,
+      "height": 261
+    }
+  },
+  {
+    "selector": ".evidenceColumn",
+    "expected": {
+      "x": 314,
+      "y": 276.59375,
+      "width": 726,
+      "height": 263
+    },
+    "actual": {
+      "x": 314,
+      "y": 276.59375,
+      "width": 726,
+      "height": 261
+    }
+  },
+  {
+    "selector": ".evidenceCard",
+    "expected": {
+      "x": 314,
+      "y": 311.59375,
+      "width": 726,
+      "height": 92.5
+    },
+    "actual": {
+      "x": 314,
+      "y": 311.59375,
+      "width": 726,
+      "height": 91.5
+    }
+  },
+  {
+    "selector": ".claimLayout aside",
+    "expected": {
+      "x": 1054,
+      "y": 276.59375,
+      "width": 240,
+      "height": 263
+    },
+    "actual": {
+      "x": 1054,
+      "y": 276.59375,
+      "width": 240,
+      "height": 261
+    }
+  },
+  {
+    "selector": ".infoCard",
+    "expected": {
+      "x": 1054,
+      "y": 276.59375,
+      "width": 240,
+      "height": 54
+    },
+    "actual": {
+      "x": 1054,
+      "y": 276.59375,
+      "width": 240,
+      "height": 54
+    }
+  }
+]

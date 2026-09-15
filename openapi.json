@@ -1,0 +1,3138 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Scientific Workbench API",
+    "version": "0.2.0"
+  },
+  "paths": {
+    "/api/v1/documents/{id}/blocks/{blockId}/resolve-data": {
+      "post": {
+        "operationId": "document_resolve_data_identity",
+        "description": "数据区块身份丢失后明确关联已有Data（加载当前内容）或新建，保留其他正文",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "blockId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "dataId": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "createNew": {
+                    "type": "boolean"
+                  },
+                  "expectedVersion": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                },
+                "required": [
+                  "expectedVersion"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "操作结果，实体包含实际版本；分页请求返回items/total/offset/limit"
+          },
+          "401": {
+            "description": "凭据无效"
+          },
+          "403": {
+            "description": "缺少权限"
+          },
+          "409": {
+            "description": "版本或幂等冲突"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/data/{id}/reload": {
+      "post": {
+        "operationId": "data_reload_file",
+        "description": "明确接纳外部文件修改，校验身份并更新内容版本",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "expectedVersion": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                },
+                "required": [
+                  "expectedVersion"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "操作结果，实体包含实际版本；分页请求返回items/total/offset/limit"
+          },
+          "401": {
+            "description": "凭据无效"
+          },
+          "403": {
+            "description": "缺少权限"
+          },
+          "409": {
+            "description": "版本或幂等冲突"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/analyses/{id}/reload": {
+      "post": {
+        "operationId": "analysis_reload_file",
+        "description": "明确接纳外部文件修改，校验身份并更新内容版本",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "expectedVersion": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                },
+                "required": [
+                  "expectedVersion"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "操作结果，实体包含实际版本；分页请求返回items/total/offset/limit"
+          },
+          "401": {
+            "description": "凭据无效"
+          },
+          "403": {
+            "description": "缺少权限"
+          },
+          "409": {
+            "description": "版本或幂等冲突"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/claims/{id}/reload": {
+      "post": {
+        "operationId": "claim_reload_file",
+        "description": "明确接纳外部文件修改，校验身份并更新内容版本",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "expectedVersion": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                },
+                "required": [
+                  "expectedVersion"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "操作结果，实体包含实际版本；分页请求返回items/total/offset/limit"
+          },
+          "401": {
+            "description": "凭据无效"
+          },
+          "403": {
+            "description": "缺少权限"
+          },
+          "409": {
+            "description": "版本或幂等冲突"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/workspace/status": {
+      "get": {
+        "operationId": "workspace_status",
+        "description": "读取目录、实体数量与待更新状态",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "操作结果，实体包含实际版本；分页请求返回items/total/offset/limit"
+          },
+          "401": {
+            "description": "凭据无效"
+          },
+          "403": {
+            "description": "缺少权限"
+          },
+          "409": {
+            "description": "版本或幂等冲突"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/workspace/settings": {
+      "get": {
+        "operationId": "workspace_settings",
+        "description": "读取工作区公开设置，不返回凭据",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "操作结果，实体包含实际版本；分页请求返回items/total/offset/limit"
+          },
+          "401": {
+            "description": "凭据无效"
+          },
+          "403": {
+            "description": "缺少权限"
+          },
+          "409": {
+            "description": "版本或幂等冲突"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/workspace/rebuild": {
+      "post": {
+        "operationId": "workspace_rebuild",
+        "description": "从业务文件重建索引",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "操作结果，实体包含实际版本；分页请求返回items/total/offset/limit"
+          },
+          "401": {
+            "description": "凭据无效"
+          },
+          "403": {
+            "description": "缺少权限"
+          },
+          "409": {
+            "description": "版本或幂等冲突"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/samples": {
+      "get": {
+        "operationId": "sample_list",
+        "description": "分页列出样品属性和提取状态",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "操作结果，实体包含实际版本；分页请求返回items/total/offset/limit"
+          },
+          "401": {
+            "description": "凭据无效"
+          },
+          "403": {
+            "description": "缺少权限"
+          },
+          "409": {
+            "description": "版本或幂等冲突"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "sample_create",
+        "description": "新建独立样品正文",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "body": {
+                    "type": "string"
+                  }
+                },
+                "required": []
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "操作结果，实体包含实际版本；分页请求返回items/total/offset/limit"
+          },
+          "401": {
+            "description": "凭据无效"
+          },
+          "403": {
+            "description": "缺少权限"
+          },
+          "409": {
+            "description": "版本或幂等冲突"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/samples/{id}": {
+      "get": {
+        "operationId": "sample_get",
+        "description": "读取样品正文、属性和实际内容版本；latest=true先完成提取",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "latest",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "操作结果，实体包含实际版本；分页请求返回items/total/offset/limit"
+          },
+          "401": {
+            "description": "凭据无效"
+          },
+          "403": {
+            "description": "缺少权限"
+          },
+          "409": {
+            "description": "版本或幂等冲突"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "put": {
+        "operationId": "sample_update",
+        "description": "按版本修改样品编号或标题",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "expectedVersion": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                },
+                "required": [
+                  "expectedVersion"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "操作结果，实体包含实际版本；分页请求返回items/total/offset/limit"
+          },
+          "401": {
+            "description": "凭据无效"
+          },
+          "403": {
+            "description": "缺少权限"
+          },
+          "409": {
+            "description": "版本或幂等冲突"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/samples/{id}/copy": {
+      "post": {
+        "operationId": "sample_copy",
+        "description": "复制操作模板，排除Data、附件和论点结果",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "type": "string"
+                  }
+                },
+                "required": []
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "操作结果，实体包含实际版本；分页请求返回items/total/offset/limit"
+          },
+          "401": {
+            "description": "凭据无效"
+          },
+          "403": {
+            "description": "缺少权限"
+          },
+          "409": {
+            "description": "版本或幂等冲突"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/samples/batch": {
+      "post": {
+        "operationId": "sample_batch",
+        "description": "按模板逐行修改属性并批量创建独立样品",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "templateId": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "expectedVersion": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "rows": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "values": {
+                          "type": "object"
+                        }
+                      },
+                      "required": [
+                        "values"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "templateId",
+                  "expectedVersion",
+                  "rows"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "操作结果，实体包含实际版本；分页请求返回items/total/offset/limit"
+          },
+          "401": {
+            "description": "凭据无效"
+          },
+          "403": {
+            "description": "缺少权限"
+          },
+          "409": {
+            "description": "版本或幂等冲突"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/documents/{id}": {
+      "get": {
+        "operationId": "document_get",
+        "description": "读取已经保存的正文和隐藏文件头",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "latest",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "操作结果，实体包含实际版本；分页请求返回items/total/offset/limit"
+          },
+          "401": {
+            "description": "凭据无效"
+          },
+          "403": {
+            "description": "缺少权限"
+          },
+          "409": {
+            "description": "版本或幂等冲突"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "put": {
+        "operationId": "document_save",
+        "description": "按版本保存正文；保存成功后仍可能待提取",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "body": {
+                    "type": "string"
+                  },
+                  "expectedVersion": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                },
+                "required": [
+                  "body",
+                  "expectedVersion"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "操作结果，实体包含实际版本；分页请求返回items/total/offset/limit"
+          },
+          "401": {
+            "description": "凭据无效"
+          },
+          "403": {
+            "description": "缺少权限"
+          },
+          "409": {
+            "description": "版本或幂等冲突"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/documents/{id}/finalize": {
+      "post": {
+        "operationId": "document_finalize",
+        "description": "整篇提取已保存正文，重复调用更新原记录",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "操作结果，实体包含实际版本；分页请求返回items/total/offset/limit"
+          },
+          "401": {
+            "description": "凭据无效"
+          },
+          "403": {
+            "description": "缺少权限"
+          },
+          "409": {
+            "description": "版本或幂等冲突"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/documents/{id}/reload": {
+      "post": {
+        "operationId": "document_reload",
+        "description": "显式接纳磁盘修改；调用前保留自己的草稿",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "操作结果，实体包含实际版本；分页请求返回items/total/offset/limit"
+          },
+          "401": {
+            "description": "凭据无效"
+          },
+          "403": {
+            "description": "缺少权限"
+          },
+          "409": {
+            "description": "版本或幂等冲突"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/documents/{id}/snapshots": {
+      "get": {
+        "operationId": "document_history",
+        "description": "只读正文历史，可复制，不回滚",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "操作结果，实体包含实际版本；分页请求返回items/total/offset/limit"
+          },
+          "401": {
+            "description": "凭据无效"
+          },
+          "403": {
+            "description": "缺少权限"
+          },
+          "409": {
+            "description": "版本或幂等冲突"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/objects": {
+      "get": {
+        "operationId": "object_search",
+        "description": "搜索全局对象、别名和废弃对象",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "操作结果，实体包含实际版本；分页请求返回items/total/offset/limit"
+          },
+          "401": {
+            "description": "凭据无效"
+          },
+          "403": {
+            "description": "缺少权限"
+          },
+          "409": {
+            "description": "版本或幂等冲突"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "object_create",
+        "description": "按明确类别创建对象，不猜测名称语义",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "canonicalName": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "role": {
+                    "type": "string",
+                    "enum": [
+                      "material",
+                      "equipment",
+                      "process",
+                      "other"
+                    ]
+                  },
+                  "aliases": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "identityText": {
+                    "type": "string"
+                  },
+                  "recommendedPropertyIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "canonicalName",
+                  "role"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "操作结果，实体包含实际版本；分页请求返回items/total/offset/limit"
+          },
+          "401": {
+            "description": "凭据无效"
+          },
+          "403": {
+            "description": "缺少权限"
+          },
+          "409": {
+            "description": "版本或幂等冲突"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/objects/{id}": {
+      "put": {
+        "operationId": "object_update",
+        "description": "按版本编辑标准名、手动别名和生命周期",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "canonicalName": {
+                    "type": "string"
+                  },
+                  "aliases": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "identityText": {
+                    "type": "string"
+                  },
+                  "recommendedPropertyIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "lifecycle": {
+                    "type": "string",
+                    "enum": [
+                      "active",
+                      "deprecated"
+                    ]
+                  },
+                  "expectedVersion": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                },
+                "required": [
+                  "expectedVersion"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "操作结果，实体包含实际版本；分页请求返回items/total/offset/limit"
+          },
+          "401": {
+            "description": "凭据无效"
+          },
+          "403": {
+            "description": "缺少权限"
+          },
+          "409": {
+            "description": "版本或幂等冲突"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "object_delete",
+        "description": "永久删除没有任何引用的对象，需要delete权限",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "expectedVersion",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "操作结果，实体包含实际版本；分页请求返回items/total/offset/limit"
+          },
+          "401": {
+            "description": "凭据无效"
+          },
+          "403": {
+            "description": "缺少权限"
+          },
+          "409": {
+            "description": "版本或幂等冲突"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/objects/{id}/merge": {
+      "post": {
+        "operationId": "object_merge",
+        "description": "显式合并对象，需要merge权限",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "targetId": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "expectedVersion": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "targetVersion": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                },
+                "required": [
+                  "targetId",
+                  "expectedVersion",
+                  "targetVersion"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "操作结果，实体包含实际版本；分页请求返回items/total/offset/limit"
+          },
+          "401": {
+            "description": "凭据无效"
+          },
+          "403": {
+            "description": "缺少权限"
+          },
+          "409": {
+            "description": "版本或幂等冲突"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/properties": {
+      "get": {
+        "operationId": "property_search",
+        "description": "搜索共用属性字典",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "操作结果，实体包含实际版本；分页请求返回items/total/offset/limit"
+          },
+          "401": {
+            "description": "凭据无效"
+          },
+          "403": {
+            "description": "缺少权限"
+          },
+          "409": {
+            "description": "版本或幂等冲突"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "property_create",
+        "description": "明确创建属性及可选单位、别名",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "canonicalName": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "aliases": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "dimension": {
+                    "type": "string"
+                  },
+                  "recommendedUnit": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "canonicalName"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "操作结果，实体包含实际版本；分页请求返回items/total/offset/limit"
+          },
+          "401": {
+            "description": "凭据无效"
+          },
+          "403": {
+            "description": "缺少权限"
+          },
+          "409": {
+            "description": "版本或幂等冲突"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/properties/{id}": {
+      "put": {
+        "operationId": "property_update",
+        "description": "按版本编辑属性字典，不自动合并近义词",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "canonicalName": {
+                    "type": "string"
+                  },
+                  "aliases": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "dimension": {
+                    "type": "string"
+                  },
+                  "recommendedUnit": {
+                    "type": "string"
+                  },
+                  "expectedVersion": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                },
+                "required": [
+                  "expectedVersion"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "操作结果，实体包含实际版本；分页请求返回items/total/offset/limit"
+          },
+          "401": {
+            "description": "凭据无效"
+          },
+          "403": {
+            "description": "缺少权限"
+          },
+          "409": {
+            "description": "版本或幂等冲突"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/data": {
+      "get": {
+        "operationId": "data_list",
+        "description": "分页列出独立Data",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "操作结果，实体包含实际版本；分页请求返回items/total/offset/limit"
+          },
+          "401": {
+            "description": "凭据无效"
+          },
+          "403": {
+            "description": "缺少权限"
+          },
+          "409": {
+            "description": "版本或幂等冲突"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "data_create",
+        "description": "创建Data，可About多个样品",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "body": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "aboutSampleIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "componentIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "components": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "file",
+                            "text"
+                          ]
+                        },
+                        "name": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "role": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "creator": {
+                          "type": "string",
+                          "enum": [
+                            "human",
+                            "external"
+                          ]
+                        },
+                        "provenance": {
+                          "type": "string"
+                        },
+                        "createdAt": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "derivedFrom": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "attachmentId": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "bodyLinked": {
+                          "type": "boolean",
+                          "description": "正文附件标记管理的组件引用；移除正文标记时解除该引用"
+                        },
+                        "content": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "kind",
+                        "name",
+                        "role",
+                        "creator",
+                        "provenance",
+                        "createdAt",
+                        "derivedFrom"
+                      ],
+                      "additionalProperties": false
+                    }
+                  }
+                },
+                "required": [
+                  "name"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "操作结果，实体包含实际版本；分页请求返回items/total/offset/limit"
+          },
+          "401": {
+            "description": "凭据无效"
+          },
+          "403": {
+            "description": "缺少权限"
+          },
+          "409": {
+            "description": "版本或幂等冲突"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/data/{id}": {
+      "get": {
+        "operationId": "data_get",
+        "description": "读取Data正文、About、组件、来源和版本",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "操作结果，实体包含实际版本；分页请求返回items/total/offset/limit"
+          },
+          "401": {
+            "description": "凭据无效"
+          },
+          "403": {
+            "description": "缺少权限"
+          },
+          "409": {
+            "description": "版本或幂等冲突"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "put": {
+        "operationId": "data_update",
+        "description": "按版本编辑Data正文、About和附件引用",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "body": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "aboutSampleIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "componentIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "components": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "file",
+                            "text"
+                          ]
+                        },
+                        "name": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "role": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "creator": {
+                          "type": "string",
+                          "enum": [
+                            "human",
+                            "external"
+                          ]
+                        },
+                        "provenance": {
+                          "type": "string"
+                        },
+                        "createdAt": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "derivedFrom": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "attachmentId": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "bodyLinked": {
+                          "type": "boolean",
+                          "description": "正文附件标记管理的组件引用；移除正文标记时解除该引用"
+                        },
+                        "content": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "kind",
+                        "name",
+                        "role",
+                        "creator",
+                        "provenance",
+                        "createdAt",
+                        "derivedFrom"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "expectedVersion": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                },
+                "required": [
+                  "expectedVersion"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "操作结果，实体包含实际版本；分页请求返回items/total/offset/limit"
+          },
+          "401": {
+            "description": "凭据无效"
+          },
+          "403": {
+            "description": "缺少权限"
+          },
+          "409": {
+            "description": "版本或幂等冲突"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/data/{id}/finalize": {
+      "post": {
+        "operationId": "data_finalize",
+        "description": "完成Data编辑并记录正文历史",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "expectedVersion": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                },
+                "required": [
+                  "expectedVersion"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "操作结果，实体包含实际版本；分页请求返回items/total/offset/limit"
+          },
+          "401": {
+            "description": "凭据无效"
+          },
+          "403": {
+            "description": "缺少权限"
+          },
+          "409": {
+            "description": "版本或幂等冲突"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/attachments/{id}": {
+      "get": {
+        "operationId": "attachment_get",
+        "description": "读取附件元数据和稳定位置",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "操作结果，实体包含实际版本；分页请求返回items/total/offset/limit"
+          },
+          "401": {
+            "description": "凭据无效"
+          },
+          "403": {
+            "description": "缺少权限"
+          },
+          "409": {
+            "description": "版本或幂等冲突"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/attachments/orphans": {
+      "get": {
+        "operationId": "attachment_cleanup_preview",
+        "description": "列出附件引用位置和可清理状态，不删除任何字节",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "操作结果，实体包含实际版本；分页请求返回items/total/offset/limit"
+          },
+          "401": {
+            "description": "凭据无效"
+          },
+          "403": {
+            "description": "缺少权限"
+          },
+          "409": {
+            "description": "版本或幂等冲突"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/attachments/cleanup": {
+      "post": {
+        "operationId": "attachment_cleanup",
+        "description": "永久删除明确选择且执行时仍无引用的本地、缓存及远端附件，需要cleanup权限",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "ids"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "操作结果，实体包含实际版本；分页请求返回items/total/offset/limit"
+          },
+          "401": {
+            "description": "凭据无效"
+          },
+          "403": {
+            "description": "缺少权限"
+          },
+          "409": {
+            "description": "版本或幂等冲突"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/attachments/{id}/text": {
+      "get": {
+        "operationId": "attachment_text_read",
+        "description": "分段读取文本附件，不把大文件塞进JSON",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "length",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 65536
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "操作结果，实体包含实际版本；分页请求返回items/total/offset/limit"
+          },
+          "401": {
+            "description": "凭据无效"
+          },
+          "403": {
+            "description": "缺少权限"
+          },
+          "409": {
+            "description": "版本或幂等冲突"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/analyses": {
+      "get": {
+        "operationId": "analysis_list",
+        "description": "分页列出分析",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "操作结果，实体包含实际版本；分页请求返回items/total/offset/limit"
+          },
+          "401": {
+            "description": "凭据无效"
+          },
+          "403": {
+            "description": "缺少权限"
+          },
+          "409": {
+            "description": "版本或幂等冲突"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "analysis_create",
+        "description": "按实际选择创建分析，空选择为空分析",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "title": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "question": {
+                    "type": "string"
+                  },
+                  "body": {
+                    "type": "string"
+                  },
+                  "itemIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "layout": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "visibleSections": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "enum": [
+                            "context",
+                            "compare",
+                            "data",
+                            "artifacts",
+                            "body",
+                            "claims"
+                          ]
+                        }
+                      },
+                      "hiddenColumns": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      "columnOrder": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "required": [
+                      "visibleSections",
+                      "hiddenColumns",
+                      "columnOrder"
+                    ]
+                  },
+                  "attachmentIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "title"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "操作结果，实体包含实际版本；分页请求返回items/total/offset/limit"
+          },
+          "401": {
+            "description": "凭据无效"
+          },
+          "403": {
+            "description": "缺少权限"
+          },
+          "409": {
+            "description": "版本或幂等冲突"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/analyses/{id}": {
+      "get": {
+        "operationId": "analysis_get",
+        "description": "读取分析正文、问题和材料顺序",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "操作结果，实体包含实际版本；分页请求返回items/total/offset/limit"
+          },
+          "401": {
+            "description": "凭据无效"
+          },
+          "403": {
+            "description": "缺少权限"
+          },
+          "409": {
+            "description": "版本或幂等冲突"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "put": {
+        "operationId": "analysis_update",
+        "description": "按版本编辑分析正文和材料顺序",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "title": {
+                    "type": "string"
+                  },
+                  "question": {
+                    "type": "string"
+                  },
+                  "body": {
+                    "type": "string"
+                  },
+                  "itemIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "layout": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "visibleSections": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "enum": [
+                            "context",
+                            "compare",
+                            "data",
+                            "artifacts",
+                            "body",
+                            "claims"
+                          ]
+                        }
+                      },
+                      "hiddenColumns": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      "columnOrder": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "required": [
+                      "visibleSections",
+                      "hiddenColumns",
+                      "columnOrder"
+                    ]
+                  },
+                  "attachmentIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "expectedVersion": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                },
+                "required": [
+                  "expectedVersion"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "操作结果，实体包含实际版本；分页请求返回items/total/offset/limit"
+          },
+          "401": {
+            "description": "凭据无效"
+          },
+          "403": {
+            "description": "缺少权限"
+          },
+          "409": {
+            "description": "版本或幂等冲突"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/analyses/{id}/finalize": {
+      "post": {
+        "operationId": "analysis_finalize",
+        "description": "完成分析编辑并记录正文历史",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "expectedVersion": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                },
+                "required": [
+                  "expectedVersion"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "操作结果，实体包含实际版本；分页请求返回items/total/offset/limit"
+          },
+          "401": {
+            "description": "凭据无效"
+          },
+          "403": {
+            "description": "缺少权限"
+          },
+          "409": {
+            "description": "版本或幂等冲突"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/analyses/{id}/export": {
+      "get": {
+        "operationId": "analysis_export_context",
+        "description": "返回去重后的实际正文、版本清单和分实体文档",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "操作结果，实体包含实际版本；分页请求返回items/total/offset/limit"
+          },
+          "401": {
+            "description": "凭据无效"
+          },
+          "403": {
+            "description": "缺少权限"
+          },
+          "409": {
+            "description": "版本或幂等冲突"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/claims": {
+      "get": {
+        "operationId": "claim_list",
+        "description": "分页列出正式论点",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "操作结果，实体包含实际版本；分页请求返回items/total/offset/limit"
+          },
+          "401": {
+            "description": "凭据无效"
+          },
+          "403": {
+            "description": "缺少权限"
+          },
+          "409": {
+            "description": "版本或幂等冲突"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "claim_create",
+        "description": "从Data或Analysis host创建论点，固定实际上下文",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "hostType": {
+                    "type": "string",
+                    "enum": [
+                      "data",
+                      "analysis"
+                    ]
+                  },
+                  "hostId": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "text": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "hostType",
+                  "hostId",
+                  "text"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "操作结果，实体包含实际版本；分页请求返回items/total/offset/limit"
+          },
+          "401": {
+            "description": "凭据无效"
+          },
+          "403": {
+            "description": "缺少权限"
+          },
+          "409": {
+            "description": "版本或幂等冲突"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/claims/{id}": {
+      "get": {
+        "operationId": "claim_get",
+        "description": "读取论点及固定证据版本",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "操作结果，实体包含实际版本；分页请求返回items/total/offset/limit"
+          },
+          "401": {
+            "description": "凭据无效"
+          },
+          "403": {
+            "description": "缺少权限"
+          },
+          "409": {
+            "description": "版本或幂等冲突"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "put": {
+        "operationId": "claim_update",
+        "description": "按版本编辑论点文字，不刷新证据",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "text": {
+                    "type": "string"
+                  },
+                  "expectedVersion": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                },
+                "required": [
+                  "text",
+                  "expectedVersion"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "操作结果，实体包含实际版本；分页请求返回items/total/offset/limit"
+          },
+          "401": {
+            "description": "凭据无效"
+          },
+          "403": {
+            "description": "缺少权限"
+          },
+          "409": {
+            "description": "版本或幂等冲突"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/claims/{id}/finalize": {
+      "post": {
+        "operationId": "claim_finalize",
+        "description": "完成论点编辑并记录正文历史",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "expectedVersion": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                },
+                "required": [
+                  "expectedVersion"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "操作结果，实体包含实际版本；分页请求返回items/total/offset/limit"
+          },
+          "401": {
+            "description": "凭据无效"
+          },
+          "403": {
+            "description": "缺少权限"
+          },
+          "409": {
+            "description": "版本或幂等冲突"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/claims/{id}/evidence": {
+      "post": {
+        "operationId": "claim_supplement_evidence",
+        "description": "追加当前上下文快照，保留旧证据",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "expectedVersion": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                },
+                "required": [
+                  "expectedVersion"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "操作结果，实体包含实际版本；分页请求返回items/total/offset/limit"
+          },
+          "401": {
+            "description": "凭据无效"
+          },
+          "403": {
+            "description": "缺少权限"
+          },
+          "409": {
+            "description": "版本或幂等冲突"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/storage/s3": {
+      "get": {
+        "operationId": "storage_settings",
+        "description": "读取S3设置，凭据脱敏",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "操作结果，实体包含实际版本；分页请求返回items/total/offset/limit"
+          },
+          "401": {
+            "description": "凭据无效"
+          },
+          "403": {
+            "description": "缺少权限"
+          },
+          "409": {
+            "description": "版本或幂等冲突"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/storage/s3/test": {
+      "post": {
+        "operationId": "storage_connection_test",
+        "description": "测试已配置的S3连接",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "操作结果，实体包含实际版本；分页请求返回items/total/offset/limit"
+          },
+          "401": {
+            "description": "凭据无效"
+          },
+          "403": {
+            "description": "缺少权限"
+          },
+          "409": {
+            "description": "版本或幂等冲突"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/storage/s3/scan": {
+      "post": {
+        "operationId": "storage_scan",
+        "description": "扫描到期附件并处理持久队列",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "操作结果，实体包含实际版本；分页请求返回items/total/offset/limit"
+          },
+          "401": {
+            "description": "凭据无效"
+          },
+          "403": {
+            "description": "缺少权限"
+          },
+          "409": {
+            "description": "版本或幂等冲突"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/backups": {
+      "post": {
+        "operationId": "backup_create",
+        "description": "创建完整备份长任务，返回jobId",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "target": {
+                    "type": "string",
+                    "enum": [
+                      "local",
+                      "s3"
+                    ]
+                  }
+                },
+                "required": []
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "操作结果，实体包含实际版本；分页请求返回items/total/offset/limit"
+          },
+          "401": {
+            "description": "凭据无效"
+          },
+          "403": {
+            "description": "缺少权限"
+          },
+          "409": {
+            "description": "版本或幂等冲突"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/backups/restore": {
+      "post": {
+        "operationId": "backup_restore",
+        "description": "验证完整备份并恢复到新目录，需要restore权限",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "zipPath": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "targetDir": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "zipPath",
+                  "targetDir"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "操作结果，实体包含实际版本；分页请求返回items/total/offset/limit"
+          },
+          "401": {
+            "description": "凭据无效"
+          },
+          "403": {
+            "description": "缺少权限"
+          },
+          "409": {
+            "description": "版本或幂等冲突"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/jobs": {
+      "get": {
+        "operationId": "job_list",
+        "description": "分页读取任务状态和错误",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "操作结果，实体包含实际版本；分页请求返回items/total/offset/limit"
+          },
+          "401": {
+            "description": "凭据无效"
+          },
+          "403": {
+            "description": "缺少权限"
+          },
+          "409": {
+            "description": "版本或幂等冲突"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/jobs/{id}": {
+      "get": {
+        "operationId": "job_get",
+        "description": "读取长任务进度和结果",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "操作结果，实体包含实际版本；分页请求返回items/total/offset/limit"
+          },
+          "401": {
+            "description": "凭据无效"
+          },
+          "403": {
+            "description": "缺少权限"
+          },
+          "409": {
+            "description": "版本或幂等冲突"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/jobs/{id}/retry": {
+      "post": {
+        "operationId": "job_retry",
+        "description": "手动重试失败的存储任务",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "操作结果，实体包含实际版本；分页请求返回items/total/offset/limit"
+          },
+          "401": {
+            "description": "凭据无效"
+          },
+          "403": {
+            "description": "缺少权限"
+          },
+          "409": {
+            "description": "版本或幂等冲突"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/jobs/{id}/cancel": {
+      "post": {
+        "operationId": "job_cancel",
+        "description": "取消仍在运行的长任务；已经完成的任务保持原状态",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "操作结果，实体包含实际版本；分页请求返回items/total/offset/limit"
+          },
+          "401": {
+            "description": "凭据无效"
+          },
+          "403": {
+            "description": "缺少权限"
+          },
+          "409": {
+            "description": "版本或幂等冲突"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/search": {
+      "get": {
+        "operationId": "search",
+        "description": "全文搜索样品、数据与字典",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "操作结果，实体包含实际版本；分页请求返回items/total/offset/limit"
+          },
+          "401": {
+            "description": "凭据无效"
+          },
+          "403": {
+            "description": "缺少权限"
+          },
+          "409": {
+            "description": "版本或幂等冲突"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    }
+  }
+}

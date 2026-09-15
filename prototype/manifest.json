@@ -1,0 +1,15 @@
+{
+  "source": "index.html",
+  "reference": "prototype/reference.html",
+  "sha256": "fe2c41e76c2de262c6520fc55d1eed46e8e3679e4486d4be0e0198da32a0f1bb",
+  "viewport": {
+    "width": 1440,
+    "height": 1000
+  },
+  "responsiveWidths": [
+    980,
+    640
+  ],
+  "theme": "clean browser default render",
+  "createdAt": "2026-09-11T16:28:29.798Z"
+}

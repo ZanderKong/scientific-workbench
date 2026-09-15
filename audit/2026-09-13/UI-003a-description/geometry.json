@@ -1,0 +1,92 @@
+[
+  {
+    "selector": ".detailTop",
+    "expected": {
+      "x": 168,
+      "y": 48,
+      "width": 1272,
+      "height": 52
+    },
+    "actual": {
+      "x": 168,
+      "y": 48,
+      "width": 1272,
+      "height": 52
+    }
+  },
+  {
+    "selector": ".detailHero",
+    "expected": {
+      "x": 314,
+      "y": 134,
+      "width": 980,
+      "height": 76
+    },
+    "actual": {
+      "x": 314,
+      "y": 134,
+      "width": 980,
+      "height": 76
+    }
+  },
+  {
+    "selector": ".metaLine",
+    "expected": {
+      "x": 314,
+      "y": 196,
+      "width": 980,
+      "height": 14
+    },
+    "actual": {
+      "x": 314,
+      "y": 196,
+      "width": 980,
+      "height": 14
+    }
+  },
+  {
+    "selector": ".contentArea",
+    "expected": {
+      "x": 314,
+      "y": 234,
+      "width": 980,
+      "height": 354.390625
+    },
+    "actual": {
+      "x": 314,
+      "y": 234,
+      "width": 980,
+      "height": 354.390625
+    }
+  },
+  {
+    "selector": ".dataBox",
+    "expected": {
+      "x": 314,
+      "y": 234,
+      "width": 980,
+      "height": 116
+    },
+    "actual": {
+      "x": 314,
+      "y": 234,
+      "width": 980,
+      "height": 116
+    }
+  },
+  {
+    "selector": ".infoGrid",
+    "expected": {
+      "x": 314,
+      "y": 360,
+      "width": 980,
+      "height": 54
+    },
+    "actual": {
+      "x": 314,
+      "y": 360,
+      "width": 980,
+      "height": 54
+    }
+  }
+]

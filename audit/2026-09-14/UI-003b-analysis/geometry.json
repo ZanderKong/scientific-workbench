@@ -1,0 +1,122 @@
+[
+  {
+    "selector": ".detailTop",
+    "expected": {
+      "x": 168,
+      "y": 48,
+      "width": 1272,
+      "height": 52
+    },
+    "actual": {
+      "x": 168,
+      "y": 48,
+      "width": 1272,
+      "height": 52
+    }
+  },
+  {
+    "selector": ".detailHero",
+    "expected": {
+      "x": 314,
+      "y": 134,
+      "width": 980,
+      "height": 117
+    },
+    "actual": {
+      "x": 314,
+      "y": 134,
+      "width": 980,
+      "height": 117
+    }
+  },
+  {
+    "selector": ".analysisToolbar",
+    "expected": {
+      "x": 314,
+      "y": 275,
+      "width": 980,
+      "height": 26
+    },
+    "actual": {
+      "x": 314,
+      "y": 275,
+      "width": 980,
+      "height": 26
+    }
+  },
+  {
+    "selector": ".analysisGrid",
+    "expected": {
+      "x": 314,
+      "y": 313,
+      "width": 980,
+      "height": 742.390625
+    },
+    "actual": {
+      "x": 314,
+      "y": 313,
+      "width": 980,
+      "height": 742.390625
+    }
+  },
+  {
+    "selector": ".entityChips",
+    "expected": {
+      "x": 330,
+      "y": 356,
+      "width": 453,
+      "height": 23
+    },
+    "actual": {
+      "x": 330,
+      "y": 356,
+      "width": 453,
+      "height": 23
+    }
+  },
+  {
+    "selector": ".compareTable",
+    "expected": {
+      "x": 330,
+      "y": 447,
+      "width": 948,
+      "height": 112
+    },
+    "actual": {
+      "x": 330,
+      "y": 447,
+      "width": 948,
+      "height": 112
+    }
+  },
+  {
+    "selector": ".chart",
+    "expected": {
+      "x": 825,
+      "y": 627,
+      "width": 453,
+      "height": 180
+    },
+    "actual": {
+      "x": 825,
+      "y": 627,
+      "width": 453,
+      "height": 180
+    }
+  },
+  {
+    "selector": ".claimSharedArea",
+    "expected": {
+      "x": 330,
+      "y": 875,
+      "width": 948,
+      "height": 145
+    },
+    "actual": {
+      "x": 330,
+      "y": 875,
+      "width": 948,
+      "height": 145
+    }
+  }
+]

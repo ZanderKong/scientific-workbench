@@ -1,0 +1,9 @@
+{
+  "name": "@workbench/mcp",
+  "version": "0.1.0",
+  "type": "module",
+  "bin": { "workbench-mcp": "dist/main.js" },
+  "scripts": { "build": "tsc -p tsconfig.json", "typecheck": "tsc -p tsconfig.json --noEmit", "start": "tsx src/main.ts", "smoke": "tsx src/smoke.ts", "test": "vitest run --passWithNoTests" },
+  "dependencies": { "@modelcontextprotocol/sdk": "^1.30.0", "@workbench/core": "workspace:*", "undici": "^7.4.0" },
+  "devDependencies": { "tsx": "^4.19.2", "typescript": "^5.7.3", "vitest": "^3.0.5" }
+}

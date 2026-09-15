@@ -1,0 +1,18 @@
+{
+  "mcpServers": {
+    "scientific-workbench": {
+      "command": "pnpm",
+      "args": [
+        "--dir",
+        "/Users/kong/ZanderProject/工作台",
+        "--filter",
+        "@workbench/mcp",
+        "start"
+      ],
+      "env": {
+        "WORKBENCH_API": "http://127.0.0.1:4317/api/v1",
+        "WORKBENCH_API_TOKEN": "<在本机私有配置填入连接 token>"
+      }
+    }
+  }
+}

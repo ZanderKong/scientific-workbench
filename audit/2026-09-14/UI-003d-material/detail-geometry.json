@@ -1,0 +1,107 @@
+[
+  {
+    "selector": ".detailTop",
+    "expected": {
+      "x": 168,
+      "y": 48,
+      "width": 1272,
+      "height": 52
+    },
+    "actual": {
+      "x": 168,
+      "y": 48,
+      "width": 1272,
+      "height": 52
+    }
+  },
+  {
+    "selector": ".detailHero",
+    "expected": {
+      "x": 314,
+      "y": 134,
+      "width": 980,
+      "height": 78
+    },
+    "actual": {
+      "x": 314,
+      "y": 134,
+      "width": 980,
+      "height": 78
+    }
+  },
+  {
+    "selector": ".resourceDetailGrid",
+    "expected": {
+      "x": 314,
+      "y": 236,
+      "width": 980,
+      "height": 285
+    },
+    "actual": {
+      "x": 314,
+      "y": 236,
+      "width": 980,
+      "height": 285
+    }
+  },
+  {
+    "selector": ".detailCard",
+    "expected": {
+      "x": 314,
+      "y": 236,
+      "width": 485,
+      "height": 135
+    },
+    "actual": {
+      "x": 314,
+      "y": 236,
+      "width": 485,
+      "height": 135
+    }
+  },
+  {
+    "selector": ".propertyRows",
+    "expected": {
+      "x": 329,
+      "y": 277,
+      "width": 455,
+      "height": 79
+    },
+    "actual": {
+      "x": 329,
+      "y": 277,
+      "width": 455,
+      "height": 79
+    }
+  },
+  {
+    "selector": ".propertyTokens",
+    "expected": {
+      "x": 824,
+      "y": 278,
+      "width": 455,
+      "height": 23
+    },
+    "actual": {
+      "x": 824,
+      "y": 278,
+      "width": 455,
+      "height": 23
+    }
+  },
+  {
+    "selector": ".span2",
+    "expected": {
+      "x": 314,
+      "y": 381,
+      "width": 980,
+      "height": 140
+    },
+    "actual": {
+      "x": 314,
+      "y": 381,
+      "width": 980,
+      "height": 140
+    }
+  }
+]

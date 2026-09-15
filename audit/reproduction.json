@@ -1,0 +1,33 @@
+{
+  "twoDataBlocks": {
+    "expected": 2,
+    "actual": 1,
+    "firstBody": ""
+  },
+  "listProjection": {
+    "detailCount": 1,
+    "listHasProperties": false
+  },
+  "analysisEvidence": [
+    {
+      "entityType": "analysis",
+      "content": "分析正文"
+    }
+  ],
+  "reloadThenSave": "Error: 磁盘文件已被外部修改，请先重新加载",
+  "credentialsInIndex": true,
+  "backupWithMissingRemote": {
+    "reportedSuccess": true
+  },
+  "restore": {
+    "verified": true,
+    "documentPath": "/var/folders/3j/gpvswjpd04s_pl83_qw8zyh80000gn/T/swb-audit-JavioX/source/samples/39e525c9-1fb5-410a-ada9-fc6894a8ae66.md",
+    "expectedPrefix": "/var/folders/3j/gpvswjpd04s_pl83_qw8zyh80000gn/T/swb-audit-JavioX/restore"
+  },
+  "fileOnlyRebuild": {
+    "objects": 0,
+    "data": 0,
+    "analyses": 0,
+    "claims": 0
+  }
+}

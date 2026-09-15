@@ -1,0 +1,77 @@
+[
+  {
+    "selector": ".pageHeader",
+    "expected": {
+      "x": 210,
+      "y": 90,
+      "width": 1188,
+      "height": 63
+    },
+    "actual": {
+      "x": 210,
+      "y": 90,
+      "width": 1188,
+      "height": 63
+    }
+  },
+  {
+    "selector": ".toolbar",
+    "expected": {
+      "x": 210,
+      "y": 177,
+      "width": 1188,
+      "height": 41
+    },
+    "actual": {
+      "x": 210,
+      "y": 177,
+      "width": 1188,
+      "height": 41
+    }
+  },
+  {
+    "selector": ".tabs",
+    "expected": {
+      "x": 210,
+      "y": 228,
+      "width": 1188,
+      "height": 26
+    },
+    "actual": {
+      "x": 210,
+      "y": 228,
+      "width": 1188,
+      "height": 26
+    }
+  },
+  {
+    "selector": ".tableWrap",
+    "expected": {
+      "x": 210,
+      "y": 264,
+      "width": 1188,
+      "height": 138
+    },
+    "actual": {
+      "x": 210,
+      "y": 264,
+      "width": 1188,
+      "height": 138
+    }
+  },
+  {
+    "selector": ".tableWrap tr",
+    "expected": {
+      "x": 210,
+      "y": 264,
+      "width": 1188,
+      "height": 31.5
+    },
+    "actual": {
+      "x": 210,
+      "y": 264,
+      "width": 1188,
+      "height": 31.5
+    }
+  }
+]

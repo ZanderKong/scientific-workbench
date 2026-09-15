@@ -1,0 +1,30 @@
+{
+  "generatedAt": "2026-09-15T00:43:39.564Z",
+  "environment": {
+    "node": "v22.22.3",
+    "platform": "darwin-arm64"
+  },
+  "documents": [
+    {
+      "operations": 20,
+      "saveMilliseconds": 43.04,
+      "finalizeMilliseconds": 61.97
+    },
+    {
+      "operations": 100,
+      "saveMilliseconds": 28.98,
+      "finalizeMilliseconds": 122.12
+    },
+    {
+      "operations": 500,
+      "saveMilliseconds": 24.63,
+      "finalizeMilliseconds": 395.21
+    }
+  ],
+  "dictionary": {
+    "totalObjects": 50005,
+    "load50kMilliseconds": 74.27,
+    "complete5kMilliseconds": 3.63,
+    "complete50kMilliseconds": 16.15
+  }
+}
