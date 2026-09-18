@@ -129,3 +129,28 @@
 - 附件清理增加只读预览、证据/正文/Data/分析引用保护、整批预检、S3稳定位置删除和一次性`cleanup`授权。设置页可明确勾选无引用附件后执行；`attachment-cleanup.test.ts` 2项及设置页真实清理流程通过。
 - 2026-09-15最终串行 `pnpm test`：core6、server51、web14、MCP1，共72项通过；普通测试仍明确跳过需容器的真实S3两项。`WORKBENCH_S3_INTEGRATION=1 ... s3.integration.test.ts` 使用隔离MinIO再次2项通过。`pnpm exec playwright test` 最终28项全部通过。`pnpm build`和OpenAPI生成通过；保留Vite React插件弃用提示及731KB单包警告，不将其隐藏为成功。
 - 最终轮曾把单元与浏览器并行：PVA完整生成测试因资源竞争在5.4秒超过默认5秒，断言未失败；该真实工作流显式采用15秒预算，串行全套用3.0秒通过。设置附件清理按钮最初在超高内容中位于视口外，修复为弹窗正文滚动后，真实点击、授权、删除和复查通过。
+
+### 2026-09-16 UI-DENSITY-001 Design v2 可读性
+
+- 任务：`/Users/kong/Downloads/Scientific_Workbench_Design_v2_UI_Readability_EPLAN.md`，首次可读性/控件密度迁移。新增 `apps/web/src/density.css`（Design v2 覆盖层，`prototype.css` 冻结未改），`main.tsx` 按 `prototype.css → workbench.css → density.css` 顺序加载。
+- 改动文件：`apps/web/src/density.css`（新增）、`apps/web/src/main.tsx`、`test/e2e/design-v2.ts`（新增共享断言）、`test/e2e/density.spec.ts`（新增）、`test/e2e/prototype.spec.ts`、`test/e2e/sample-visual.spec.ts`、`test/e2e/data-visual.spec.ts`、`test/e2e/analysis-visual.spec.ts`、`test/e2e/claim-visual.spec.ts`、`test/e2e/resource-visual.spec.ts`、`test/e2e/overlay.spec.ts`、`DESIGN_RULES.md`、`HANDOFF.md`、`docs/VERIFICATION.md`。
+- 主要排版前→后：导航/品牌 12→13px；侧栏动作 10→12px；topbar 10→11px；主按钮 11→12px 且 min-height≈32px；工具条/分段控件 10→12px；表格正文 10→12px、表头 9→10px；objToken/propText/sortMark 8→10px；pill/status 9→10px；miniProps 9→10px；Data/Analysis/Claim/Resource 8–9px 微文字统一到 10–11px；弹窗字段标签 9→11px、输入 10→12px；样品编辑器辅助信息 9–10→11px。样品一级正文保持15px、二级13px；侧栏168px、topbar 48px、840/980内容宽、980/640断点均未变。
+- 未采用任何根级 `font-size` 百分比、`zoom`、`transform: scale()` 或加宽容器；未改业务逻辑、API、解析、持久化与 Tiptap 模型；未改 `prototype/reference.html` 与 `prototype.css`。
+- 视觉测试迁移：移除与冻结原型的整页 `pixelmatch` 断言（保留截图产物），改为断言已批准的水平布局不变量（元素 x/宽度对照冻结原型，≤2px）、Design v2 排版值、无页面级横向溢出和控件不裁切；`sample-visual` 额外锁定样品`.directEditor`高度与冻结原型一致（正文排版未变）。原功能断言（折叠、文件数、Data/Claim 语义、附件、冲突、导航、设置真实数据）全部保留，未放宽。
+- 新增 `density.spec.ts` 2项：校验 `.sidebar`168px、`.topbar`48px、品牌/导航13px、侧栏动作12px、topbar 11px、主按钮12px、工具条按钮12px、表格正文12px、表头/token/属性≥10px、miniProps≥10px、侧栏标签单行、按钮不裁切；以及样品一级15px/二级13px保持。
+- 命令与结果：`pnpm typecheck` 4包通过；`pnpm test` = core6 + web14 + MCP1 + server51（真实S3 2项按设计跳过），共72通过；`pnpm build` 通过；`pnpm exec playwright test` 30项全部通过（原28项迁移后+新增2项 density）。
+- 视口矩阵：在 1600×900、1440×1000、1280×800、980×1000、640×1000 逐页复查无页面级横向溢出；640 下侧栏/顶栏折叠行为与 980 断点未变；窄屏仅允许 `.tableWrap` 内部横向滚动。1600×900 截图覆盖样品表格、样品编辑器、描述型Data、FTIR Data、分析、论点、资源列表/详情、设置弹窗（见各测试 `test-results/**/actual-1600x900.png`）。
+- 已知告警：Vite React 插件弃用提示与约731KB单包告警仍存在，未隐藏。
+- 运行环境：测试端口14317与临时目录。发现上一上下文遗留的 14317 测试服务（工作目录为 `/private/tmp/scientific-workbench-live.aeI1NQ` 临时工作区）占端口，已停止该临时测试进程；未访问或修改 `~/ScientificWorkbench`、旧默认4317服务或用户数据。
+- 人工验收仍待：真实 macOS 中文输入法选字、实际旧工作区转换、极端长内容/非默认空态巡检（与本次可读性无关的既有待验收项继续有效）。
+
+### 2026-09-18 OpenCode 外部 Agent Runtime 集成
+
+- 任务：`/Users/kong/Downloads/SCIENTIFIC_WORKBENCH_OPENCODE_CODING_PLAN_FINAL.md`。范围：`agent-run` Job、OpenCode V2 Adapter、AgentRunService、Settings→OpenCode、全局 Task Stack、Jobs 历史 Session 跳转。未新增领域对象，未改 `operations.ts`/`apps/mcp`/冻结原型。
+- 版本判定：本机 opencode CLI 1.18.31 二进制包含 V2 路由（`/api/session`、`/api/model`、`/api/mcp`、`/api/permission/request`、`/api/event`），确认 V2；依赖锁定 `@opencode/client@2.0.7`，仅 `apps/server/src/opencode.ts` 导入。
+- `opencode.test.ts` 12项：loopback URL 校验、目录重叠/symlink 校验、凭据 0600 与解析、Basic Auth 覆盖全部请求、model normalize（含 `supportsImage` true/false/unknown）、session/prompt/abort、permission `once`、question、事件 normalize、Session 深链、不可达/认证错误码、执行目录 0700、MCP operations 无 agent 入口、完整备份排除 `private/` 与 opencode 凭据。
+- `agent-runs.test.ts` 15项：完整生命周期（busy→idle+对应本次 `promptMessageId` 的 assistant→succeeded→resultText）、`retry` 保持 running、permission ask→attention→allow once、auto-allow 仅 `once` 且不发 `always`、未知 Session 不批准、child 归属 root、question 不被自动回答、事件丢失由 list/reconcile 恢复、unreachable 保持 running、Session missing 才 failed、cancel abort 且不删 Session、queued 无 Session 恢复为 failed 且不 replay、Job payload 不含 prompt/密码/Authorization、dismiss 后保留 Job 历史、事件连接状态。
+- `test/e2e/opencode.spec.ts` 10项（Fake OpenCode V2 HTTP 服务 + 临时工作区 + 独立端口14317）：Settings→OpenCode 连接/模型/权限/MCP 与保存测试、密码不回显、running 黑色 30×30 无动画、permission 黄色→hover 文案→click once→恢复黑、auto-allow 不变黄且无 `always`、question 黄色且 click 不回复、完成条幅 5 秒后消失、failed 橙红 >5 秒且 dismiss 后 Job 仍 failed、长按 450ms 打开正确 Session 深链、多任务最新在上且完成后补位、任务历史 OpenCode 名称且无 Retry。
+- 命令与结果：`pnpm typecheck` 4包通过；`pnpm build` 通过；`pnpm test` = core6 + web14 + MCP1 + server78（含新增 opencode 12 + agent-runs 15；真实S3 2项按设计跳过），共99通过；`pnpm exec playwright test` 40项通过（原30 + 新增 opencode 10）。
+- 安全：全仓搜索确认密码只存 `private/opencode-<id>.json`（0600），不进入 settings/SQLite/Job/API/日志/备份；`operations.ts` 与 MCP 无 `agent_run`/`opencode`；业务科研页面未增加 AI 按钮。冻结原型哈希仍为 `fe2c41e76c2de262c6520fc55d1eed46e8e3679e4486d4be0e0198da32a0f1bb`。
+- 未访问 `~/ScientificWorkbench`，未修改真实 OpenCode 全局配置，未调用真实模型；自动测试只使用 Fake OpenCode。真实 OpenCode 端到端人工验证与业务页面 AI 入口仍未实现，完整首版未完成。

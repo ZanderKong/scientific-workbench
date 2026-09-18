@@ -2598,7 +2598,11 @@ export class WorkbenchStore {
     return this.db
       .prepare("SELECT * FROM jobs ORDER BY created_at DESC")
       .all()
-      .map((j: any) => ({ ...j, payload: parseJson(j.payload, {}) }));
+      .map((j: any) => ({
+        ...j,
+        status: j.status === "canceled" ? "cancelled" : j.status,
+        payload: parseJson(j.payload, {}),
+      }));
   }
   createJob(type: string, payload: Record<string, unknown>): Job {
     return this.commit(() => {

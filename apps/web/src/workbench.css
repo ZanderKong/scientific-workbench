@@ -322,3 +322,197 @@
   left: 11.578125px;
   top: 1px;
 }
+
+/* Task Stack (OpenCode external agent runtime) — scoped global overlay. */
+.taskStack {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 80;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  pointer-events: none;
+}
+.taskStack > * {
+  pointer-events: auto;
+}
+.taskBlocks {
+  display: flex;
+  flex-direction: column-reverse;
+  align-items: flex-end;
+  gap: 6px;
+}
+.taskBlockWrap {
+  position: relative;
+  display: flex;
+}
+.taskBlock {
+  position: relative;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: 9px;
+  cursor: pointer;
+  background: #2d322e;
+  transition: transform 180ms ease;
+}
+.taskBlock.queued {
+  background: rgba(45, 50, 46, 0.35);
+}
+.taskBlock.running {
+  background: #2d322e;
+}
+.taskBlock.attention {
+  background: #e8b84a;
+  transform: translateX(-4px);
+}
+.taskBlock.failed {
+  background: #d9654a;
+}
+.taskBlock.pulse {
+  animation: taskPulse 600ms ease-out 1;
+}
+@keyframes taskPulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(232, 184, 74, 0.55);
+  }
+  100% {
+    box-shadow: 0 0 0 9px rgba(232, 184, 74, 0);
+  }
+}
+.taskTooltip {
+  display: none;
+  position: absolute;
+  right: 40px;
+  bottom: 0;
+  width: max-content;
+  max-width: 280px;
+  padding: 9px 11px;
+  border-radius: 8px;
+  background: #2d322e;
+  color: #f4f5f2;
+  font-size: 11px;
+  line-height: 1.5;
+  text-align: left;
+  box-shadow: 0 6px 20px #0003;
+  z-index: 1;
+}
+.taskTooltip span {
+  display: block;
+}
+.taskBlock:hover .taskTooltip,
+.taskBlock:focus-visible .taskTooltip {
+  display: block;
+}
+.taskOverflow {
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  background: #e6e6e1;
+  color: #6b706b;
+  font-size: 10px;
+  display: grid;
+  place-items: center;
+}
+.taskOverflow.attention {
+  background: #e8b84a;
+  color: #4a3a10;
+}
+.taskCompletion {
+  position: relative;
+  min-width: 160px;
+  max-width: 280px;
+  height: 34px;
+  padding: 0 13px;
+  border-radius: 9px;
+  background: #191c19;
+  color: #f6f7f4;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  transform-origin: right center;
+  animation: taskBannerIn 220ms ease-out 1;
+}
+@keyframes taskBannerIn {
+  from {
+    transform: scaleX(0.2);
+    opacity: 0.4;
+  }
+  to {
+    transform: scaleX(1);
+    opacity: 1;
+  }
+}
+.taskCompletionText {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.taskParticle {
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: #e8b84a;
+  animation: taskParticle 620ms ease-out 1 forwards;
+}
+.taskParticle.p0 {
+  --tx: -20px;
+  --ty: -16px;
+}
+.taskParticle.p1 {
+  --tx: -10px;
+  --ty: -22px;
+}
+.taskParticle.p2 {
+  --tx: 2px;
+  --ty: -24px;
+}
+.taskParticle.p3 {
+  --tx: 14px;
+  --ty: -18px;
+}
+.taskParticle.p4 {
+  --tx: 20px;
+  --ty: -6px;
+}
+.taskParticle.p5 {
+  --tx: 14px;
+  --ty: 8px;
+}
+.taskParticle.p6 {
+  --tx: 0px;
+  --ty: 14px;
+}
+.taskParticle.p7 {
+  --tx: -14px;
+  --ty: 8px;
+}
+@keyframes taskParticle {
+  from {
+    opacity: 1;
+    transform: translate(0, 0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translate(var(--tx), var(--ty)) scale(0.4);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .taskBlock,
+  .taskCompletion,
+  .taskParticle,
+  .taskBlock.pulse {
+    animation: none;
+    transition: none;
+  }
+  .taskParticle {
+    display: none;
+  }
+}

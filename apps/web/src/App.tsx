@@ -19,6 +19,7 @@ import { AnalysisDetail } from "./pages/AnalysisDetail";
 import { ClaimDetail } from "./pages/ClaimDetail";
 import { ResourcesPage } from "./pages/ResourcesPage";
 import { SettingsPanel } from "./pages/SettingsPanel";
+import { TaskStack } from "./components/TaskStack";
 
 import { BatchSamplesPage } from "./pages/BatchSamplesPage";
 
@@ -320,6 +321,7 @@ export function App() {
           <button onClick={() => setNotice("")}>×</button>
         </div>
       )}
+      <TaskStack />
       {dialog && (
         <Modal
           title={

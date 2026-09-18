@@ -14,12 +14,53 @@ import {
   resolveWorkspaceLocation,
   selectWorkspaceForNextStart,
 } from "./workspace-location";
+import {
+  OpenCodeError,
+  OpenCodeHttpAdapter,
+  assertSeparateDirectories,
+  deleteOpenCodeCredential,
+  hasOpenCodeCredential,
+  resolveOpenCodeConfig,
+  saveOpenCodeCredential,
+  validateOpenCodeBaseUrl,
+  type OpenCodeConfig,
+  type OpenCodeModelRef,
+  type ResolvedOpenCodeConfig,
+} from "./opencode";
+import { AgentRunService } from "./agent-runs";
 
 const port = Number(process.env.WORKBENCH_PORT ?? 4317);
 const host = process.env.WORKBENCH_HOST ?? "127.0.0.1";
 const workspaceLocation = resolveWorkspaceLocation();
 const store = new WorkbenchStore({ dataDir: workspaceLocation.dataDir });
 const storage = new StorageService(store);
+
+function readOpenCodeConfig(): ResolvedOpenCodeConfig {
+  return resolveOpenCodeConfig(
+    store.dataDir,
+    store.setting<Partial<OpenCodeConfig>>("opencode", {}),
+  );
+}
+function buildOpenCodeAdapter(): OpenCodeHttpAdapter | null {
+  const config = readOpenCodeConfig();
+  if (!config.baseUrl) return null;
+  try {
+    const baseUrl = validateOpenCodeBaseUrl(config.baseUrl);
+    return new OpenCodeHttpAdapter({ ...config, baseUrl });
+  } catch {
+    return null;
+  }
+}
+const agentRuns = new AgentRunService({
+  store,
+  getConfig: () => readOpenCodeConfig(),
+  getDataDir: () => store.dataDir,
+  healthyPollMs: Number(process.env.WORKBENCH_AGENT_POLL_MS ?? 15_000),
+  unhealthyPollMs: Number(
+    process.env.WORKBENCH_AGENT_UNHEALTHY_POLL_MS ?? 5_000,
+  ),
+});
+agentRuns.setAdapter(buildOpenCodeAdapter());
 function idempotent<T>(
   req: {
     headers: Record<string, unknown>;
@@ -544,7 +585,7 @@ app.post("/api/v1/backups", async (req: any, reply) => {
     .catch((error) => {
       store.updateJob(
         job.id,
-        controller.signal.aborted ? "canceled" : "failed",
+        controller.signal.aborted ? "cancelled" : "failed",
         { target },
         controller.signal.aborted ? undefined : String(error),
       );
@@ -566,14 +607,21 @@ app.post("/api/v1/jobs/:id/cancel", async (req: any, reply) => {
   const job = store.listJobs().find((item) => item.id === req.params.id);
   if (!job)
     return reply.code(404).send({ code: "NOT_FOUND", error: "任务不存在" });
+  if (job.type === "agent-run") {
+    if (job.status !== "running" && job.status !== "queued")
+      return reply
+        .code(409)
+        .send({ code: "CONFLICT", error: "任务已结束，不能取消" });
+    return agentRuns.cancel(job.id);
+  }
   const controller = taskControllers.get(job.id);
   if (!controller || job.status !== "running")
     return reply
       .code(409)
       .send({ code: "CONFLICT", error: "任务已结束，不能取消" });
   controller.abort();
-  store.updateJob(job.id, "canceled", job.payload);
-  return { id: job.id, status: "canceled" };
+  store.updateJob(job.id, "cancelled", job.payload);
+  return { id: job.id, status: "cancelled" };
 });
 app.get("/api/v1/backups/:jobId/download", async (req: any, reply) => {
   const job = store
@@ -616,6 +664,255 @@ app.post("/api/v1/backups/restore", async (req: any, reply) => {
   }
 });
 
+function normalizeModelRef(input: unknown): OpenCodeModelRef {
+  const value = input as { providerId?: unknown; modelId?: unknown };
+  const providerId = String(value?.providerId ?? "").trim();
+  const modelId = String(value?.modelId ?? "").trim();
+  if (!providerId || !modelId)
+    throw new OpenCodeError("MODEL_UNAVAILABLE", "模型配置无效", 400);
+  return { providerId, modelId };
+}
+
+function publicOpenCodeConfig(config: OpenCodeConfig) {
+  return {
+    baseUrl: config.baseUrl,
+    username: config.username,
+    executionDir: config.executionDir,
+    permissionMode: config.permissionMode,
+    textModel: config.textModel ?? null,
+    visionModel: config.visionModel ?? null,
+    hasPassword: hasOpenCodeCredential(store.dataDir, config.credentialId),
+  };
+}
+
+async function openCodeStatus() {
+  const config = readOpenCodeConfig();
+  if (!config.baseUrl)
+    return { connected: false, mcp: { state: "missing" as const } };
+  const adapter = buildOpenCodeAdapter();
+  if (!adapter)
+    return {
+      connected: false,
+      error: "OpenCode Server 地址无效",
+      mcp: { state: "missing" as const },
+    };
+  try {
+    const health = await adapter.health();
+    const mcp = await adapter.getMcpStatus();
+    return { connected: true, version: health.version, mcp };
+  } catch (error) {
+    const message =
+      error instanceof OpenCodeError
+        ? error.message
+        : "无法连接 OpenCode Server";
+    return {
+      connected: false,
+      error: message,
+      mcp: { state: "missing" as const },
+    };
+  }
+}
+
+app.get("/api/v1/integrations/opencode", async () => ({
+  config: publicOpenCodeConfig(readOpenCodeConfig()),
+  status: await openCodeStatus(),
+}));
+app.put("/api/v1/integrations/opencode", async (req: any) => {
+  const body = req.body ?? {};
+  const existing = readOpenCodeConfig();
+  const rawBaseUrl = String(body.baseUrl ?? "").trim();
+  const baseUrl = rawBaseUrl ? validateOpenCodeBaseUrl(rawBaseUrl) : "";
+  const executionDir = assertSeparateDirectories(
+    store.dataDir,
+    String(body.executionDir ?? existing.executionDir),
+  );
+  const permissionMode = body.permissionMode ?? existing.permissionMode;
+  if (!["ask", "auto-allow"].includes(permissionMode))
+    throw new OpenCodeError("INVALID_INPUT", "权限模式无效", 400);
+  const next: OpenCodeConfig = {
+    baseUrl,
+    username: String(body.username ?? (existing.username || "opencode")),
+    executionDir,
+    permissionMode,
+  };
+  if (body.textModel === null) next.textModel = undefined;
+  else if (body.textModel) next.textModel = normalizeModelRef(body.textModel);
+  else if (existing.textModel) next.textModel = existing.textModel;
+  if (body.visionModel === null) next.visionModel = undefined;
+  else if (body.visionModel)
+    next.visionModel = normalizeModelRef(body.visionModel);
+  else if (existing.visionModel) next.visionModel = existing.visionModel;
+
+  const password = typeof body.password === "string" ? body.password : "";
+  const previousCredential = existing.credentialId;
+  let newCredential: string | undefined;
+  if (password) {
+    newCredential = saveOpenCodeCredential(store.dataDir, password);
+    next.credentialId = newCredential;
+  } else if (previousCredential) {
+    next.credentialId = previousCredential;
+  }
+  try {
+    store.saveSetting("opencode", next);
+  } catch (error) {
+    if (newCredential)
+      deleteOpenCodeCredential(store.dataDir, newCredential);
+    throw error;
+  }
+  if (
+    newCredential &&
+    previousCredential &&
+    previousCredential !== newCredential
+  )
+    deleteOpenCodeCredential(store.dataDir, previousCredential);
+  agentRuns.setAdapter(buildOpenCodeAdapter());
+  return {
+    config: publicOpenCodeConfig(readOpenCodeConfig()),
+    status: await openCodeStatus(),
+  };
+});
+app.post("/api/v1/integrations/opencode/test", async (req: any, reply) => {
+  const body = req.body ?? {};
+  const existing = readOpenCodeConfig();
+  let baseUrl = existing.baseUrl;
+  try {
+    if (body.baseUrl) baseUrl = validateOpenCodeBaseUrl(String(body.baseUrl));
+  } catch (error) {
+    const normalized = error as OpenCodeError;
+    return reply
+      .code(400)
+      .send({ code: normalized.code, error: normalized.message });
+  }
+  if (!baseUrl)
+    return reply.code(400).send({
+      code: "INVALID_OPENCODE_URL",
+      error: "请先填写 OpenCode Server 地址",
+    });
+  const adapter = new OpenCodeHttpAdapter({
+    ...existing,
+    baseUrl,
+    username: String(body.username ?? (existing.username || "opencode")),
+    password:
+      typeof body.password === "string" && body.password
+        ? body.password
+        : existing.password,
+  });
+  try {
+    const health = await adapter.health();
+    const models = await adapter.listModels();
+    const mcp = await adapter.getMcpStatus();
+    return {
+      connected: true,
+      version: health.version,
+      modelCount: models.length,
+      mcp,
+    };
+  } catch (error) {
+    const normalized =
+      error instanceof OpenCodeError
+        ? error
+        : new OpenCodeError(
+            "OPENCODE_UNREACHABLE",
+            "无法连接 OpenCode Server",
+          );
+    return reply
+      .code(normalized.code === "OPENCODE_AUTH_FAILED" ? 401 : 503)
+      .send({ code: normalized.code, error: normalized.message });
+  }
+});
+app.get("/api/v1/integrations/opencode/models", async (_req, reply) => {
+  const adapter = buildOpenCodeAdapter();
+  if (!adapter)
+    return reply
+      .code(503)
+      .send({ code: "OPENCODE_UNREACHABLE", error: "OpenCode 尚未配置" });
+  try {
+    return { models: await adapter.listModels() };
+  } catch (error) {
+    const normalized =
+      error instanceof OpenCodeError
+        ? error
+        : new OpenCodeError("OPENCODE_UNREACHABLE", "无法连接 OpenCode Server");
+    return reply
+      .code(503)
+      .send({ code: normalized.code, error: normalized.message });
+  }
+});
+
+app.post("/api/v1/agent-runs", async (req: any, reply) => {
+  try {
+    const view = await agentRuns.createRun(req.body ?? {});
+    return reply.code(201).send(view);
+  } catch (error) {
+    if (error instanceof OpenCodeError)
+      return reply
+        .code(error.status || 503)
+        .send({ code: error.code, error: error.message });
+    return reply
+      .code(400)
+      .send({ code: "INVALID_INPUT", error: String((error as any)?.message ?? error) });
+  }
+});
+app.get("/api/v1/agent-runs/state", async () => agentRuns.snapshot());
+app.get("/api/v1/agent-runs/events", async (req: any, reply) => {
+  reply.hijack();
+  reply.raw.writeHead(200, {
+    "content-type": "text/event-stream",
+    "cache-control": "no-cache",
+    connection: "keep-alive",
+  });
+  const send = (state: unknown) => {
+    reply.raw.write(`event: snapshot\ndata: ${JSON.stringify(state)}\n\n`);
+  };
+  send(agentRuns.snapshot());
+  const unsubscribe = agentRuns.subscribe(send);
+  const heartbeat = setInterval(() => reply.raw.write(": ping\n\n"), 25_000);
+  heartbeat.unref?.();
+  req.raw.on("close", () => {
+    clearInterval(heartbeat);
+    unsubscribe();
+  });
+  return reply;
+});
+app.get("/api/v1/agent-runs/:id/link", async (req: any, reply) => {
+  const url = agentRuns.sessionUrl(req.params.id);
+  if (!url)
+    return reply.code(404).send({
+      code: "OPENCODE_SESSION_MISSING",
+      error: "该任务还没有 OpenCode Session",
+    });
+  return { url };
+});
+app.post(
+  "/api/v1/agent-runs/:id/permission/allow",
+  async (req: any, reply) => {
+    const permissionId = String(req.body?.permissionId ?? "").trim();
+    if (!permissionId)
+      return reply
+        .code(400)
+        .send({ code: "INVALID_INPUT", error: "需要 permissionId" });
+    try {
+      await agentRuns.allowPermission(req.params.id, permissionId);
+      return { ok: true };
+    } catch (error) {
+      const normalized =
+        error instanceof OpenCodeError
+          ? error
+          : new OpenCodeError(
+              "PERMISSION_NOT_PENDING",
+              "权限请求已失效",
+              409,
+            );
+      return reply
+        .code(normalized.status || 409)
+        .send({ code: normalized.code, error: normalized.message });
+    }
+  },
+);
+app.post("/api/v1/agent-runs/:id/dismiss", async (req: any) => ({
+  ok: agentRuns.dismiss(req.params.id),
+}));
+
 app.setErrorHandler((error: any, _request, reply) => {
   if (
     error.code === "CONFLICT" ||
@@ -637,11 +934,17 @@ app.setErrorHandler((error: any, _request, reply) => {
 });
 
 app.addHook("onClose", async () => {
+  await agentRuns.shutdown();
   await storage.stopScheduler();
   await Promise.all(longTasks);
   store.close();
 });
 storage.startScheduler();
+try {
+  await agentRuns.recover();
+} catch (error) {
+  app.log.error(error);
+}
 for (const pending of store.db
   .prepare(
     "SELECT id FROM documents WHERE extraction_status IN ('pending','error')",

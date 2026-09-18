@@ -9,3 +9,11 @@
 已经补齐样品附件与区块身份、对象合并/删除、附件清理预览与证据保护、旧格式转换器、PVA生成器、性能基准、长任务取消及恢复后的启动目录选择。剩余人工项：实际用户旧目录如需转换时核对报告、macOS中文选字、极端长内容的视觉巡检。构建仍报告Vite插件弃用和约731KB单包警告，当前不影响行为验收。
 
 2026-09-11及此前的实现声明已被审核更正；原始审核证据保留于 [audit/REVIEW.md](./audit/REVIEW.md)。
+
+## 2026-09-18 OpenCode 外部 Agent Runtime 集成
+
+按 `SCIENTIFIC_WORKBENCH_OPENCODE_CODING_PLAN_FINAL.md` 完成 OpenCode V2 外部 Agent Runtime 集成：`agent-run` Job、OpenCodeAdapter（唯一协议边界）、AgentRunService（Session/提示/状态/权限/Question/事件/轮询/Recovery/Cancel）、Settings → OpenCode、全局 Task Stack、Jobs 历史 Session 跳转、Fake OpenCode 自动测试。
+
+- 本机实测为 OpenCode V2（CLI 1.18.31 含 `/api/*` 路由），依赖锁定 `@opencode/client@2.0.7`。
+- `pnpm typecheck`、`pnpm build` 通过；`pnpm test` 通过（真实S3 2项按设计跳过）；完整 Playwright 40 项通过（含新增 OpenCode 10 项）。冻结原型哈希未变。
+- 限制：业务科研页面尚未增加 AI 任务入口；未对真实 OpenCode 做人工端到端验证；`auto-allow` 仅逐条 `once`；科研数据只经 MCP 访问。详见 [docs/OPENCODE_INTEGRATION.md](./docs/OPENCODE_INTEGRATION.md)。完整首版仍未完成。

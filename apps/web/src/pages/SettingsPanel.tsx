@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { ConnectionSettings } from "../components/ConnectionSettings";
 import { BackupSettings } from "../components/BackupSettings";
+import { OpenCodeSettings } from "../components/OpenCodeSettings";
 import { request } from "../api";
 interface StorageConfig {
   enabled: boolean;
@@ -23,6 +24,7 @@ interface Job {
   type: string;
   status: string;
   error?: string;
+  payload?: { name?: string; sessionId?: string };
 }
 interface CleanupAttachment {
   id: string;
@@ -108,7 +110,8 @@ export function SettingsPanel({
   return (
     <>
       <div className="tabs">
-        {["本机", "附件存储", "任务", "备份与恢复", "接口"].map((name) => (
+        {["本机", "OpenCode", "附件存储", "任务", "备份与恢复", "接口"].map(
+          (name) => (
           <button
             className={tab === name ? "active" : ""}
             key={name}
@@ -144,6 +147,7 @@ export function SettingsPanel({
           </div>
         </>
       )}
+      {tab === "OpenCode" && <OpenCodeSettings notify={notify} />}
       {tab === "附件存储" && config && (
         <>
           <div className="field">
@@ -316,12 +320,41 @@ export function SettingsPanel({
           <div className="propertyRows">
             {jobs.map((job) => (
               <div key={job.id}>
-                <span>{job.type}</span>
+                {job.type === "agent-run" ? (
+                  <span>
+                    OpenCode ·{" "}
+                    {job.payload?.sessionId ? (
+                      <button
+                        className="link"
+                        onClick={() =>
+                          void request<{ url: string }>(
+                            `/agent-runs/${job.id}/link`,
+                          )
+                            .then((link) =>
+                              window.open(
+                                link.url,
+                                "_blank",
+                                "noopener,noreferrer",
+                              ),
+                            )
+                            .catch((error) => notify(error.message))
+                        }
+                      >
+                        {job.payload?.name ?? "未命名任务"}
+                      </button>
+                    ) : (
+                      job.payload?.name ?? "未命名任务"
+                    )}
+                  </span>
+                ) : (
+                  <span>{job.type}</span>
+                )}
                 <b>
                   {job.status}
                   {job.error ? `：${job.error}` : ""}
                 </b>
-                {job.status === "running" && (
+                {(job.status === "running" ||
+                  (job.type === "agent-run" && job.status === "queued")) && (
                   <button
                     className="ghost"
                     onClick={() =>
@@ -334,8 +367,7 @@ export function SettingsPanel({
                     取消
                   </button>
                 )}
-                {job.status === "failed" &&
-                  job.type === "attachment-upload" && (
+                {job.status === "failed" && job.type === "s3-upload" && (
                     <button
                       className="ghost"
                       onClick={() =>

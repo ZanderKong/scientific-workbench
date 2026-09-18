@@ -128,3 +128,24 @@
 - 性能证据：20/100/500操作整篇提取61.97/122.12/395.21ms；50,005对象读取74.27ms，5k/50k补全3.63/16.15ms，见`audit/2026-09-15/VERIFY-001-performance.json`。
 - 没有运行日常`~/ScientificWorkbench`，没有修改旧4317服务；最终验证只使用临时目录和14317，当前无测试服务监听。没有更改冻结原型。
 - 仅剩人工验收：在真实macOS中文输入法中测试数字/英文/符号后继续中文选字；若用户有实际旧工作区，再运行转换到全新目录并人工核对报告；可继续巡检极端长内容和非默认空态。下一步不是重做设计或缩减功能。
+
+## 2026-09-16 UI-DENSITY-001 Design v2 可读性（优先于上文）
+
+- 执行 `/Users/kong/Downloads/Scientific_Workbench_Design_v2_UI_Readability_EPLAN.md` 首次可读性/控件密度迁移：新增 `apps/web/src/density.css` Design v2 覆盖层并在 `main.tsx` 最后加载；冻结 `prototype.css`/`reference.html` 未改。
+- 放大持久 UI（导航13、按钮/工具条12、次级11、表格正文12、微文字≥10），保持侧栏168px、topbar48px、840/980内容宽、980/640断点与样品正文15/13px不变；未用根级缩放/zoom/scale，未改业务逻辑。
+- 视觉测试从“与冻结原型逐像素一致”迁移为“布局不变量+Design v2排版值+无溢出”，移除整页 pixelmatch 但保留截图；新增 `test/e2e/design-v2.ts` 与 `test/e2e/density.spec.ts`。
+- 本机结果：typecheck通过；`pnpm test` 72通过（真实S3 2项按设计跳过）；`pnpm build` 通过；`pnpm exec playwright test` 30项全部通过；1600/1440/1280/980/640 无页面级横向溢出（640仅表内滚动）。见 docs/VERIFICATION.md 2026-09-16 段。
+- 停止了一个上一上下文遗留、占用14317且工作目录在 `/private/tmp` 的临时测试服务；未访问 ~/ScientificWorkbench、旧4317服务或用户数据。
+- 下一步仍为既有待验收项：真实macOS中文输入法选字、实际旧工作区DOC-002转换核对、极端长内容/非默认空态巡检，以及其余页面的进一步人工视觉确认；完整首版未完成。
+
+## 2026-09-18 OpenCode 外部 Agent Runtime 集成（优先于上文）
+
+- 执行 `/Users/kong/Downloads/SCIENTIFIC_WORKBENCH_OPENCODE_CODING_PLAN_FINAL.md`。实际实现：`agent-run` Job、OpenCode V2 HTTP 适配器、AgentRunService（Session/提示/权限/Question/事件/轮询/Recovery/Cancel/TaskStack snapshot）、Settings → OpenCode、全局 Task Stack、Jobs 历史 Session 跳转、Fake OpenCode 测试与文档。
+- 版本判定：本机 opencode CLI 1.18.31 二进制包含 V2 `/api/session`、`/api/model`、`/api/permission/request`、`/api/event` 等路由，确认为 V2；依赖锁定 `@opencode/client@2.0.7`，仅 `apps/server/src/opencode.ts` 导入。未安装 legacy 客户端。
+- 依赖：`apps/server/package.json` 新增 `@opencode/client@2.0.7`，`pnpm-lock.yaml` 已更新。
+- 新增文件：`apps/server/src/opencode.ts`、`opencode.test.ts`、`agent-runs.ts`、`agent-runs.test.ts`、`apps/web/src/components/OpenCodeSettings.tsx`、`TaskStack.tsx`、`test/e2e/fake-opencode.ts`、`test/e2e/opencode.spec.ts`、`docs/OPENCODE_INTEGRATION.md`。
+- 修改：`packages/core` 未改领域模型；`apps/server/src/main.ts`（集成 routes、Job cancel 分派、startup recovery、shutdown、Settings、asset 凭据）、`store.listJobs` 兼容旧 `canceled`→`cancelled`、`SettingsPanel.tsx`（OpenCode tab、agent-run 历史、s3-upload retry 修复）、`App.tsx`（挂载 `<TaskStack />`）、`workbench.css`（作用域 TaskStack 样式）、`playwright.config.ts`（测试用 agent 轮询间隔）。
+- 未改：`prototype/reference.html`（哈希仍 `fe2c41e…f1bb`）、`packages/core/src/operations.ts`、`apps/mcp`、科研领域模型。未访问 `~/ScientificWorkbench`，未修改真实 OpenCode 配置，测试只用临时目录/独立端口/Fake OpenCode，未调用真实模型。
+- 测试结果：`pnpm typecheck` 通过；`pnpm build` 通过；`pnpm test` 为 core6/server78（含新增 opencode 12 + agent-runs 15；真实S3 2项按设计跳过）/web/mcp 通过；完整 `playwright test` 40 项通过（含新增 opencode 10 项，Fake V2 HTTP 服务）；prototype hash 未变。
+- 剩余限制：业务科研页面尚未增加 AI 任务入口（任务经 `POST /api/v1/agent-runs` 创建）；未对真实 OpenCode 做端到端人工验证（自动测试只针对 Fake OpenCode）；真实 macOS 中文输入法等原有待验收项继续有效。完整首版未完成。
+- 服务状态：e2e 结束后无测试服务监听；未启动常驻服务。

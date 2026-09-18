@@ -24,6 +24,8 @@ export default defineConfig({
       WORKBENCH_PORT: String(port),
       WORKBENCH_ACCEPTANCE: "1",
       WORKBENCH_API_TOKEN: apiToken,
+      WORKBENCH_AGENT_POLL_MS: "300",
+      WORKBENCH_AGENT_UNHEALTHY_POLL_MS: "200",
     },
     url: `http://127.0.0.1:${port}/api/v1/health`,
     reuseExistingServer: false,
