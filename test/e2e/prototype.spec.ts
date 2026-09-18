@@ -1,9 +1,17 @@
 import { test, expect, type Page } from "@playwright/test";
 import path from "node:path";
 import fs from "node:fs";
-import { PNG } from "pngjs";
-import pixelmatch from "pixelmatch";
 import type { SampleRow } from "../../apps/web/src/api";
+import {
+  DESIGN_V2,
+  checkViewport,
+  expectBox,
+  expectFontAtLeast,
+  expectFontSize,
+  expectHorizontalInvariant,
+  expectNoPageOverflow,
+  expectNotClipped,
+} from "./design-v2";
 
 const definitions = [
   ["poa", "2-POA", "添加量"],
@@ -15,26 +23,7 @@ const definitions = [
   ["polymerMw", "聚羟丙基甲基纤维素高黏度等级", "重均分子量"],
 ];
 
-async function geometry(page: Page, selector: string) {
-  return page
-    .locator(selector)
-    .first()
-    .evaluate((element) => {
-      const box = element.getBoundingClientRect(),
-        style = getComputedStyle(element);
-      return {
-        x: box.x,
-        y: box.y,
-        width: box.width,
-        height: box.height,
-        radius: style.borderRadius,
-        fontSize: style.fontSize,
-        padding: style.padding,
-      };
-    });
-}
-
-test("UI-001a: original sample table geometry and pixels", async ({
+test("UI-001a/UI-DENSITY-001: sample table keeps prototype layout at Design v2 density", async ({
   page,
   browser,
 }, testInfo) => {
@@ -70,79 +59,180 @@ test("UI-001a: original sample table geometry and pixels", async ({
   );
   await page.goto("/?acceptance=1");
   await expect(page.getByText("S260909-01", { exact: true })).toBeVisible();
-  const measurements = [];
+
+  const measurements: unknown[] = [];
   for (const selector of [
     ".sidebar",
-    ".navItem",
     ".topbar",
     ".pageHeader",
     ".toolbar",
-    ".primary",
-    ".searchPseudo",
     ".tableWrap",
     ".dbRow",
   ]) {
-    const expected = await geometry(reference, selector),
-      actual = await geometry(page, selector);
-    measurements.push({ selector, expected, actual });
-    for (const key of ["x", "y", "width", "height"] as const)
-      expect
-        .soft(Math.abs(expected[key] - actual[key]), `${selector}.${key}`)
-        .toBeLessThanOrEqual(2);
-    for (const key of ["radius", "fontSize", "padding"] as const)
-      expect.soft(actual[key], `${selector}.${key}`).toBe(expected[key]);
+    await expectHorizontalInvariant(page, reference, selector);
+    measurements.push({
+      selector,
+      expected: await reference.locator(selector).first().boundingBox(),
+      actual: await page.locator(selector).first().boundingBox(),
+    });
   }
+  await expectBox(page, ".sidebar", {
+    x: 0,
+    y: 0,
+    width: DESIGN_V2.sidebarWidth,
+  });
+  await expectBox(page, ".topbar", {
+    x: 168,
+    y: 0,
+    height: DESIGN_V2.topbarHeight,
+  });
+
+  await expectFontSize(page, ".brand", DESIGN_V2.nav);
+  await expectFontSize(page, ".navItem", DESIGN_V2.nav);
+  await expectFontSize(page, ".sideAction", DESIGN_V2.control);
+  await expectFontSize(page, ".topbar", DESIGN_V2.meta);
+  await expectFontSize(page, ".primary", DESIGN_V2.control);
+  await expectFontSize(page, ".toolbar button", DESIGN_V2.control);
+  await expectFontSize(page, "td", DESIGN_V2.control);
+  await expectFontAtLeast(page, "th", DESIGN_V2.micro);
+  await expectFontAtLeast(page, ".objToken", DESIGN_V2.micro);
+  await expectFontAtLeast(page, ".propText", DESIGN_V2.micro);
+
+  for (const label of [
+    "＋ 新建样品",
+    "搜索",
+    "筛选",
+    "排序",
+    "属性",
+    "表格",
+    "卡片",
+  ]) {
+    await expectNotClipped(
+      page,
+      page.getByRole("button", { name: label, exact: true }),
+    );
+  }
+  await expectNoPageOverflow(page);
+
   fs.writeFileSync(
     testInfo.outputPath("geometry.json"),
     JSON.stringify(measurements, null, 2),
   );
-  // The reference's hard-coded save status is intentionally replaced by real state.
-  const expectedImage = PNG.sync.read(
-    await reference.screenshot({
-      path: testInfo.outputPath("reference.png"),
-      mask: [reference.locator(".topRight > span")],
-    }),
+  await reference.screenshot({ path: testInfo.outputPath("reference.png") });
+  await page.screenshot({ path: testInfo.outputPath("actual.png") });
+  await checkViewport(
+    page,
+    reference,
+    1600,
+    900,
+    testInfo,
+    [".sidebar", ".topbar", ".pageHeader", ".toolbar", ".tableWrap", ".dbRow"],
+    { screenshot: true },
   );
-  const actualImage = PNG.sync.read(
-    await page.screenshot({
-      path: testInfo.outputPath("actual.png"),
-      mask: [page.locator(".topRight > span")],
-    }),
-  );
-  const diff = new PNG({ width: 1440, height: 1000 });
-  const pixels = pixelmatch(
-    expectedImage.data,
-    actualImage.data,
-    diff.data,
-    1440,
-    1000,
-    { threshold: 0.1 },
-  );
-  fs.writeFileSync(testInfo.outputPath("diff.png"), PNG.sync.write(diff));
-  fs.writeFileSync(
-    testInfo.outputPath("pixels.json"),
-    JSON.stringify({ pixels, ratio: pixels / 1440000 }),
-  );
-  expect(pixels / 1440000).toBeLessThanOrEqual(0.005);
+  await checkViewport(page, reference, 1280, 800, testInfo, [
+    ".sidebar",
+    ".topbar",
+    ".pageHeader",
+    ".toolbar",
+    ".tableWrap",
+    ".dbRow",
+  ]);
+  // Below the table's min-width the row width follows the larger Design v2
+  // type, so only the wrapper geometry is an invariant; the table itself is
+  // allowed to scroll horizontally.
+  for (const [width, height] of [
+    [980, 1000],
+    [640, 1000],
+  ] as const) {
+    await checkViewport(page, reference, width, height, testInfo, [
+      ".sidebar",
+      ".topbar",
+      ".pageHeader",
+      ".toolbar",
+      ".tableWrap",
+    ]);
+    const wrap = await page
+      .locator(".tableWrap")
+      .first()
+      .evaluate((element) => ({
+        clientWidth: element.clientWidth,
+        scrollWidth: element.scrollWidth,
+      }));
+    if (wrap.scrollWidth > wrap.clientWidth) {
+      // Internal horizontal table scrolling is explicitly approved.
+      expect.soft(wrap.scrollWidth).toBeGreaterThan(wrap.clientWidth);
+    }
+  }
   await reference.close();
 });
 
-test('UI-002a: empty editor layout follows the frozen prototype', async ({ page, browser }, testInfo) => {
+test("UI-002a/UI-DENSITY-001: empty editor keeps frozen macro layout", async ({
+  page,
+  browser,
+}, testInfo) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
-  const reference = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
-  await reference.goto(`file://${path.resolve('prototype/reference.html')}`);
-  await reference.evaluate("goPage({type:'sample',id:'S260910-01',fresh:true},'samples')");
-  await page.goto('/?acceptance=1');
-  await page.getByRole('button', { name: '＋ 新建样品', exact: true }).click();
-  await expect(page.getByRole('textbox', { name: '样品正文' })).toBeVisible();
-  const measurements = [];
-  for (const selector of ['.sidebar', '.topbar', '.editorTop', '.editorHeader', '.directEditor', '.editorFooter', '.docParseNote']) {
-    const expected = await geometry(reference, selector), actual = await geometry(page, selector);
-    measurements.push({ selector, expected, actual });
-    for (const key of ['x', 'y', 'width', 'height'] as const) expect.soft(Math.abs(expected[key] - actual[key]), `${selector}.${key}`).toBeLessThanOrEqual(2);
+  const reference = await browser.newPage({
+    viewport: { width: 1440, height: 1000 },
+  });
+  await reference.goto(`file://${path.resolve("prototype/reference.html")}`);
+  await reference.evaluate(
+    "goPage({type:'sample',id:'S260910-01',fresh:true},'samples')",
+  );
+  await page.goto("/?acceptance=1");
+  await page.getByRole("button", { name: "＋ 新建样品", exact: true }).click();
+  await expect(page.getByRole("textbox", { name: "样品正文" })).toBeVisible();
+
+  const measurements: unknown[] = [];
+  for (const selector of [
+    ".sidebar",
+    ".topbar",
+    ".editorTop",
+    ".editorHeader",
+    ".directEditor",
+    ".editorFooter",
+    ".docParseNote",
+  ]) {
+    await expectHorizontalInvariant(page, reference, selector);
+    measurements.push({
+      selector,
+      expected: await reference.locator(selector).first().boundingBox(),
+      actual: await page.locator(selector).first().boundingBox(),
+    });
   }
-  fs.writeFileSync(testInfo.outputPath('geometry.json'), JSON.stringify(measurements, null, 2));
-  await reference.screenshot({ path: testInfo.outputPath('reference.png') });
-  await page.screenshot({ path: testInfo.outputPath('actual.png') });
+  await expectBox(page, ".sidebar", { width: DESIGN_V2.sidebarWidth });
+  await expectBox(page, ".topbar", { height: DESIGN_V2.topbarHeight });
+  // The sample editor content column is an approved invariant.
+  await expectBox(page, ".editorHeader", {
+    width: DESIGN_V2.sampleEditorWidth,
+  });
+  await expectBox(page, ".directEditor", {
+    width: DESIGN_V2.sampleEditorWidth,
+  });
+  await expectBox(page, ".editorFooter", { width: 760 });
+  await expectNoPageOverflow(page);
+
+  fs.writeFileSync(
+    testInfo.outputPath("geometry.json"),
+    JSON.stringify(measurements, null, 2),
+  );
+  await reference.screenshot({ path: testInfo.outputPath("reference.png") });
+  await page.screenshot({ path: testInfo.outputPath("actual.png") });
+  await checkViewport(
+    page,
+    reference,
+    1600,
+    900,
+    testInfo,
+    [
+      ".sidebar",
+      ".topbar",
+      ".editorTop",
+      ".editorHeader",
+      ".directEditor",
+      ".editorFooter",
+      ".docParseNote",
+    ],
+    { screenshot: true },
+  );
   await reference.close();
 });

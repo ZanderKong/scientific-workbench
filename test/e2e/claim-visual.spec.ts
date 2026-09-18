@@ -1,10 +1,16 @@
 import { test, expect } from "@playwright/test";
 import path from "node:path";
 import fs from "node:fs";
-import { PNG } from "pngjs";
-import pixelmatch from "pixelmatch";
+import {
+  DESIGN_V2,
+  checkViewport,
+  expectFontAtLeast,
+  expectFontSize,
+  expectHorizontalInvariant,
+  expectNoPageOverflow,
+} from "./design-v2";
 
-test("UI-003c: Claim uses prototype geometry with frozen Data cards and explicit context semantics", async ({
+test("UI-003c/UI-DENSITY-001: Claim keeps prototype layout with frozen Data cards", async ({
   page,
   browser,
 }, testInfo) => {
@@ -107,33 +113,44 @@ test("UI-003c: Claim uses prototype geometry with frozen Data cards and explicit
     ".claimLayout aside",
     ".infoCard",
   ]) {
-    const expected = await reference.locator(selector).first().boundingBox();
-    const actual = await page.locator(selector).first().boundingBox();
-    measurements.push({ selector, expected, actual });
-    for (const key of ["x", "y", "width", "height"] as const)
-      expect
-        .soft(Math.abs(expected![key] - actual![key]), `${selector}.${key}`)
-        .toBeLessThanOrEqual(2);
+    await expectHorizontalInvariant(page, reference, selector);
+    measurements.push({
+      selector,
+      expected: await reference.locator(selector).first().boundingBox(),
+      actual: await page.locator(selector).first().boundingBox(),
+    });
   }
+  // The claim heading scale is preserved.
+  const heading = await page.locator(".claimHero h1").first().boundingBox();
+  expect.soft(Math.abs(heading!.height - 36)).toBeLessThanOrEqual(2);
+  await expectFontAtLeast(page, ".evidenceCard span", DESIGN_V2.micro);
+  await expectFontAtLeast(page, ".evidenceCard p", DESIGN_V2.meta);
+  await expectFontAtLeast(page, ".infoCard label", DESIGN_V2.micro);
+  await expectFontSize(page, ".claimHero p", DESIGN_V2.meta);
+  await expectNoPageOverflow(page);
   fs.writeFileSync(
     testInfo.outputPath("geometry.json"),
     JSON.stringify(measurements, null, 2),
   );
-  const a = PNG.sync.read(
-    await page.screenshot({ path: testInfo.outputPath("actual.png") }),
+  await page.screenshot({ path: testInfo.outputPath("actual.png") });
+  await reference.screenshot({ path: testInfo.outputPath("reference.png") });
+  await checkViewport(
+    page,
+    reference,
+    1600,
+    900,
+    testInfo,
+    [
+      ".detailTop",
+      ".claimHero",
+      ".claimHero h1",
+      ".claimLayout",
+      ".evidenceColumn",
+      ".evidenceCard",
+      ".claimLayout aside",
+      ".infoCard",
+    ],
+    { screenshot: true },
   );
-  const b = PNG.sync.read(
-    await reference.screenshot({ path: testInfo.outputPath("reference.png") }),
-  );
-  const diff = new PNG({ width: 1440, height: 1000 });
-  const pixels = pixelmatch(a.data, b.data, diff.data, 1440, 1000, {
-    threshold: 0.1,
-  });
-  fs.writeFileSync(testInfo.outputPath("diff.png"), PNG.sync.write(diff));
-  fs.writeFileSync(
-    testInfo.outputPath("pixels.json"),
-    JSON.stringify({ pixels, ratio: pixels / 1440000 }),
-  );
-  expect(pixels / 1440000).toBeLessThanOrEqual(0.005);
   await reference.close();
 });

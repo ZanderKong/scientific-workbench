@@ -1,10 +1,16 @@
 import { test, expect } from "@playwright/test";
 import path from "node:path";
 import fs from "node:fs";
-import { PNG } from "pngjs";
-import pixelmatch from "pixelmatch";
+import {
+  DESIGN_V2,
+  checkViewport,
+  expectFontAtLeast,
+  expectFontSize,
+  expectHorizontalInvariant,
+  expectNoPageOverflow,
+} from "./design-v2";
 
-test("UI-003d: material list and detail retain prototype layout with actual recommended properties", async ({
+test("UI-003d/UI-DENSITY-001: material list and detail keep prototype layout with larger type", async ({
   page,
   browser,
 }, testInfo) => {
@@ -54,13 +60,11 @@ test("UI-003d: material list and detail retain prototype layout with actual reco
         references: [{ objectId: fixture[0].id }],
       },
     },
-    properties: properties
-      .slice(0, index ? 1 : 2)
-      .map((property) => ({
-        object_id: fixture[0].id,
-        property_id: property.id,
-        property_name: property.canonicalName,
-      })),
+    properties: properties.slice(0, index ? 1 : 2).map((property) => ({
+      object_id: fixture[0].id,
+      property_id: property.id,
+      property_name: property.canonicalName,
+    })),
   }));
   await page.route("**/api/v1/**", (route) => {
     const endpoint = new URL(route.request().url()).pathname;
@@ -101,44 +105,35 @@ test("UI-003d: material list and detail retain prototype layout with actual reco
             ".span2",
           ];
     for (const selector of selectors) {
-      const expected = await reference.locator(selector).first().boundingBox(),
-        actual = await page.locator(selector).first().boundingBox();
-      measures.push({ selector, expected, actual });
-      for (const key of ["x", "y", "width", "height"] as const)
-        expect
-          .soft(
-            Math.abs(expected![key] - actual![key]),
-            `${state}:${selector}.${key}`,
-          )
-          .toBeLessThanOrEqual(2);
+      await expectHorizontalInvariant(page, reference, selector);
+      measures.push({
+        selector,
+        expected: await reference.locator(selector).first().boundingBox(),
+        actual: await page.locator(selector).first().boundingBox(),
+      });
     }
+    if (state === "list") {
+      await expectFontSize(page, ".tabs button", DESIGN_V2.control);
+    } else {
+      await expectFontAtLeast(page, ".propertyRows span", DESIGN_V2.micro);
+      await expectFontAtLeast(page, ".propertyRows b", DESIGN_V2.meta);
+      await expectFontAtLeast(page, ".propertyTokens span", DESIGN_V2.micro);
+    }
+    await expectNoPageOverflow(page);
     fs.writeFileSync(
       testInfo.outputPath(`${state}-geometry.json`),
       JSON.stringify(measures, null, 2),
     );
-    const a = PNG.sync.read(
-        await page.screenshot({
-          path: testInfo.outputPath(`${state}-actual.png`),
-        }),
-      ),
-      b = PNG.sync.read(
-        await reference.screenshot({
-          path: testInfo.outputPath(`${state}-reference.png`),
-        }),
-      );
-    const diff = new PNG({ width: 1440, height: 1000 });
-    const pixels = pixelmatch(a.data, b.data, diff.data, 1440, 1000, {
-      threshold: 0.1,
+    await page.screenshot({
+      path: testInfo.outputPath(`${state}-actual.png`),
     });
-    fs.writeFileSync(
-      testInfo.outputPath(`${state}-diff.png`),
-      PNG.sync.write(diff),
-    );
-    fs.writeFileSync(
-      testInfo.outputPath(`${state}-pixels.json`),
-      JSON.stringify({ pixels, ratio: pixels / 1440000 }),
-    );
-    expect(pixels / 1440000).toBeLessThanOrEqual(0.005);
+    await reference.screenshot({
+      path: testInfo.outputPath(`${state}-reference.png`),
+    });
+    await checkViewport(page, reference, 1600, 900, testInfo, selectors, {
+      screenshot: true,
+      name: `${state}-actual`,
+    });
   }
   await reference.close();
 });

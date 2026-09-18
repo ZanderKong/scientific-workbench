@@ -86,6 +86,9 @@ test("UI-003e: search, help and settings keep the prototype modal shell and expo
     path: testInfo.outputPath("settings-reference.png"),
   });
   await page.screenshot({ path: testInfo.outputPath("settings-actual.png") });
+  await page.setViewportSize({ width: 1600, height: 900 });
+  await page.screenshot({ path: testInfo.outputPath("settings-1600x900.png") });
+  await page.setViewportSize({ width: 1440, height: 1000 });
 
   await expect(settings).toContainText(process.env.SWB_ACCEPTANCE_DIR!);
   await settings.getByRole("button", { name: "附件存储", exact: true }).click();

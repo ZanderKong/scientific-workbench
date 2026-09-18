@@ -1,0 +1,371 @@
+/*
+ * Design v2 readability / control-density layer (UI-DENSITY-001).
+ *
+ * prototype.css is the immutable frozen design source.
+ * workbench.css holds implementation-specific additions.
+ * This file only overrides the typography and control metrics that this pass
+ * intentionally changes. Layout geometry (sidebar width, content widths,
+ * breakpoints) is not touched here.
+ */
+
+:root {
+  --ui-font-micro: 10px;
+  --ui-font-meta: 11px;
+  --ui-font-control: 12px;
+  --ui-font-nav: 13px;
+
+  --ui-control-compact: 30px;
+  --ui-control-default: 32px;
+  --ui-nav-height: 34px;
+}
+
+/* ---- Sidebar: larger content inside the unchanged 168px container ---- */
+.navItem {
+  font-size: var(--ui-font-nav);
+  min-height: var(--ui-nav-height);
+  padding: 9px 9px;
+}
+.sideAction {
+  font-size: var(--ui-font-control);
+  min-height: var(--ui-control-default);
+  padding: 8px 9px;
+}
+/* Only enlarge the wordmark while the sidebar is expanded; the frozen
+   responsive collapse (<=980px) must keep hiding the label. */
+@media (min-width: 981px) {
+  .brand {
+    font-size: 13px;
+  }
+}
+
+/* ---- Topbar ---- */
+.topbar {
+  font-size: var(--ui-font-meta);
+}
+.topbar button {
+  font-size: var(--ui-font-meta);
+  min-height: 28px;
+}
+.detailTop,
+.editorTop {
+  font-size: var(--ui-font-meta);
+}
+.back,
+.detailTop button,
+.editorTop button {
+  font-size: var(--ui-font-meta);
+  min-height: 28px;
+}
+
+/* ---- Page headers (descriptive text only; h1 scale is unchanged) ---- */
+.pageHeader p {
+  font-size: var(--ui-font-control);
+}
+.metaLine {
+  font-size: var(--ui-font-meta);
+}
+.metaLine button {
+  font-size: var(--ui-font-meta);
+}
+.eyebrow {
+  font-size: var(--ui-font-micro);
+}
+
+/* ---- Primary / secondary actions ---- */
+.primary {
+  font-size: var(--ui-font-control);
+  min-height: var(--ui-control-default);
+  padding: 7px 12px;
+}
+.ghost {
+  font-size: var(--ui-font-meta);
+  min-height: var(--ui-control-compact);
+}
+.designNoteBtn {
+  font-size: var(--ui-font-micro);
+}
+.menuItem {
+  font-size: var(--ui-font-meta);
+}
+.toast {
+  font-size: var(--ui-font-meta);
+}
+
+/* ---- Toolbar and segmented controls ---- */
+.toolbar button,
+.segmented button {
+  font-size: var(--ui-font-control);
+  min-height: var(--ui-control-compact);
+}
+.tabs button {
+  font-size: var(--ui-font-control);
+}
+.analysisToolbar button {
+  font-size: var(--ui-font-meta);
+}
+
+/* ---- Sample database table (highest-priority content surface) ---- */
+td {
+  font-size: var(--ui-font-control);
+}
+th {
+  font-size: var(--ui-font-micro);
+}
+.objToken,
+.propText,
+.sortMark {
+  font-size: var(--ui-font-micro);
+}
+.compareTable th,
+.conversionTable th {
+  font-size: var(--ui-font-micro);
+}
+.compareTable td,
+.conversionTable td {
+  font-size: var(--ui-font-meta);
+}
+.batchInput {
+  font-size: var(--ui-font-control);
+}
+.rowNumber {
+  font-size: var(--ui-font-micro);
+}
+
+/* ---- Pills, status badges, mini properties ---- */
+.pill,
+.status {
+  font-size: var(--ui-font-micro);
+}
+.miniProps span {
+  font-size: var(--ui-font-micro);
+}
+.semanticBadge {
+  font-size: var(--ui-font-micro);
+}
+.claimEditorBadge {
+  font-size: var(--ui-font-micro);
+}
+.copyOrigin {
+  font-size: var(--ui-font-micro);
+}
+.roleTag {
+  font-size: var(--ui-font-micro);
+}
+.entityChips button,
+.propertyTokens span {
+  font-size: var(--ui-font-micro);
+}
+.evidenceChoice {
+  font-size: var(--ui-font-micro);
+}
+.cardStats {
+  font-size: var(--ui-font-micro);
+}
+.templateNote {
+  font-size: var(--ui-font-micro);
+}
+.bulkBar,
+.bulkBar strong,
+.bulkBar button {
+  font-size: var(--ui-font-meta);
+}
+
+/* ---- Data / Analysis / Claim / Resources microtext ---- */
+.assetRow b {
+  font-size: var(--ui-font-meta);
+}
+.assetRow small {
+  font-size: var(--ui-font-micro);
+}
+.claimCard b {
+  font-size: var(--ui-font-meta);
+}
+.claimCard small {
+  font-size: var(--ui-font-micro);
+}
+.infoCard label {
+  font-size: var(--ui-font-micro);
+}
+.infoCard span,
+.infoCard button {
+  font-size: var(--ui-font-meta);
+}
+.evidenceCard b {
+  font-size: var(--ui-font-meta);
+}
+.evidenceCard span {
+  font-size: var(--ui-font-micro);
+}
+.evidenceCard p {
+  font-size: var(--ui-font-meta);
+}
+.addLink {
+  font-size: var(--ui-font-meta);
+}
+.componentKind {
+  font-size: var(--ui-font-micro);
+}
+.componentMain {
+  font-size: var(--ui-font-meta);
+}
+.componentMain b {
+  font-size: var(--ui-font-meta);
+}
+.componentMain span {
+  font-size: var(--ui-font-micro);
+}
+.componentRole {
+  font-size: var(--ui-font-micro);
+}
+.propertyRows span {
+  font-size: var(--ui-font-micro);
+}
+.propertyRows b {
+  font-size: var(--ui-font-meta);
+}
+.unitList b,
+.unitList span {
+  font-size: var(--ui-font-micro);
+}
+.formula {
+  font-size: var(--ui-font-micro);
+}
+.blockTitle {
+  font-size: var(--ui-font-meta);
+}
+.blockTitle button {
+  font-size: var(--ui-font-micro);
+}
+.resultType {
+  font-size: var(--ui-font-meta);
+}
+.result b {
+  font-size: var(--ui-font-control);
+}
+.result small {
+  font-size: var(--ui-font-micro);
+}
+.historyItem b {
+  font-size: var(--ui-font-meta);
+}
+.historyItem span {
+  font-size: var(--ui-font-micro);
+}
+.historyItem p {
+  font-size: var(--ui-font-meta);
+}
+.objectPickerHeader {
+  font-size: var(--ui-font-micro);
+}
+.objectResultName {
+  font-size: var(--ui-font-meta);
+}
+.objectResultMeta {
+  font-size: var(--ui-font-micro);
+}
+.columnGhost,
+.columnGhost strong {
+  font-size: var(--ui-font-micro);
+}
+.hoverTooltip {
+  font-size: var(--ui-font-micro);
+}
+.dragHint {
+  font-size: 9px;
+}
+.parseStatus {
+  font-size: var(--ui-font-micro);
+}
+.docParseNote {
+  font-size: var(--ui-font-micro);
+}
+.asyncStatus {
+  font-size: var(--ui-font-meta);
+}
+.emptyState p {
+  font-size: var(--ui-font-meta);
+}
+
+/* ---- Modal forms ---- */
+.field label {
+  font-size: var(--ui-font-meta);
+}
+.field input,
+.field textarea,
+.field select {
+  font-size: var(--ui-font-control);
+}
+.check {
+  font-size: var(--ui-font-meta);
+}
+
+/* ---- Claim editors hosted in Data / Analysis ---- */
+.claimSharedArea .claimTextLink {
+  font-size: var(--ui-font-meta);
+}
+.claimSharedArea .researchEditor .ProseMirror > ul > li,
+.claimSharedArea .researchEditor .ProseMirror > ul > li > p,
+.claimSharedArea .researchEditor .ProseMirror > ul > li.emptyResearchLine > p {
+  font-size: var(--ui-font-control);
+}
+.claimEditorText,
+.claimTextArea,
+.claimComposerInput {
+  font-size: var(--ui-font-control);
+}
+.claimEditorLine.child .claimEditorText,
+.claimPropertyInput {
+  font-size: var(--ui-font-meta);
+}
+.claimDirectNote,
+.claimComposerHint {
+  font-size: var(--ui-font-micro);
+}
+.claimInlineItem {
+  font-size: var(--ui-font-micro);
+}
+.claimInlineItem small {
+  font-size: var(--ui-font-micro);
+}
+.dataDropZone {
+  font-size: var(--ui-font-micro);
+}
+.dataDropZone button {
+  font-size: var(--ui-font-meta);
+}
+
+/* ---- Sample editor: auxiliary chrome only, never the scientific text ---- */
+.composerHint {
+  font-size: var(--ui-font-meta);
+}
+.editorFooter {
+  font-size: var(--ui-font-meta);
+}
+.fileIcon {
+  font-size: 9px;
+}
+.fileName {
+  font-size: var(--ui-font-micro);
+}
+
+/* ---- Design-note drawer (supporting surface) ---- */
+.noteIntro {
+  font-size: var(--ui-font-meta);
+}
+.noteSection h4 {
+  font-size: var(--ui-font-meta);
+}
+.noteSection p,
+.noteSection li {
+  font-size: var(--ui-font-micro);
+}
+.noteCode {
+  font-size: var(--ui-font-micro);
+}
+.themeSwitch button {
+  font-size: var(--ui-font-micro);
+}
+/* Existing rule is !important; override must match that specificity floor. */
+.inlineNoteBtn {
+  font-size: var(--ui-font-micro) !important;
+}

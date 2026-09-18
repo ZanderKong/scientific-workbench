@@ -1,10 +1,16 @@
 import { test, expect } from "@playwright/test";
 import path from "node:path";
 import fs from "node:fs";
-import { PNG } from "pngjs";
-import pixelmatch from "pixelmatch";
+import {
+  DESIGN_V2,
+  checkViewport,
+  expectFontAtLeast,
+  expectFontSize,
+  expectHorizontalInvariant,
+  expectNoPageOverflow,
+} from "./design-v2";
 
-test("UI-003a: descriptive Data uses the prototype content geometry", async ({
+test("UI-003a/UI-DENSITY-001: descriptive Data keeps prototype content width at Design v2 density", async ({
   page,
   browser,
 }, testInfo) => {
@@ -61,39 +67,36 @@ test("UI-003a: descriptive Data uses the prototype content geometry", async ({
     ".dataBox",
     ".infoGrid",
   ]) {
-    const expected = await reference.locator(selector).first().boundingBox();
-    const actual = await page.locator(selector).first().boundingBox();
-    measurements.push({ selector, expected, actual });
-    for (const key of ["x", "y", "width", "height"] as const)
-      expect
-        .soft(Math.abs(expected![key] - actual![key]), `${selector}.${key}`)
-        .toBeLessThanOrEqual(2);
+    await expectHorizontalInvariant(page, reference, selector);
+    measurements.push({
+      selector,
+      expected: await reference.locator(selector).first().boundingBox(),
+      actual: await page.locator(selector).first().boundingBox(),
+    });
   }
+  await expectFontSize(page, ".dataDescription .literalLine", 15);
+  await expectFontSize(page, ".metaLine", DESIGN_V2.meta);
+  await expectFontAtLeast(page, ".infoCard label", DESIGN_V2.micro);
+  await expectFontAtLeast(page, ".infoCard span", DESIGN_V2.meta);
+  await expectNoPageOverflow(page);
   fs.writeFileSync(
     testInfo.outputPath("geometry.json"),
     JSON.stringify(measurements, null, 2),
   );
-  const expectedImage = PNG.sync.read(
-    await reference.screenshot({ path: testInfo.outputPath("reference.png") }),
-  );
-  const actualImage = PNG.sync.read(
-    await page.screenshot({ path: testInfo.outputPath("actual.png") }),
-  );
-  const diff = new PNG({ width: 1440, height: 1000 });
-  const pixels = pixelmatch(
-    expectedImage.data,
-    actualImage.data,
-    diff.data,
-    1440,
-    1000,
-    { threshold: 0.1 },
-  );
-  fs.writeFileSync(testInfo.outputPath("diff.png"), PNG.sync.write(diff));
-  fs.writeFileSync(
-    testInfo.outputPath("pixels.json"),
-    JSON.stringify({ pixels, ratio: pixels / 1440000 }),
-  );
-  expect(pixels / 1440000).toBeLessThanOrEqual(0.005);
+  await reference.screenshot({ path: testInfo.outputPath("reference.png") });
+  await page.screenshot({ path: testInfo.outputPath("actual.png") });
+  const detailSelectors = [
+    ".detailTop",
+    ".detailHero",
+    ".metaLine",
+    ".contentArea",
+    ".dataBox",
+    ".infoGrid",
+  ];
+  await checkViewport(page, reference, 1600, 900, testInfo, detailSelectors, {
+    screenshot: true,
+  });
+  await checkViewport(page, reference, 1280, 800, testInfo, detailSelectors);
   for (const width of [980, 640]) {
     await reference.setViewportSize({ width, height: 1000 });
     await page.setViewportSize({ width, height: 1000 });
@@ -103,16 +106,9 @@ test("UI-003a: descriptive Data uses the prototype content geometry", async ({
       ".dataBox",
       ".infoGrid",
     ]) {
-      const expected = await reference.locator(selector).first().boundingBox(),
-        actual = await page.locator(selector).first().boundingBox();
-      for (const key of ["x", "y", "width", "height"] as const)
-        expect
-          .soft(
-            Math.abs(expected![key] - actual![key]),
-            `${width}:${selector}.${key}`,
-          )
-          .toBeLessThanOrEqual(2);
+      await expectHorizontalInvariant(page, reference, selector);
     }
+    await expectNoPageOverflow(page);
     await reference.screenshot({
       path: testInfo.outputPath(`reference-${width}.png`),
     });
@@ -121,7 +117,7 @@ test("UI-003a: descriptive Data uses the prototype content geometry", async ({
   await reference.close();
 });
 
-test("UI-003a: multi-component FTIR Data follows prototype rows and density", async ({
+test("UI-003a/UI-DENSITY-001: multi-component FTIR Data keeps rows and larger type", async ({
   page,
   browser,
 }, testInfo) => {
@@ -244,33 +240,39 @@ test("UI-003a: multi-component FTIR Data follows prototype rows and density", as
     ".componentRow",
     ".infoGrid",
   ]) {
-    const expected = await reference.locator(selector).first().boundingBox(),
-      actual = await page.locator(selector).first().boundingBox();
-    measurements.push({ selector, expected, actual });
-    for (const key of ["x", "y", "width", "height"] as const)
-      expect
-        .soft(Math.abs(expected![key] - actual![key]), `${selector}.${key}`)
-        .toBeLessThanOrEqual(2);
+    await expectHorizontalInvariant(page, reference, selector);
+    measurements.push({
+      selector,
+      expected: await reference.locator(selector).first().boundingBox(),
+      actual: await page.locator(selector).first().boundingBox(),
+    });
   }
+  await expectFontAtLeast(page, ".componentKind", DESIGN_V2.micro);
+  await expectFontAtLeast(page, ".componentMain b", DESIGN_V2.meta);
+  await expectFontAtLeast(page, ".componentMain span", DESIGN_V2.micro);
+  await expectFontAtLeast(page, ".componentRole", DESIGN_V2.micro);
+  await expectNoPageOverflow(page);
   fs.writeFileSync(
     testInfo.outputPath("geometry.json"),
     JSON.stringify(measurements, null, 2),
   );
-  const a = PNG.sync.read(
-    await page.screenshot({ path: testInfo.outputPath("actual.png") }),
+  await page.screenshot({ path: testInfo.outputPath("actual.png") });
+  await reference.screenshot({ path: testInfo.outputPath("reference.png") });
+  await checkViewport(
+    page,
+    reference,
+    1600,
+    900,
+    testInfo,
+    [
+      ".detailHero",
+      ".contentArea",
+      ".dataBox",
+      ".componentList",
+      ".componentRow",
+      ".infoGrid",
+    ],
+    { screenshot: true },
   );
-  const b = PNG.sync.read(
-    await reference.screenshot({ path: testInfo.outputPath("reference.png") }),
-  );
-  const diff = new PNG({ width: 1440, height: 1000 });
-  const pixels = pixelmatch(a.data, b.data, diff.data, 1440, 1000, {
-    threshold: 0.1,
-  });
-  fs.writeFileSync(testInfo.outputPath("diff.png"), PNG.sync.write(diff));
-  fs.writeFileSync(
-    testInfo.outputPath("pixels.json"),
-    JSON.stringify({ pixels, ratio: pixels / 1440000 }),
-  );
-  expect(pixels / 1440000).toBeLessThanOrEqual(0.005);
   await reference.close();
 });
