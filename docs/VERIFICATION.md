@@ -154,3 +154,15 @@
 - 命令与结果：`pnpm typecheck` 4包通过；`pnpm build` 通过；`pnpm test` = core6 + web14 + MCP1 + server78（含新增 opencode 12 + agent-runs 15；真实S3 2项按设计跳过），共99通过；`pnpm exec playwright test` 40项通过（原30 + 新增 opencode 10）。
 - 安全：全仓搜索确认密码只存 `private/opencode-<id>.json`（0600），不进入 settings/SQLite/Job/API/日志/备份；`operations.ts` 与 MCP 无 `agent_run`/`opencode`；业务科研页面未增加 AI 按钮。冻结原型哈希仍为 `fe2c41e76c2de262c6520fc55d1eed46e8e3679e4486d4be0e0198da32a0f1bb`。
 - 未访问 `~/ScientificWorkbench`，未修改真实 OpenCode 全局配置，未调用真实模型；自动测试只使用 Fake OpenCode。真实 OpenCode 端到端人工验证与业务页面 AI 入口仍未实现，完整首版未完成。
+
+### 2026-09-18 OpenCode 异步运行与真实验收修订
+
+- 任务：《Scientific Workbench × OpenCode 下一步修订与真实验收计划》，仅修可靠性。
+- 环境与契约实测：`opencode 1.18.31` 的新 `/api/session/:id/prompt` 需要 `{prompt:{text}}`，与 `@opencode/client@2.0.7` 扁平 `{text}` 不一致，且两者都没有 `promptAsync`。真实异步入口是 legacy `POST /session/:id/prompt_async`（实测 204，约 10ms）。据此在 `apps/server/src/opencode.ts` 内实现 `detectOpenCodeFlavor()`（`/api/info`→V2，`/global/health`→V1）与 `LegacyOpenCodeAdapter`，业务层只看到 `OpenCodeAdapter`。
+- `prompt_async`/同步守卫：`LegacyOpenCodeAdapter.submitPrompt` 使用 `/prompt_async` 并发送 `msg_` 持久 id；`opencode.test.ts` 新增 5 项 legacy 测试（flavor 检测、health/models/image 能力、prompt_async 且 syncPromptCalls=0、消息升序、permission `{response:"once"}`、question、深链、工厂选择）。E2E Fake 改为真实 V1 契约并记录 `asyncPromptCalls`/`syncPromptCalls`，阻塞 `POST /session/:id/message` 返回 500。
+- 非阻塞回归：E2E `POST /agent-runs returns while the OpenCode agent is still busy` 断言 HTTP `202`、耗时 <3s、Agent 仍 busy、`asyncPromptCalls===1`、`syncPromptCalls===0`。
+- Terminal notice 恢复：TaskStack 完成条幅改由 `state.notices` 驱动，`seenNoticeIds` 防重播，5 秒后离场并 dismiss；E2E `completion notice survives a page refresh within its TTL` 通过（真实浏览器冒烟同样通过）。
+- 连接锁定：Server 在存在 `queued/running` agent-run 时对 `baseUrl/username/password/executionDir` 变更返回 `409 OPENCODE_CONFIG_IN_USE`；`permissionMode/textModel/visionModel` 允许；`GET /integrations/opencode` 返回 `connectionLocked` 且 Settings 禁用连接输入。E2E `running agent locks connection identity but allows defaults` 通过。
+- 自动回归结果：`pnpm typecheck` 通过；`pnpm build` 通过；`pnpm test` = core6 + web14 + MCP1 + server83（真实S3 2项按设计跳过），共104通过；`pnpm exec playwright test` 44项通过（opencode 14项）。
+- 真实隔离冒烟（`XDG_*` 与 `WORKBENCH_DATA_DIR` 均为临时目录，独立端口 14318/45997，未访问 `~/ScientificWorkbench`，未改用户 OpenCode 配置，未用 4317）：真实 1.18.31 V1；连接/版本、7 个模型、MCP 已连接；`POST /agent-runs` 148ms 返回 202；黑色方块立即出现；真实 completion 文本；深链返回 OpenCode Web HTML；运行中改 baseUrl 409、改 permissionMode 200；浏览器刷新条幅恢复并在 5 秒消失；Server 重启后 running 立即恢复并最终 succeeded（约 1246 字）；OpenCode 经 scientific-workbench MCP 返回临时 Sample 标题 `Smoke Sample`。未触发项：真机 permission（默认策略放行工作目录写）与真实 OpenCode 临时不可达，均标记 NOT MANUALLY VERIFIED。
+- 安全：密码仍只在 `private/opencode-<id>.json`（0600）；`operations.ts`/MCP 无 agent 入口；`prototype/reference.html` 哈希未变。完整首版未完成。

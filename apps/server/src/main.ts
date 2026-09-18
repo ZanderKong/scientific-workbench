@@ -16,13 +16,14 @@ import {
 } from "./workspace-location";
 import {
   OpenCodeError,
-  OpenCodeHttpAdapter,
   assertSeparateDirectories,
+  createOpenCodeAdapter,
   deleteOpenCodeCredential,
   hasOpenCodeCredential,
   resolveOpenCodeConfig,
   saveOpenCodeCredential,
   validateOpenCodeBaseUrl,
+  type OpenCodeAdapter,
   type OpenCodeConfig,
   type OpenCodeModelRef,
   type ResolvedOpenCodeConfig,
@@ -41,12 +42,12 @@ function readOpenCodeConfig(): ResolvedOpenCodeConfig {
     store.setting<Partial<OpenCodeConfig>>("opencode", {}),
   );
 }
-function buildOpenCodeAdapter(): OpenCodeHttpAdapter | null {
+function buildOpenCodeAdapter(): OpenCodeAdapter | null {
   const config = readOpenCodeConfig();
   if (!config.baseUrl) return null;
   try {
     const baseUrl = validateOpenCodeBaseUrl(config.baseUrl);
-    return new OpenCodeHttpAdapter({ ...config, baseUrl });
+    return createOpenCodeAdapter({ ...config, baseUrl });
   } catch {
     return null;
   }
@@ -673,6 +674,16 @@ function normalizeModelRef(input: unknown): OpenCodeModelRef {
   return { providerId, modelId };
 }
 
+function hasActiveAgentRun() {
+  return store
+    .listJobs()
+    .some(
+      (job) =>
+        job.type === "agent-run" &&
+        (job.status === "queued" || job.status === "running"),
+    );
+}
+
 function publicOpenCodeConfig(config: OpenCodeConfig) {
   return {
     baseUrl: config.baseUrl,
@@ -682,6 +693,7 @@ function publicOpenCodeConfig(config: OpenCodeConfig) {
     textModel: config.textModel ?? null,
     visionModel: config.visionModel ?? null,
     hasPassword: hasOpenCodeCredential(store.dataDir, config.credentialId),
+    connectionLocked: hasActiveAgentRun(),
   };
 }
 
@@ -729,9 +741,24 @@ app.put("/api/v1/integrations/opencode", async (req: any) => {
   const permissionMode = body.permissionMode ?? existing.permissionMode;
   if (!["ask", "auto-allow"].includes(permissionMode))
     throw new OpenCodeError("INVALID_INPUT", "权限模式无效", 400);
+  const username = String(body.username ?? (existing.username || "opencode"));
+  const password = typeof body.password === "string" ? body.password : "";
+  if (hasActiveAgentRun()) {
+    const identityChanged =
+      baseUrl !== existing.baseUrl ||
+      username !== existing.username ||
+      password.length > 0 ||
+      executionDir !== existing.executionDir;
+    if (identityChanged)
+      throw new OpenCodeError(
+        "OPENCODE_CONFIG_IN_USE",
+        "当前仍有 OpenCode 任务运行，请等待任务结束或取消任务后再修改连接设置。",
+        409,
+      );
+  }
   const next: OpenCodeConfig = {
     baseUrl,
-    username: String(body.username ?? (existing.username || "opencode")),
+    username,
     executionDir,
     permissionMode,
   };
@@ -743,7 +770,6 @@ app.put("/api/v1/integrations/opencode", async (req: any) => {
     next.visionModel = normalizeModelRef(body.visionModel);
   else if (existing.visionModel) next.visionModel = existing.visionModel;
 
-  const password = typeof body.password === "string" ? body.password : "";
   const previousCredential = existing.credentialId;
   let newCredential: string | undefined;
   if (password) {
@@ -788,7 +814,7 @@ app.post("/api/v1/integrations/opencode/test", async (req: any, reply) => {
       code: "INVALID_OPENCODE_URL",
       error: "请先填写 OpenCode Server 地址",
     });
-  const adapter = new OpenCodeHttpAdapter({
+  const adapter = createOpenCodeAdapter({
     ...existing,
     baseUrl,
     username: String(body.username ?? (existing.username || "opencode")),
@@ -842,7 +868,7 @@ app.get("/api/v1/integrations/opencode/models", async (_req, reply) => {
 app.post("/api/v1/agent-runs", async (req: any, reply) => {
   try {
     const view = await agentRuns.createRun(req.body ?? {});
-    return reply.code(201).send(view);
+    return reply.code(202).send(view);
   } catch (error) {
     if (error instanceof OpenCodeError)
       return reply
@@ -914,6 +940,10 @@ app.post("/api/v1/agent-runs/:id/dismiss", async (req: any) => ({
 }));
 
 app.setErrorHandler((error: any, _request, reply) => {
+  if (error instanceof OpenCodeError)
+    return reply
+      .code(error.status || 503)
+      .send({ code: error.code, error: error.message });
   if (
     error.code === "CONFLICT" ||
     error.code === "DATA_CONFLICT" ||

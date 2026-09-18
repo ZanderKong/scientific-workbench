@@ -23,7 +23,8 @@ export type OpenCodeErrorCode =
   | "MODEL_UNAVAILABLE"
   | "VISION_MODEL_UNAVAILABLE"
   | "OPENCODE_SESSION_MISSING"
-  | "PERMISSION_NOT_PENDING";
+  | "PERMISSION_NOT_PENDING"
+  | "OPENCODE_CONFIG_IN_USE";
 
 export class OpenCodeError extends Error {
   constructor(
@@ -133,6 +134,7 @@ export type NormalizedOpenCodeEvent =
   | { type: "permission.replied"; sessionId: string; permissionId: string }
   | { type: "question.asked"; sessionId: string; questionId: string }
   | { type: "question.replied"; sessionId: string; questionId: string }
+  | { type: "activity"; sessionId: string }
   | { type: "other" };
 
 export interface OpenCodeAdapter {
@@ -344,20 +346,26 @@ export function resolveOpenCodeConfig(
   };
 }
 
+export function openCodeAuthHeaders(config: {
+  username?: string;
+  password?: string;
+}): Record<string, string> {
+  if (!config.password) return {};
+  return {
+    Authorization: `Basic ${Buffer.from(
+      `${config.username || DEFAULT_OPENCODE_USERNAME}:${config.password}`,
+    ).toString("base64")}`,
+  };
+}
+
 export function createOpenCodeClient(config: {
   baseUrl: string;
   username?: string;
   password?: string;
 }): ReturnType<typeof OpenCode.make> {
-  const headers: Record<string, string> = {};
-  if (config.password) {
-    headers.Authorization = `Basic ${Buffer.from(
-      `${config.username || DEFAULT_OPENCODE_USERNAME}:${config.password}`,
-    ).toString("base64")}`;
-  }
   return OpenCode.make({
     baseUrl: config.baseUrl,
-    headers,
+    headers: openCodeAuthHeaders(config),
   });
 }
 
@@ -494,6 +502,74 @@ function normalizeEvent(event: unknown): NormalizedOpenCodeEvent | null {
         sessionId: String(data.sessionID ?? ""),
         questionId: String(data.id ?? ""),
       };
+    default:
+      return null;
+  }
+}
+
+/**
+ * Legacy OpenCode V1 event stream uses `{ type, properties }`. The installed
+ * server reports `session.status`, `message.updated`, `permission.updated`...
+ */
+function normalizeV1Event(event: unknown): NormalizedOpenCodeEvent | null {
+  const value = event as {
+    type?: string;
+    properties?: Record<string, unknown>;
+  };
+  const properties = value.properties ?? {};
+  const sessionId = String(properties.sessionID ?? "");
+  switch (value.type) {
+    case "session.status":
+      return {
+        type: "session.status",
+        sessionId,
+        status: normalizeStatus(properties.status ?? properties),
+      };
+    case "session.idle":
+      return { type: "session.idle", sessionId };
+    case "permission.updated":
+    case "permission.asked":
+      return {
+        type: "permission.asked",
+        sessionId,
+        permissionId: String(properties.id ?? ""),
+      };
+    case "permission.replied":
+      return {
+        type: "permission.replied",
+        sessionId,
+        permissionId: String(properties.requestID ?? properties.id ?? ""),
+      };
+    case "question.asked":
+    case "question.updated":
+      return {
+        type: "question.asked",
+        sessionId,
+        questionId: String(properties.id ?? properties.requestID ?? ""),
+      };
+    case "question.replied":
+    case "question.rejected":
+      return {
+        type: "question.replied",
+        sessionId,
+        questionId: String(properties.id ?? properties.requestID ?? ""),
+      };
+    case "session.error":
+      return {
+        type: "session.failed",
+        sessionId,
+        error: safeText(
+          (properties.error as { data?: { message?: string } })?.data?.message ??
+            (properties.error as { message?: string })?.message ??
+            properties.error,
+        ),
+      };
+    case "message.updated":
+    case "message.part.updated":
+    case "message.removed":
+    case "session.updated":
+    case "session.diff":
+      return { type: "activity", sessionId };
     default:
       return null;
   }
@@ -805,4 +881,527 @@ export class OpenCodeHttpAdapter implements OpenCodeAdapter {
     );
     return `${this.config.baseUrl}/server/${serverKey}/session/${encodeURIComponent(sessionId)}`;
   }
+}
+
+/**
+ * Legacy OpenCode V1 transport. The installed server exposes `/global/health`,
+ * `/config/providers`, `/session/*` and a truly asynchronous
+ * `POST /session/:id/prompt_async`. It is selected automatically when the V2
+ * `@opencode/client` contract is not present, and stays entirely inside the
+ * adapter boundary so the workbench never sees version differences.
+ */
+export class LegacyOpenCodeAdapter implements OpenCodeAdapter {
+  private readonly headers: Record<string, string>;
+  private readonly statuses = new Map<string, NormalizedSessionStatus>();
+
+  constructor(private readonly config: ResolvedOpenCodeConfig) {
+    this.headers = openCodeAuthHeaders(config);
+  }
+
+  private async request(
+    method: string,
+    endpoint: string,
+    body?: unknown,
+    signal?: AbortSignal,
+  ): Promise<any> {
+    let response: Response;
+    try {
+      response = await fetch(`${this.config.baseUrl}${endpoint}`, {
+        method,
+        headers: {
+          ...this.headers,
+          ...(body !== undefined ? { "content-type": "application/json" } : {}),
+        },
+        body: body === undefined ? undefined : JSON.stringify(body),
+        signal,
+      });
+    } catch (error) {
+      if (signal?.aborted) throw error;
+      throw new OpenCodeError(
+        "OPENCODE_UNREACHABLE",
+        "无法连接 OpenCode Server",
+        0,
+        String((error as { message?: string }).message ?? error),
+      );
+    }
+    if (response.status === 401)
+      throw new OpenCodeError(
+        "OPENCODE_AUTH_FAILED",
+        "OpenCode 认证失败，请检查用户名和密码",
+        401,
+      );
+    if (response.status === 204) return undefined;
+    const contentType = response.headers.get("content-type") ?? "";
+    const isJson = contentType.includes("application/json");
+    if (!response.ok) {
+      const text = await response.text().catch(() => "");
+      throw new OpenCodeError(
+        "OPENCODE_UNREACHABLE",
+        `OpenCode 请求失败（${response.status}）`,
+        response.status,
+        safeText(isJson ? text : "", 200),
+      );
+    }
+    if (isJson) return response.json();
+    const text = await response.text();
+    try {
+      return JSON.parse(text);
+    } catch {
+      return text;
+    }
+  }
+
+  async health(): Promise<OpenCodeHealth> {
+    const value = await this.request("GET", "/global/health");
+    return { ok: Boolean(value?.healthy ?? true), version: value?.version };
+  }
+
+  async listModels(): Promise<OpenCodeModelOption[]> {
+    const value = await this.request("GET", "/config/providers");
+    const models: OpenCodeModelOption[] = [];
+    for (const provider of value?.providers ?? []) {
+      const definitions = provider?.models ?? {};
+      const entries = Array.isArray(definitions)
+        ? definitions
+        : Object.values(definitions);
+      for (const model of entries as any[]) {
+        if (!model) continue;
+        const attachment = model.capabilities?.attachment;
+        models.push({
+          providerId: String(model.providerID ?? provider.id),
+          modelId: String(model.id),
+          providerName: String(provider.name ?? provider.id),
+          modelName: String(model.name ?? model.id),
+          available: true,
+          supportsImage:
+            attachment === undefined
+              ? "unknown"
+              : attachment === true,
+        });
+      }
+    }
+    return models;
+  }
+
+  async getMcpStatus(): Promise<OpenCodeMcpStatus> {
+    const value = await this.request("GET", "/mcp");
+    const entries: [string, any][] = Object.entries(value ?? {});
+    const server = entries.find(([name]) =>
+      /scientific[-_]?workbench|workbench/i.test(name),
+    );
+    if (!server) return { state: "missing" };
+    const status = String(server[1]?.status ?? "");
+    if (status === "connected") return { state: "connected" };
+    return {
+      state: "error",
+      detail: safeText(
+        server[1]?.error ?? (status || "OpenCode 报告错误"),
+      ),
+    };
+  }
+
+  async createSession(input: {
+    title: string;
+    directory: string;
+  }): Promise<{ id: string }> {
+    const session = await this.request("POST", "/session", {
+      title: input.title,
+      directory: input.directory,
+    });
+    return { id: String(session.id) };
+  }
+
+  async submitPrompt(input: {
+    sessionId: string;
+    directory: string;
+    prompt: string;
+    model?: OpenCodeModelRef;
+    messageId: string;
+  }): Promise<{ promptMessageId: string }> {
+    const messageId = input.messageId.startsWith("msg_")
+      ? input.messageId
+      : `msg_${input.messageId.replace(/-/g, "")}`;
+    await this.request(
+      "POST",
+      `/session/${encodeURIComponent(input.sessionId)}/prompt_async`,
+      {
+        messageID: messageId,
+        parts: [{ type: "text", text: input.prompt }],
+        ...(input.model
+          ? {
+              model: {
+                providerID: input.model.providerId,
+                modelID: input.model.modelId,
+              },
+            }
+          : {}),
+      },
+    );
+    return { promptMessageId: messageId };
+  }
+
+  async getSession(sessionId: string): Promise<NormalizedSession | null> {
+    try {
+      const session = await this.request(
+        "GET",
+        `/session/${encodeURIComponent(sessionId)}`,
+      );
+      return {
+        id: String(session.id),
+        parentId: session.parentID,
+        title: session.title,
+      };
+    } catch (error) {
+      if (error instanceof OpenCodeError && error.status === 404) return null;
+      throw error;
+    }
+  }
+
+  async getSessionStatuses(): Promise<Map<string, NormalizedSessionStatus>> {
+    const value = await this.request("GET", "/session/status");
+    const statuses = new Map(this.statuses);
+    for (const [sessionId, status] of Object.entries(value ?? {}))
+      statuses.set(sessionId, normalizeStatus(status));
+    return statuses;
+  }
+
+  async getMessages(sessionId: string): Promise<NormalizedMessage[]> {
+    const value = await this.request(
+      "GET",
+      `/session/${encodeURIComponent(sessionId)}/message`,
+    );
+    const messages = (Array.isArray(value) ? value : value?.data ?? []).map(
+      (entry: any) => {
+        const info = entry?.info ?? entry;
+        const parts = entry?.parts ?? [];
+        return {
+          id: String(info.id),
+          role:
+            info.role === "user"
+              ? ("user" as const)
+              : info.role === "assistant"
+                ? ("assistant" as const)
+                : ("other" as const),
+          created: info.time?.created ?? 0,
+          completed: info.time?.completed,
+          text: (parts as any[])
+            .filter((part) => part.type === "text")
+            .map((part) => String(part.text ?? ""))
+            .join(""),
+        };
+      },
+    );
+    return messages.sort(
+      (a: NormalizedMessage, b: NormalizedMessage) => a.created - b.created,
+    );
+  }
+
+  async getChildren(sessionId: string): Promise<NormalizedSession[]> {
+    const value = await this.request("GET", "/session");
+    return (Array.isArray(value) ? value : value?.data ?? [])
+      .filter((session: any) => session.parentID === sessionId)
+      .map((session: any) => ({
+        id: String(session.id),
+        parentId: session.parentID,
+        title: session.title,
+      }));
+  }
+
+  async abortSession(sessionId: string): Promise<void> {
+    await this.request(
+      "POST",
+      `/session/${encodeURIComponent(sessionId)}/abort`,
+    );
+  }
+
+  async listPermissions(sessionId?: string): Promise<NormalizedPermission[]> {
+    const value = await this.request("GET", "/permission");
+    return (Array.isArray(value) ? value : value?.data ?? [])
+      .filter(
+        (permission: any) =>
+          !sessionId || permission.sessionID === sessionId,
+      )
+      .map((permission: any) => ({
+        id: String(permission.id),
+        sessionId: String(permission.sessionID),
+        action: String(permission.permission ?? permission.type ?? "permission"),
+        resources: Array.isArray(permission.patterns)
+          ? permission.patterns.map(String)
+          : permission.pattern
+            ? [String(permission.pattern)]
+            : [],
+        summary: permissionSummary({
+          action: String(
+            permission.title ?? permission.permission ?? permission.type ?? "",
+          ),
+          resources: Array.isArray(permission.patterns)
+            ? permission.patterns.map(String)
+            : permission.pattern
+              ? [String(permission.pattern)]
+              : [],
+          message: permission.message,
+        }),
+      }));
+  }
+
+  async replyPermission(input: {
+    sessionId: string;
+    permissionId: string;
+    response: "once";
+  }): Promise<void> {
+    try {
+      await this.request(
+        "POST",
+        `/session/${encodeURIComponent(input.sessionId)}/permissions/${encodeURIComponent(input.permissionId)}`,
+        { response: input.response },
+      );
+    } catch (error) {
+      if (error instanceof OpenCodeError && error.status === 404)
+        throw new OpenCodeError(
+          "PERMISSION_NOT_PENDING",
+          "权限请求已失效",
+          409,
+        );
+      throw error;
+    }
+  }
+
+  async listQuestions(sessionId?: string): Promise<NormalizedQuestion[]> {
+    const value = await this.request("GET", "/question");
+    return (Array.isArray(value) ? value : value?.data ?? [])
+      .filter(
+        (question: any) => !sessionId || question.sessionID === sessionId,
+      )
+      .map((question: any) => ({
+        id: String(question.id),
+        sessionId: String(question.sessionID),
+        summary: safeText(
+          question.title ?? question.header ?? "OpenCode 需要你的输入",
+        ),
+      }));
+  }
+
+  async subscribeEvents(
+    handler: (event: NormalizedOpenCodeEvent) => void,
+    signal: AbortSignal,
+  ): Promise<void> {
+    let response: Response;
+    try {
+      response = await fetch(`${this.config.baseUrl}/event`, {
+        method: "GET",
+        headers: { ...this.headers, accept: "text/event-stream" },
+        signal,
+      });
+    } catch (error) {
+      if (signal.aborted) return;
+      throw normalizeError(error);
+    }
+    if (response.status === 401)
+      throw new OpenCodeError(
+        "OPENCODE_AUTH_FAILED",
+        "OpenCode 认证失败，请检查用户名和密码",
+        401,
+      );
+    if (!response.ok || !response.body)
+      throw new OpenCodeError(
+        "OPENCODE_UNREACHABLE",
+        "OpenCode 事件流不可用",
+        response.status,
+      );
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        let boundary = buffer.indexOf("\n\n");
+        while (boundary >= 0) {
+          const block = buffer.slice(0, boundary);
+          buffer = buffer.slice(boundary + 2);
+          const data = block
+            .split("\n")
+            .filter((line) => line.startsWith("data:"))
+            .map((line) => line.slice(5).trimStart())
+            .join("\n");
+          if (data) {
+            let parsed: any;
+            try {
+              parsed = JSON.parse(data);
+            } catch {
+              parsed = null;
+            }
+            if (parsed) {
+              const normalized = normalizeV1Event(parsed);
+              if (normalized) {
+                if (normalized.type === "session.status")
+                  this.statuses.set(normalized.sessionId, normalized.status);
+                else if (normalized.type === "session.idle")
+                  this.statuses.set(normalized.sessionId, "idle");
+                handler(normalized);
+              }
+            }
+          }
+          boundary = buffer.indexOf("\n\n");
+        }
+      }
+    } catch (error) {
+      if (signal.aborted) return;
+      throw normalizeError(error);
+    } finally {
+      try {
+        reader.releaseLock();
+      } catch {
+        /* already released */
+      }
+    }
+  }
+
+  buildSessionUrl(sessionId: string): string {
+    const serverKey = Buffer.from(this.config.baseUrl, "utf8").toString(
+      "base64url",
+    );
+    return `${this.config.baseUrl}/server/${serverKey}/session/${encodeURIComponent(sessionId)}`;
+  }
+}
+
+export type OpenCodeFlavor = "v2" | "v1";
+
+async function probeJson(
+  baseUrl: string,
+  endpoint: string,
+  headers: Record<string, string>,
+): Promise<any> {
+  try {
+    const response = await fetch(`${baseUrl}${endpoint}`, {
+      headers,
+      signal: AbortSignal.timeout(4000),
+    });
+    if (!response.ok) return null;
+    const contentType = response.headers.get("content-type") ?? "";
+    if (!contentType.includes("application/json")) return null;
+    return await response.json();
+  } catch {
+    return null;
+  }
+}
+
+/** V2-first detection with a V1 fallback, both confined to the adapter. */
+export async function detectOpenCodeFlavor(
+  config: ResolvedOpenCodeConfig,
+): Promise<OpenCodeFlavor> {
+  const headers = openCodeAuthHeaders(config);
+  const info = await probeJson(config.baseUrl, "/api/info", headers);
+  if (info && typeof info.version === "string") return "v2";
+  const health = await probeJson(config.baseUrl, "/global/health", headers);
+  if (health && (health.healthy === true || typeof health.version === "string"))
+    return "v1";
+  throw new OpenCodeError(
+    "OPENCODE_UNREACHABLE",
+    "无法连接 OpenCode Server",
+  );
+}
+
+/**
+ * Wraps flavor detection. V2 servers use `@opencode/client`; the installed
+ * legacy V1 server is served by the raw `/session/*` transport. Neither branch
+ * leaks into AgentRunService or the UI.
+ */
+export class CompatOpenCodeAdapter implements OpenCodeAdapter {
+  private resolved: OpenCodeAdapter | null = null;
+  private resolving: Promise<OpenCodeAdapter> | null = null;
+
+  constructor(private readonly config: ResolvedOpenCodeConfig) {}
+
+  private resolve(): Promise<OpenCodeAdapter> {
+    if (this.resolved) return Promise.resolve(this.resolved);
+    if (!this.resolving)
+      this.resolving = detectOpenCodeFlavor(this.config)
+        .then((flavor) => {
+          this.resolved =
+            flavor === "v1"
+              ? new LegacyOpenCodeAdapter(this.config)
+              : new OpenCodeHttpAdapter(this.config);
+          return this.resolved;
+        })
+        .catch((error) => {
+          this.resolving = null;
+          throw error;
+        });
+    return this.resolving;
+  }
+
+  async health(): Promise<OpenCodeHealth> {
+    return (await this.resolve()).health();
+  }
+  async listModels(): Promise<OpenCodeModelOption[]> {
+    return (await this.resolve()).listModels();
+  }
+  async getMcpStatus(): Promise<OpenCodeMcpStatus> {
+    return (await this.resolve()).getMcpStatus();
+  }
+  async createSession(input: {
+    title: string;
+    directory: string;
+    model?: OpenCodeModelRef;
+  }): Promise<{ id: string }> {
+    return (await this.resolve()).createSession(input);
+  }
+  async submitPrompt(input: {
+    sessionId: string;
+    directory: string;
+    prompt: string;
+    model?: OpenCodeModelRef;
+    messageId: string;
+  }): Promise<{ promptMessageId: string }> {
+    return (await this.resolve()).submitPrompt(input);
+  }
+  async getSession(sessionId: string): Promise<NormalizedSession | null> {
+    return (await this.resolve()).getSession(sessionId);
+  }
+  async getSessionStatuses(): Promise<Map<string, NormalizedSessionStatus>> {
+    return (await this.resolve()).getSessionStatuses();
+  }
+  async getMessages(sessionId: string): Promise<NormalizedMessage[]> {
+    return (await this.resolve()).getMessages(sessionId);
+  }
+  async getChildren(sessionId: string): Promise<NormalizedSession[]> {
+    return (await this.resolve()).getChildren(sessionId);
+  }
+  async abortSession(sessionId: string): Promise<void> {
+    return (await this.resolve()).abortSession(sessionId);
+  }
+  async listPermissions(sessionId?: string): Promise<NormalizedPermission[]> {
+    return (await this.resolve()).listPermissions(sessionId);
+  }
+  async replyPermission(input: {
+    sessionId: string;
+    permissionId: string;
+    response: "once";
+  }): Promise<void> {
+    return (await this.resolve()).replyPermission(input);
+  }
+  async listQuestions(sessionId?: string): Promise<NormalizedQuestion[]> {
+    return (await this.resolve()).listQuestions(sessionId);
+  }
+  async subscribeEvents(
+    handler: (event: NormalizedOpenCodeEvent) => void,
+    signal: AbortSignal,
+  ): Promise<void> {
+    return (await this.resolve()).subscribeEvents(handler, signal);
+  }
+  buildSessionUrl(sessionId: string): string {
+    if (this.resolved) return this.resolved.buildSessionUrl(sessionId);
+    const serverKey = Buffer.from(this.config.baseUrl, "utf8").toString(
+      "base64url",
+    );
+    return `${this.config.baseUrl}/server/${serverKey}/session/${encodeURIComponent(sessionId)}`;
+  }
+}
+
+export function createOpenCodeAdapter(
+  config: ResolvedOpenCodeConfig,
+): OpenCodeAdapter {
+  return new CompatOpenCodeAdapter(config);
 }

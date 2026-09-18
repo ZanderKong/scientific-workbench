@@ -173,7 +173,7 @@ export class AgentRunService {
       throw new Error("任务模式无效");
 
     const config = this.options.getConfig();
-    const baseUrl = validateOpenCodeBaseUrl(config.baseUrl);
+    validateOpenCodeBaseUrl(config.baseUrl);
     const dataDir = this.options.getDataDir?.();
     const directory = assertSeparateDirectories(
       dataDir ?? process.cwd(),

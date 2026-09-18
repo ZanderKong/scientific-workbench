@@ -149,3 +149,16 @@
 - 测试结果：`pnpm typecheck` 通过；`pnpm build` 通过；`pnpm test` 为 core6/server78（含新增 opencode 12 + agent-runs 15；真实S3 2项按设计跳过）/web/mcp 通过；完整 `playwright test` 40 项通过（含新增 opencode 10 项，Fake V2 HTTP 服务）；prototype hash 未变。
 - 剩余限制：业务科研页面尚未增加 AI 任务入口（任务经 `POST /api/v1/agent-runs` 创建）；未对真实 OpenCode 做端到端人工验证（自动测试只针对 Fake OpenCode）；真实 macOS 中文输入法等原有待验收项继续有效。完整首版未完成。
 - 服务状态：e2e 结束后无测试服务监听；未启动常驻服务。
+
+## 2026-09-18 OpenCode 异步运行与真实验收修订（优先于上文）
+
+- 执行《Scientific Workbench × OpenCode 下一步修订与真实验收计划》。仅修可靠性，未加业务 AI 入口。
+- 环境判定：本机 `opencode 1.18.31` 同时提供新 `/api/*` 与 legacy `/session/*`，但 prompt 契约与 `@opencode/client@2.0.7` 不一致（新 `/prompt` 需要 `{prompt:{text}}`），且没有 `promptAsync`。最终实现 V2-first + V1 兼容，全部收敛在 `apps/server/src/opencode.ts`：`detectOpenCodeFlavor()` 优先 `/api/info`（V2 `@opencode/client`），否则 `/global/health`（V1 原生 HTTP），`CompatOpenCodeAdapter` 对外仍是同一个 `OpenCodeAdapter`。
+- J1：V1 `submitPrompt` 改用真正的 `POST /session/:id/prompt_async`（实测约 10ms 返回 204）；发送 `msg_` 前缀持久 message id；`POST /agent-runs` 改 `202`。Workbench 不调用 `session.wait`/`generate`/`POST /session/:id/message` 等阻塞入口。
+- Fake 强化：`test/e2e/fake-opencode.ts` 改为真实 V1 契约，暴露 `asyncPromptCalls` 与 `syncPromptCalls`，阻塞 `POST /session/:id/message` 直接 500 失败；新增 E2E 断言 `asyncPromptCalls===1 && syncPromptCalls===0`，并断言 “POST 返回时 Agent 仍 busy”。`opencode.test.ts` 新增 `LegacyOpenCodeAdapter` 5 项与 flavor 检测。
+- J2：TaskStack 完成条幅改为由 `state.notices` 驱动，新增 `seenNoticeIds` 与 banner 定时清理；离场后调用 dismiss。新增 E2E “完成通知在 TTL 内刷新后恢复显示”。
+- J3：Server 在存在 `queued/running` agent-run 时锁定连接身份（baseUrl/username/password/executionDir），返回 `409 OPENCODE_CONFIG_IN_USE`；permissionMode/textModel/visionModel 可改。`GET /integrations/opencode` 返回 `connectionLocked`，Settings 相应禁用连接输入。新增 E2E 覆盖。
+- J4：`createRun` 去掉未使用 baseUrl 变量。
+- 回归：`pnpm typecheck`/`pnpm build` 通过；`pnpm test` = core6 + web14 + MCP1 + server83（新增 V1 适配器 5 项；真实S3 2项跳过），共104通过；`pnpm exec playwright test` 44 项通过（opencode 由 10 增到 14）。
+- 真实验收（隔离环境，未访问 ~/ScientificWorkbench、未改用户 OpenCode 配置、未用 4317）：真实 OpenCode 1.18.31 连接/版本/7 模型/MCP 已连接；POST agent-runs 148ms 返回 202 且立即黑色方块；真实完成结果落盘；深链返回 Web HTML；运行中改 baseUrl 409、改 permissionMode 成功；浏览器刷新后条幅恢复；重启 Server 后 running 恢复并最终 succeeded；OpenCode 经 scientific-workbench MCP 读取临时 Sample 返回标题 `Smoke Sample`。Permission 真机未触发（默认策略放行工作目录写）与“真实 OpenCode 临时不可达”未人工验证，已在文档标记。
+- 未改：`prototype/reference.html` 哈希未变；`packages/core/src/operations.ts`/MCP 无 Agent 入口；未改科研领域模型。完整首版未完成。

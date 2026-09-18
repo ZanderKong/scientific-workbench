@@ -17,3 +17,11 @@
 - 本机实测为 OpenCode V2（CLI 1.18.31 含 `/api/*` 路由），依赖锁定 `@opencode/client@2.0.7`。
 - `pnpm typecheck`、`pnpm build` 通过；`pnpm test` 通过（真实S3 2项按设计跳过）；完整 Playwright 40 项通过（含新增 OpenCode 10 项）。冻结原型哈希未变。
 - 限制：业务科研页面尚未增加 AI 任务入口；未对真实 OpenCode 做人工端到端验证；`auto-allow` 仅逐条 `once`；科研数据只经 MCP 访问。详见 [docs/OPENCODE_INTEGRATION.md](./docs/OPENCODE_INTEGRATION.md)。完整首版仍未完成。
+
+## 2026-09-18 OpenCode 异步与真实闭环修订
+
+- prompt 提交改为真正异步：V1 `POST /session/:id/prompt_async`（V2 `session.prompt` 即入队），`POST /agent-runs` 返回 `202` 且不等待模型；不调用阻塞入口。
+- Adapter 增加 V2-first + V1 兼容检测，差异仅在 `apps/server/src/opencode.ts`；真实 OpenCode 1.18.31 走 V1。
+- TaskStack 完成通知改由 terminal notice 驱动，支持刷新/重连恢复；运行中锁定 OpenCode 连接身份（409 `OPENCODE_CONFIG_IN_USE`）。
+- 自动回归：`pnpm typecheck`/`build` 通过；`pnpm test`（含新增 V1 适配器测试）与 `pnpm exec playwright test` 44 项通过。
+- 真实 OpenCode 隔离冒烟：连接/模型/MCP、非阻塞 202、深链、连接锁定、浏览器刷新恢复、Server 重启恢复、MCP 读取 Sample 均通过；permission 真机未触发与不可达场景标记未人工验证。详见 [docs/OPENCODE_INTEGRATION.md](./docs/OPENCODE_INTEGRATION.md)。完整首版未完成。

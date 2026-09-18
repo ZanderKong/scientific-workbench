@@ -20,9 +20,18 @@ interface AgentRunView {
   error?: string;
 }
 
+interface TerminalNotice {
+  id: string;
+  kind: "completed" | "failed";
+  name: string;
+  sessionUrl?: string;
+  message?: string;
+  createdAt: number;
+}
+
 interface AgentRunState {
   runs: AgentRunView[];
-  notices: unknown[];
+  notices: TerminalNotice[];
   eventConnected: boolean;
 }
 
@@ -72,7 +81,8 @@ export function TaskStack() {
   const [runs, setRuns] = useState<AgentRunView[]>([]);
   const [banners, setBanners] = useState<Banner[]>([]);
   const [pulsing, setPulsing] = useState<string | null>(null);
-  const previous = useRef<Map<string, AgentRunView>>(new Map());
+  const seenNotices = useRef<Set<string>>(new Set());
+  const bannerTimers = useRef<number[]>([]);
   const press = useRef<{
     timer?: number;
     longPressed: boolean;
@@ -81,37 +91,42 @@ export function TaskStack() {
   }>({ longPressed: false, x: 0, y: 0 });
 
   const applyState = useCallback((state: AgentRunState) => {
-    const now = new Map(state.runs.map((run) => [run.id, run]));
+    // Terminal notices (not run transitions) drive the completion banner so it
+    // also survives a browser refresh or SSE reconnect within the server TTL.
     const fresh: Banner[] = [];
-    for (const run of state.runs) {
-      if (run.uiState !== "completed") continue;
-      const before = previous.current.get(run.id);
-      if (!before || before.uiState === "completed") continue;
+    for (const notice of state.notices) {
+      if (notice.kind !== "completed") continue;
+      if (seenNotices.current.has(notice.id)) continue;
+      seenNotices.current.add(notice.id);
       fresh.push({
-        id: run.id,
-        name: run.name,
-        sessionUrl: run.sessionUrl,
+        id: notice.id,
+        name: notice.name,
+        sessionUrl: notice.sessionUrl,
         leaving: false,
       });
-      window.setTimeout(
-        () =>
-          setBanners((current) =>
-            current.map((banner) =>
-              banner.id === run.id ? { ...banner, leaving: true } : banner,
+      bannerTimers.current.push(
+        window.setTimeout(
+          () =>
+            setBanners((current) =>
+              current.map((banner) =>
+                banner.id === notice.id ? { ...banner, leaving: true } : banner,
+              ),
             ),
-          ),
-        BANNER_MS,
+          BANNER_MS,
+        ),
       );
-      window.setTimeout(
-        () =>
+      bannerTimers.current.push(
+        window.setTimeout(() => {
           setBanners((current) =>
-            current.filter((banner) => banner.id !== run.id),
-          ),
-        BANNER_MS + 700,
+            current.filter((banner) => banner.id !== notice.id),
+          );
+          void request(`/agent-runs/${notice.id}/dismiss`, {
+            method: "POST",
+          }).catch(() => undefined);
+        }, BANNER_MS + 700),
       );
     }
     if (fresh.length) setBanners((current) => [...current, ...fresh]);
-    previous.current = now;
     setRuns(state.runs.filter((run) => run.uiState !== "completed"));
   }, []);
 
@@ -145,6 +160,15 @@ export function TaskStack() {
     const timer = window.setTimeout(() => setPulsing(null), 650);
     return () => window.clearTimeout(timer);
   }, [runs]);
+
+  useEffect(
+    () => () => {
+      for (const timer of bannerTimers.current) window.clearTimeout(timer);
+      bannerTimers.current = [];
+      if (press.current.timer) window.clearTimeout(press.current.timer);
+    },
+    [],
+  );
 
   const refresh = () =>
     request<AgentRunState>("/agent-runs/state")

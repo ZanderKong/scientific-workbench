@@ -14,6 +14,7 @@ interface OpenCodeConfigView {
   textModel: ModelRef | null;
   visionModel: ModelRef | null;
   hasPassword: boolean;
+  connectionLocked: boolean;
 }
 
 interface OpenCodeStatusView {
@@ -153,6 +154,9 @@ export function OpenCodeSettings({
       <div className="field">
         <label>连接</label>
         <p>工作台只连接已经运行的 OpenCode Server，不会启动或修改 OpenCode。</p>
+        {config?.connectionLocked && (
+          <p>有 OpenCode 任务正在运行，连接设置暂时锁定。</p>
+        )}
       </div>
       <div className="field">
         <label htmlFor="opencode-base-url">OpenCode Server</label>
@@ -160,6 +164,7 @@ export function OpenCodeSettings({
           id="opencode-base-url"
           value={config?.baseUrl ?? ""}
           placeholder={DEFAULT_BASE_URL_PLACEHOLDER}
+          disabled={config?.connectionLocked}
           onChange={(event) => patch({ baseUrl: event.target.value })}
         />
         <p>
@@ -173,6 +178,7 @@ export function OpenCodeSettings({
           id="opencode-username"
           value={config?.username ?? ""}
           placeholder="opencode"
+          disabled={config?.connectionLocked}
           onChange={(event) => patch({ username: event.target.value })}
         />
       </div>
@@ -185,6 +191,7 @@ export function OpenCodeSettings({
           placeholder={
             config?.hasPassword ? "已配置时留空保持不变" : "尚未配置密码"
           }
+          disabled={config?.connectionLocked}
           onChange={(event) => setPassword(event.target.value)}
         />
       </div>
@@ -193,6 +200,7 @@ export function OpenCodeSettings({
         <input
           id="opencode-execution-dir"
           value={config?.executionDir ?? ""}
+          disabled={config?.connectionLocked}
           onChange={(event) => patch({ executionDir: event.target.value })}
         />
         <p>必须与科研数据目录分离；科研数据仍通过 Workbench MCP 访问。</p>

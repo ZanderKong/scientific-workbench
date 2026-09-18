@@ -21,24 +21,23 @@ OpenCode 负责：
 
 本阶段**没有**实现：AI Chat 页面、AI Sidebar、Prompt Library、Agent Builder、Provider 管理、Codex/ACP Runtime、多 Agent orchestration，也没有在 Sample/Data/Analysis/Claim 页面增加 AI 按钮。科研领域模型（Sample/Data/Analysis/Claim/…）未改变。
 
-## 连接方式（V2）
+## 连接方式（V2-first，V1 兼容在 Adapter 内）
 
-按当前安装的 OpenCode（V2 HTTP Server，`/api/*`）实现，客户端为固定版本的
-`@opencode/client`，只允许在 `apps/server/src/opencode.ts` 内导入。其他代码不得
-直接引用该 SDK。
+按当前安装的 OpenCode 自动选择传输，差异只存在于 `apps/server/src/opencode.ts`：
+
+- 优先 V2：`GET /api/info` 返回 JSON `version` 时使用固定版本的 `@opencode/client`；
+- 否则 V1（当前安装的 `opencode 1.18.31`）：使用 `/global/health`、`/config/providers`、
+  `/session/*`、`/permission`、`/question`、`/event` 的原生 HTTP 传输；
+- 两者都不通时报告 `OPENCODE_UNREACHABLE`。
+
+其他代码不得直接引用 OpenCode SDK 或构造 OpenCode URL。
 
 `baseUrl` 默认空字符串。第一版只支持 loopback（`localhost` / `127.0.0.1` / `::1`）、
 `http`/`https`、根路径，且拒绝 URL 内嵌用户名密码、query、hash、公网或 LAN 地址。
 尾随斜杠会被移除。
 
-V2 推荐运行：
-
-```text
-opencode pair
-```
-
-粘贴其显示的 URL / 用户名 / 密码；固定端口用户运行 `opencode serve` 后填写对应地址。
-端口不要假定为固定 `4096` 或 `49374`。
+V2 推荐运行 `opencode pair` 获取 URL/用户名/密码；固定端口用户运行 `opencode serve`
+后填写对应地址。端口不要假定为固定 `4096` 或 `49374`。
 
 ## 认证
 
@@ -46,6 +45,20 @@ opencode pair
 权限 `0600`。密码不会进入 `registry/settings.json`、SQLite、Job payload、API 响应、
 日志或备份。所有 OpenCode 请求（含 Event/SSE 订阅）共用唯一 client factory，因此
 认证头统一注入。空密码输入表示保持当前密码。
+
+## Prompt 语义（异步，非阻塞）
+
+`POST /api/v1/agent-runs` 只负责创建 Job、Session 并**异步**提交 Prompt，成功后返回
+`202 Accepted`，不会等待模型生成。Workbench 从不调用同步阻塞入口：
+
+- V2：`@opencode/client` 的 `session.prompt()` 返回 `SessionInboxUser`（入队记录），
+  即服务端的异步提交；当前固定版本 `2.0.7` 的 TypeScript 类型没有 `promptAsync`，
+  因此不虚构该方法；
+- V1：`POST /session/:id/prompt_async`，服务端约 10ms 返回 `204`；
+- 绝不会使用 `session.wait`、`session.generate`、`POST /session/:id/message` 等阻塞入口。
+
+Workbench 生成或采用服务端返回的持久 message id（V1 需要 `msg_` 前缀），并把它存进
+`agent-run` Job 的 `promptMessageId`；完成判定只以该 id 之后的 assistant 响应为准。
 
 ## Agent 工作目录
 
@@ -82,6 +95,25 @@ OpenCode 配置中的 `deny` 继续由 OpenCode 自己拒绝。Question（V2 for
 
 Child/subagent Session 的 permission 通过父链（最大深度 16）归属到 root Job；未知或
 循环链不会自动授权，其他用户手动创建的 Session 不会被 Workbench 批准。
+
+## 连接锁定
+
+存在 `queued` / `running` 的 `agent-run` 时，Server 禁止修改连接身份
+（`baseUrl`、`username`、`password`、`executionDir`），否则返回
+`409 OPENCODE_CONFIG_IN_USE`。`permissionMode`、`textModel`、`visionModel` 仍可修改，
+因为只影响后续任务/权限。`GET /api/v1/integrations/opencode` 返回
+`config.connectionLocked`；Settings 页面据此禁用连接相关输入。安全边界在 Server，
+UI 只是提示。
+
+## Terminal Notice 与刷新恢复
+
+完成/失败不是新的 Job 状态，而是内存 terminal notice。TaskStack 的完成黑色条幅由
+`state.notices`（而非前端 run 状态跳变）驱动：
+
+- Server 对 completed notice 保留约 30 秒 TTL，供浏览器刷新或 SSE 重连；
+- 前端每个 notice 只播放一次（内存 `seenNoticeIds`），展示 5 秒后离场并调用
+  `POST /agent-runs/:id/dismiss`；
+- failed 仍显示橙红方块，点击 dismiss 后从 TaskStack 消失，Job 保持在任务历史。
 
 ## 事件与轮询
 
@@ -132,3 +164,30 @@ Workbench 不自动修改 OpenCode 配置，也不执行 `opencode mcp add`。Se
 自动测试使用 Fake OpenCode（模拟 V2 HTTP 契约）与临时工作区/独立端口，禁止调用真实
 模型或 Provider。真实 OpenCode 集成只能通过显式 opt-in（如
 `SWB_OPENCODE_TEST_URL`）运行，默认跳过；跳过不被视为真实集成通过。
+
+## 真实验收记录（2026-09-18）
+
+在**隔离的临时环境**中对真实 OpenCode 完成低风险冒烟（`XDG_*` 指向临时目录，独立
+Workbench 临时数据目录 `WORKBENCH_DATA_DIR` 与独立端口，未使用 `4317`，未访问
+`~/ScientificWorkbench`，未修改用户 OpenCode 全局配置，未升级/重装）：
+
+- OpenCode：`1.18.31`（V1 传输），`@opencode/client@2.0.7`（V2 路径）；
+- 连接/版本：`● 已连接 · 1.18.31`；
+- 模型列表：真实读取到 7 个可用模型；
+- MCP：真实读取到 `scientific-workbench` 为已连接；
+- 非阻塞：`POST /api/v1/agent-runs` 约 148ms 返回 `202`，TaskStack 立即显示黑色运行方块；
+- 完成：真实模型返回文本并落到 `payload.resultText`；
+- Session 深链：`/server/<base64url(baseUrl)>/session/<id>` 返回 OpenCode Web HTML；
+- 连接锁定：运行中修改 `baseUrl` 返回 `409 OPENCODE_CONFIG_IN_USE`，修改 `permissionMode`
+  成功；三处真实验证后取消任务；
+- 刷新恢复：真实浏览器刷新后完成条幅重新出现，5 秒后消失；
+- Server 重启恢复：重启 Workbench Server 后运行中 Job 立即恢复为 `running`，随后
+  `succeeded`（真实结果约 1246 字）；
+- MCP 读取：OpenCode 通过 `scientific-workbench` MCP 读取临时工作台中的 `Smoke Sample`
+  并返回标题 `Smoke Sample`，未直接访问科研数据目录。
+
+未触发/未验证项：
+
+- Permission 人工触发：当前真实 OpenCode 默认权限策略下，写工作目录内的文件未产生
+  pending permission，因此真机 `Allow Once` 未人工触发；该路径由 Fake/单元/E2E 覆盖。
+- 真实 OpenCode 临时不可达：为避免影响真实服务，未执行，标记为 NOT MANUALLY VERIFIED。

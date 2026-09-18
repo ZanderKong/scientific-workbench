@@ -9,11 +9,14 @@ import { operations } from "@workbench/core";
 import { WorkbenchStore } from "./store";
 import { createCompleteBackup } from "./backup";
 import {
+  LegacyOpenCodeAdapter,
   OpenCodeHttpAdapter,
   OpenCodeError,
   assertSeparateDirectories,
+  createOpenCodeAdapter,
   defaultOpenCodeConfig,
   deleteOpenCodeCredential,
+  detectOpenCodeFlavor,
   ensureExecutionDirectory,
   hasOpenCodeCredential,
   readOpenCodeCredential,
@@ -519,6 +522,322 @@ describe("OpenCode adapter", () => {
       expect(content.toString("utf8")).not.toContain("backup-secret");
     } finally {
       store.close();
+    }
+  });
+});
+
+class FakeV1 {
+  server!: http.Server;
+  baseUrl = "";
+  sessions = new Map<string, any>();
+  messages = new Map<string, any[]>();
+  permissions: any[] = [];
+  questions: any[] = [];
+  replies: { sessionID: string; requestID: string; response: string }[] = [];
+  asyncPromptCalls = 0;
+  syncPromptCalls = 0;
+  providers = [
+    {
+      id: "anthropic",
+      name: "Anthropic",
+      models: {
+        claude: {
+          id: "claude",
+          providerID: "anthropic",
+          name: "Claude",
+          capabilities: { attachment: true },
+        },
+        gpt: {
+          id: "gpt",
+          providerID: "anthropic",
+          name: "GPT",
+          capabilities: { attachment: false },
+        },
+        unknown: {
+          id: "unknown",
+          providerID: "anthropic",
+          name: "Unknown",
+        },
+      },
+    },
+  ];
+  mcp: Record<string, any> = {
+    "scientific-workbench": { status: "connected" },
+  };
+  private sequence = 0;
+
+  async start() {
+    this.server = http.createServer((request, response) =>
+      this.handle(request, response),
+    );
+    await new Promise<void>((resolve) =>
+      this.server.listen(0, "127.0.0.1", resolve),
+    );
+    this.baseUrl = `http://127.0.0.1:${(this.server.address() as AddressInfo).port}`;
+    return this;
+  }
+  async stop() {
+    await new Promise<void>((resolve) => this.server.close(() => resolve()));
+  }
+
+  private handle(request: http.IncomingMessage, response: http.ServerResponse) {
+    const url = new URL(request.url ?? "/", "http://127.0.0.1");
+    const method = request.method ?? "GET";
+    const parts = url.pathname.split("/").filter(Boolean);
+    const send = (status: number, body?: unknown) => {
+      if (status === 204) {
+        response.writeHead(status);
+        response.end();
+        return;
+      }
+      const text = JSON.stringify(body ?? {});
+      response.writeHead(status, {
+        "content-type": "application/json",
+        "content-length": Buffer.byteLength(text),
+      });
+      response.end(text);
+    };
+    if (method === "GET" && url.pathname === "/global/health")
+      return send(200, { healthy: true, version: "1.18.31" });
+    if (method === "GET" && url.pathname === "/config/providers")
+      return send(200, { providers: this.providers, default: {} });
+    if (method === "GET" && url.pathname === "/mcp") return send(200, this.mcp);
+    if (method === "GET" && url.pathname === "/permission")
+      return send(200, this.permissions);
+    if (method === "GET" && url.pathname === "/question")
+      return send(200, this.questions);
+    if (method === "POST" && url.pathname === "/session") {
+      readBody(request).then((body) => {
+        const id = `ses_v1_${++this.sequence}`;
+        this.sessions.set(id, { id, title: body.title });
+        this.messages.set(id, []);
+        send(200, this.sessions.get(id));
+      });
+      return;
+    }
+    if (
+      method === "POST" &&
+      parts[0] === "session" &&
+      parts[1] &&
+      parts[2] === "prompt_async"
+    ) {
+      this.asyncPromptCalls += 1;
+      readBody(request).then((body) => {
+        const list = this.messages.get(parts[1]) ?? [];
+        list.push({
+          info: {
+            id: body.messageID,
+            role: "user",
+            sessionID: parts[1],
+            time: { created: 1 },
+          },
+          parts: body.parts,
+        });
+        this.messages.set(parts[1], list);
+        send(204);
+      });
+      return;
+    }
+    if (
+      method === "POST" &&
+      parts[0] === "session" &&
+      parts[1] &&
+      parts[2] === "message"
+    ) {
+      this.syncPromptCalls += 1;
+      return send(500, { error: "SYNC_PROMPT_NOT_ALLOWED_IN_TEST" });
+    }
+    if (
+      method === "POST" &&
+      parts[0] === "session" &&
+      parts[1] &&
+      parts[2] === "permissions" &&
+      parts[3]
+    ) {
+      readBody(request).then((body) => {
+        const index = this.permissions.findIndex((p) => p.id === parts[3]);
+        if (index < 0) return send(404, { name: "NotFoundError" });
+        this.permissions.splice(index, 1);
+        this.replies.push({
+          sessionID: parts[1],
+          requestID: parts[3],
+          response: body.response,
+        });
+        send(204);
+      });
+      return;
+    }
+    if (
+      method === "GET" &&
+      parts[0] === "session" &&
+      parts[1] &&
+      parts[2] === "message"
+    )
+      return send(200, this.messages.get(parts[1]) ?? []);
+    if (
+      method === "GET" &&
+      parts[0] === "session" &&
+      parts[1] &&
+      parts.length === 2
+    )
+      return this.sessions.has(parts[1])
+        ? send(200, this.sessions.get(parts[1]))
+        : send(404, { name: "NotFoundError" });
+    return send(404, { name: "NotFoundError" });
+  }
+}
+
+function v1Adapter(fake: FakeV1) {
+  return new LegacyOpenCodeAdapter({
+    ...defaultOpenCodeConfig(path.join(dataDir, "ws")),
+    baseUrl: fake.baseUrl,
+    executionDir: path.join(dataDir, "agent"),
+  });
+}
+
+describe("Legacy OpenCode V1 adapter", () => {
+  it("detects the legacy flavor and reports health, models and MCP", async () => {
+    const v1 = await new FakeV1().start();
+    try {
+      const config = {
+        ...defaultOpenCodeConfig(path.join(dataDir, "ws")),
+        baseUrl: v1.baseUrl,
+        executionDir: path.join(dataDir, "agent"),
+      };
+      expect(await detectOpenCodeFlavor(config)).toBe("v1");
+      const adapter = v1Adapter(v1);
+      expect(await adapter.health()).toMatchObject({
+        ok: true,
+        version: "1.18.31",
+      });
+      const models = await adapter.listModels();
+      expect(models).toHaveLength(3);
+      expect(
+        models.find((model) => model.modelId === "claude")?.supportsImage,
+      ).toBe(true);
+      expect(
+        models.find((model) => model.modelId === "gpt")?.supportsImage,
+      ).toBe(false);
+      expect(
+        models.find((model) => model.modelId === "unknown")?.supportsImage,
+      ).toBe("unknown");
+      expect(await adapter.getMcpStatus()).toEqual({ state: "connected" });
+    } finally {
+      await v1.stop();
+    }
+  });
+
+  it("submits prompts through prompt_async and never the blocking endpoint", async () => {
+    const v1 = await new FakeV1().start();
+    try {
+      const adapter = v1Adapter(v1);
+      const { id } = await adapter.createSession({
+        title: "异步任务",
+        directory: path.join(dataDir, "agent"),
+      });
+      const { promptMessageId } = await adapter.submitPrompt({
+        sessionId: id,
+        directory: path.join(dataDir, "agent"),
+        prompt: "请分析",
+        messageId: "11111111-1111-4111-8111-111111111111",
+      });
+      expect(promptMessageId.startsWith("msg_")).toBe(true);
+      expect(v1.asyncPromptCalls).toBe(1);
+      expect(v1.syncPromptCalls).toBe(0);
+      const messages = await adapter.getMessages(id);
+      expect(messages[0]).toMatchObject({
+        id: promptMessageId,
+        role: "user",
+        text: "请分析",
+      });
+    } finally {
+      await v1.stop();
+    }
+  });
+
+  it("sorts messages, replies permissions with once and lists questions", async () => {
+    const v1 = await new FakeV1().start();
+    try {
+      const adapter = v1Adapter(v1);
+      const { id } = await adapter.createSession({
+        title: "t",
+        directory: path.join(dataDir, "agent"),
+      });
+      v1.messages.set(id, [
+        {
+          info: {
+            id: "msg_b",
+            role: "assistant",
+            sessionID: id,
+            time: { created: 2, completed: 3 },
+          },
+          parts: [{ type: "text", text: "done" }],
+        },
+        {
+          info: {
+            id: "msg_a",
+            role: "user",
+            sessionID: id,
+            time: { created: 1 },
+          },
+          parts: [{ type: "text", text: "hi" }],
+        },
+      ]);
+      const messages = await adapter.getMessages(id);
+      expect(messages.map((message) => message.id)).toEqual(["msg_a", "msg_b"]);
+      expect(messages[1].completed).toBe(3);
+      v1.permissions.push({
+        id: "perm-1",
+        sessionID: id,
+        permission: "shell",
+        patterns: ["python analyse.py"],
+        title: "shell",
+      });
+      const permissions = await adapter.listPermissions(id);
+      expect(permissions[0]).toMatchObject({
+        id: "perm-1",
+        summary: "shell：python analyse.py",
+      });
+      await adapter.replyPermission({
+        sessionId: id,
+        permissionId: "perm-1",
+        response: "once",
+      });
+      expect(v1.replies).toEqual([
+        { sessionID: id, requestID: "perm-1", response: "once" },
+      ]);
+      expect(v1.permissions).toHaveLength(0);
+      v1.questions.push({ id: "q-1", sessionID: id, title: "选择参数" });
+      expect(await adapter.listQuestions(id)).toEqual([
+        { id: "q-1", sessionId: id, summary: "选择参数" },
+      ]);
+    } finally {
+      await v1.stop();
+    }
+  });
+
+  it("builds the server-scoped deep link for the legacy server", async () => {
+    const v1 = await new FakeV1().start();
+    try {
+      const url = v1Adapter(v1).buildSessionUrl("ses_v1_1");
+      expect(url.startsWith(`${v1.baseUrl}/server/`)).toBe(true);
+      expect(url.endsWith("/session/ses_v1_1")).toBe(true);
+    } finally {
+      await v1.stop();
+    }
+  });
+
+  it("selects the legacy transport through the compatibility factory", async () => {
+    const v1 = await new FakeV1().start();
+    try {
+      const adapter = createOpenCodeAdapter({
+        ...defaultOpenCodeConfig(path.join(dataDir, "ws")),
+        baseUrl: v1.baseUrl,
+        executionDir: path.join(dataDir, "agent"),
+      });
+      expect(await adapter.health()).toMatchObject({ version: "1.18.31" });
+    } finally {
+      await v1.stop();
     }
   });
 });
