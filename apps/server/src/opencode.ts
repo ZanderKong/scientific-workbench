@@ -711,9 +711,15 @@ export class OpenCodeHttpAdapter implements OpenCodeAdapter {
   async getSessionStatuses(): Promise<Map<string, NormalizedSessionStatus>> {
     try {
       const active = await this.client.session.active();
-      const statuses = new Map(this.statuses);
+      // V2 `active()` is an authoritative active-session snapshot, not a
+      // delta. Rebuild from scratch so a session that finished is no longer
+      // reported busy even if an idle event was missed.
+      const statuses = new Map<string, NormalizedSessionStatus>();
       for (const sessionId of Object.keys(active))
         statuses.set(sessionId, "busy");
+      this.statuses.clear();
+      for (const [sessionId, status] of statuses)
+        this.statuses.set(sessionId, status);
       return statuses;
     } catch (error) {
       throw normalizeError(error);
@@ -895,7 +901,13 @@ export class LegacyOpenCodeAdapter implements OpenCodeAdapter {
   private readonly statuses = new Map<string, NormalizedSessionStatus>();
 
   constructor(private readonly config: ResolvedOpenCodeConfig) {
-    this.headers = openCodeAuthHeaders(config);
+    this.headers = {
+      ...openCodeAuthHeaders(config),
+      // Legacy V1 routes workspace/instance requests by header, not by a
+      // Session body field. Every request (including the event stream) uses
+      // this single header set.
+      "x-opencode-directory": config.executionDir,
+    };
   }
 
   private async request(
@@ -1004,9 +1016,10 @@ export class LegacyOpenCodeAdapter implements OpenCodeAdapter {
     title: string;
     directory: string;
   }): Promise<{ id: string }> {
+    // `directory` is intentionally not a Session body field in legacy V1; the
+    // adapter's `x-opencode-directory` header routes the instance instead.
     const session = await this.request("POST", "/session", {
       title: input.title,
-      directory: input.directory,
     });
     return { id: String(session.id) };
   }
@@ -1059,10 +1072,17 @@ export class LegacyOpenCodeAdapter implements OpenCodeAdapter {
 
   async getSessionStatuses(): Promise<Map<string, NormalizedSessionStatus>> {
     const value = await this.request("GET", "/session/status");
-    const statuses = new Map(this.statuses);
+    // `/session/status` lists only non-idle sessions. Treat it as the
+    // authoritative reconciliation snapshot and drop stale entries instead of
+    // merging them with the event cache, otherwise a finished session keeps
+    // looking busy forever when its idle event is lost.
+    const statuses = new Map<string, NormalizedSessionStatus>();
     for (const [sessionId, status] of Object.entries(value ?? {}))
       statuses.set(sessionId, normalizeStatus(status));
-    return statuses;
+    this.statuses.clear();
+    for (const [sessionId, status] of statuses)
+      this.statuses.set(sessionId, status);
+    return new Map(statuses);
   }
 
   async getMessages(sessionId: string): Promise<NormalizedMessage[]> {

@@ -221,6 +221,34 @@ describe("AgentRunService", () => {
     expect(service.snapshot().notices[0]).toMatchObject({ kind: "completed" });
   });
 
+  it("recovers completion through polling after the idle event is lost", async () => {
+    const view = await createRun();
+    const sessionId = adapter.prompts[0].sessionId;
+    adapter.statuses.set(sessionId, "busy");
+    await service.reconcileAll();
+    expect((await currentJob(view.id)).status).toBe("running");
+    // The stale busy state really existed before the snapshot dropped it.
+    expect(adapter.statuses.get(sessionId)).toBe("busy");
+
+    // The assistant finished and the active snapshot no longer lists the
+    // session, but no session.idle event was delivered.
+    const list = adapter.messages.get(sessionId) ?? [];
+    list.push({
+      id: "assistant-poll",
+      role: "assistant",
+      created: 2,
+      completed: 3,
+      text: "poll 完成",
+    });
+    adapter.messages.set(sessionId, list);
+    adapter.statuses.delete(sessionId);
+
+    await service.reconcileAll();
+    const job = await currentJob(view.id);
+    expect(job.status).toBe("succeeded");
+    expect((job.payload as AgentRunPayload).resultText).toBe("poll 完成");
+  });
+
   it("keeps a retry status running instead of failing", async () => {
     const view = await createRun();
     const sessionId = adapter.prompts[0].sessionId;

@@ -52,6 +52,8 @@ export class FakeOpenCode {
   };
   asyncPromptCalls = 0;
   syncPromptCalls = 0;
+  requestDirectories: { path: string; directory?: string }[] = [];
+  serverCwd = "/tmp/opencode-server-cwd";
   private streams = new Set<http.ServerResponse>();
   private sequence = 0;
   private active = new Set<string>();
@@ -76,11 +78,26 @@ export class FakeOpenCode {
     return this.streams.size;
   }
 
-  createSession(title: string, parentID?: string) {
+  createSession(title: string, parentID?: string, directory?: string) {
     const id = `ses_fake_${++this.sequence}`;
-    this.sessions.set(id, { id, title, parentID });
+    this.sessions.set(id, {
+      id,
+      title,
+      parentID,
+      directory: directory ?? this.serverCwd,
+    });
     this.messages.set(id, []);
     return id;
+  }
+
+  directoryFor(title: string) {
+    for (const session of this.sessions.values())
+      if (session.title === title) return session.directory;
+    return undefined;
+  }
+
+  sessionDirectory(sessionId: string) {
+    return this.sessions.get(sessionId)?.directory;
   }
 
   sessionIdForTitle(title: string) {
@@ -117,6 +134,10 @@ export class FakeOpenCode {
     const url = new URL(request.url ?? "/", "http://127.0.0.1");
     const method = request.method ?? "GET";
     const parts = url.pathname.split("/").filter(Boolean);
+    const directory = request.headers["x-opencode-directory"] as
+      | string
+      | undefined;
+    this.requestDirectories.push({ path: url.pathname, directory });
     const send = (status: number, body?: unknown) => {
       if (status === 204) {
         response.writeHead(status);
@@ -150,8 +171,10 @@ export class FakeOpenCode {
       return send(200, [...this.sessions.values()]);
     if (method === "POST" && url.pathname === "/session") {
       readBody(request).then((body) => {
-        const id = this.createSession(body.title ?? "");
-        send(200, this.sessions.get(id));
+        // `body.directory` is intentionally ignored: legacy routing uses the
+        // x-opencode-directory header only.
+        const id = this.createSession(body.title ?? "", undefined, directory);
+        send(200, { ...this.sessions.get(id), bodyDirectory: body.directory });
       });
       return;
     }

@@ -25,3 +25,12 @@
 - TaskStack 完成通知改由 terminal notice 驱动，支持刷新/重连恢复；运行中锁定 OpenCode 连接身份（409 `OPENCODE_CONFIG_IN_USE`）。
 - 自动回归：`pnpm typecheck`/`build` 通过；`pnpm test`（含新增 V1 适配器测试）与 `pnpm exec playwright test` 44 项通过。
 - 真实 OpenCode 隔离冒烟：连接/模型/MCP、非阻塞 202、深链、连接锁定、浏览器刷新恢复、Server 重启恢复、MCP 读取 Sample 均通过；permission 真机未触发与不可达场景标记未人工验证。详见 [docs/OPENCODE_INTEGRATION.md](./docs/OPENCODE_INTEGRATION.md)。完整首版未完成。
+
+## 2026-09-18 OpenCode Runtime v1 基础层封板
+
+- 修复 Legacy V1 目录路由：实例请求统一用 `x-opencode-directory` 头（含 SSE），`POST /session` 不再传无效 `directory` body。
+- 修复 stale busy：`/session/status`（V1）与 `session.active()`（V2）作为权威 active 快照，每轮重建不 merge 旧缓存；丢失 idle 事件可由轮询收敛到 succeeded。
+- 新增：Legacy 路由头/会话目录、V1/V2 stale busy、服务层 lost-idle 收敛、E2E 目录隔离与 lost-idle 测试。
+- 回归：typecheck/build 通过；`pnpm test` 共108通过（真实S3 2项跳过）；Playwright 46项通过。
+- 真实三目录 smoke 通过（Workbench dataDir ≠ Agent executionDir ≠ OpenCode server cwd；文件只落 Agent 目录；session.directory=executionDir）。
+- 未人工验证继续保留：真实 Permission、真实 OpenCode 临时不可达、真实 V2 Server。OpenCode External Agent Runtime v1 基础层封板，完整首版仍未完成。

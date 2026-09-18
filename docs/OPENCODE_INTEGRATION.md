@@ -72,6 +72,30 @@ OpenCode -> scientific-workbench MCP -> Workbench API
 
 访问，OpenCode 不直接读写科研数据目录。
 
+Legacy V1 使用实例级 HTTP header 路由工作区：
+
+```http
+x-opencode-directory: <executionDir>
+```
+
+`executionDir` **不是** `POST /session` 的 JSON body 字段（该字段被忽略）。Adapter 为
+所有实例请求统一附带该 header，包括 `/session`、`/session/status`、`/session/:id`、
+`/session/:id/message`、`/session/:id/prompt_async`、`/session/:id/abort`、`/mcp`、
+`/permission`、`/question`、`/config/providers` 与 `/event`（SSE）——不单独复制 header。
+Session 创建后会记录自己的 `directory`，后续 session-scoped 请求优先按 Session 自身的
+directory 路由。V2 仍通过 `session.create({ location: { directory } })` 指定。
+
+## Session 状态
+
+`/session/status`（V1）与 `session.active()`（V2 active 快照）被当作**权威快照**使用，
+每次轮询重建，而不是与事件缓存 merge：
+
+- 快照中出现 → `busy`；
+- 快照中消失（含 idle）→ 不返回 `busy`/`retry`，由完成判定使用 message 结果收敛；
+- 事件流是快速增量路径，轮询快照是校正路径；丢失 `session.idle` 也能自愈。
+
+`retry` 仍视为运行中，不作为 idle/failed/completed。
+
 ## 模型
 
 Workbench 只读取 OpenCode 当前可用模型并选择默认，不管理 Provider、OAuth、API Key
@@ -191,3 +215,25 @@ Workbench 临时数据目录 `WORKBENCH_DATA_DIR` 与独立端口，未使用 `4
 - Permission 人工触发：当前真实 OpenCode 默认权限策略下，写工作目录内的文件未产生
   pending permission，因此真机 `Allow Once` 未人工触发；该路径由 Fake/单元/E2E 覆盖。
 - 真实 OpenCode 临时不可达：为避免影响真实服务，未执行，标记为 NOT MANUALLY VERIFIED。
+
+## Final directory-routing smoke（2026-09-18）
+
+三目录刻意分离的真实冒烟（OpenCode Server cwd 与 Agent directory 不同）：
+
+```text
+Workbench dataDir   = /tmp/swb-opencode-final-smoke/workbench
+Agent executionDir  = /tmp/swb-opencode-final-smoke/agent
+OpenCode server cwd = /tmp/swb-opencode-final-smoke/server-cwd
+```
+
+- 连接：真实 OpenCode `1.18.31`（V1 传输），`connected=true`；
+- 非阻塞：`POST /api/v1/agent-runs` 约 0.5s 返回，Job 随即 `running`；
+- Session 路由：`GET /session/:id` 返回 `directory=/private/tmp/swb-opencode-final-smoke/agent`，
+  等于 executionDir，且不等于 server cwd；
+- 文件落点：Agent 创建的 `cwd-smoke.txt`（内容 `cwd-ok`）只出现在
+  `agent/`，`server-cwd/` 与 Workbench dataDir 均无该文件；resultText 报告的绝对路径
+  指向 agent 目录；
+- 完成：Job `succeeded`。丢失 idle 事件后的 polling 自愈由 Fake deterministic 测试覆盖
+  （本轮不做真实 SSE 故障注入）。
+
+未人工验证项继续保留：真实 Permission、真实 OpenCode 临时不可达、真实 V2 Server。

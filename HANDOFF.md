@@ -162,3 +162,15 @@
 - 回归：`pnpm typecheck`/`pnpm build` 通过；`pnpm test` = core6 + web14 + MCP1 + server83（新增 V1 适配器 5 项；真实S3 2项跳过），共104通过；`pnpm exec playwright test` 44 项通过（opencode 由 10 增到 14）。
 - 真实验收（隔离环境，未访问 ~/ScientificWorkbench、未改用户 OpenCode 配置、未用 4317）：真实 OpenCode 1.18.31 连接/版本/7 模型/MCP 已连接；POST agent-runs 148ms 返回 202 且立即黑色方块；真实完成结果落盘；深链返回 Web HTML；运行中改 baseUrl 409、改 permissionMode 成功；浏览器刷新后条幅恢复；重启 Server 后 running 恢复并最终 succeeded；OpenCode 经 scientific-workbench MCP 读取临时 Sample 返回标题 `Smoke Sample`。Permission 真机未触发（默认策略放行工作目录写）与“真实 OpenCode 临时不可达”未人工验证，已在文档标记。
 - 未改：`prototype/reference.html` 哈希未变；`packages/core/src/operations.ts`/MCP 无 Agent 入口；未改科研领域模型。完整首版未完成。
+
+## 2026-09-18 OpenCode 基础层封板修订（优先于上文）
+
+- 执行《OpenCode Final Stabilization Plan》。仅修两个已确认问题，未加业务 AI 入口。
+- L1 目录路由：Legacy V1 所有实例请求（含 SSE `/event`）统一携带 `x-opencode-directory: <executionDir>`；`createSession` 不再向 `POST /session` body 传 `directory`（该字段被忽略）。V2 仍用 `session.create({location:{directory}})`。
+- L2 状态快照：V1 `getSessionStatuses()` 与 V2 `session.active()` 改为**权威快照**（每次重建、clear+set），不再 merge 旧事件缓存，避免丢失 idle 事件后 stale busy 永久保留。`retry` 仍视为 running。
+- L3 Fake 强化：E2E Fake 与单测 `FakeV1` 记录 `x-opencode-directory`（`requestDirectories`）、`POST /session` 忽略 `body.directory` 并根据 header 保存 `session.directory`；保留 active-set 语义（idle 不出现）。
+- 新增测试：Legacy 请求均带 executionDir 路由 header（`/session`、`/session/status`、`/mcp`、`/event`）且 `session.directory===executionDir !== serverCwd`；V1/V2 stale busy 快照不残留；`agent-runs` 服务层“丢失 idle 事件后 polling 仍 succeeded”；E2E `legacy requests route to executionDir` 与 `polling recovers completion when the idle event is lost`。
+- 回归：`pnpm typecheck`/`build` 通过；`pnpm test` = core6 + web14 + MCP1 + server87（新增4项；真实S3 2项跳过），共108通过；`pnpm exec playwright test` 46项通过（opencode 16项）。
+- 真实三目录 smoke（workbench/agent/server-cwd 三者不同，隔离 XDG，独立端口，未访问 ~/ScientificWorkbench、未改用户 OpenCode 配置、未用 4317）：真实 1.18.31；POST 0.5s 返回 running；`session.directory=agent`；`cwd-smoke.txt` 只在 agent 目录；Job succeeded。
+- 未人工验证项继续保留：真实 Permission、真实 OpenCode 临时不可达、真实 V2 Server。冻结原型未改；`operations.ts`/MCP 无 Agent 入口。
+- 状态：OpenCode External Agent Runtime v1 基础层封板；下一阶段另行讨论业务页面如何创建 Agent Task。

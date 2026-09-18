@@ -394,6 +394,21 @@ describe("OpenCode adapter", () => {
     expect(fake.sessions.get(id).interrupted).toBe(true);
   });
 
+  it("does not keep stale busy sessions in the V2 active snapshot", async () => {
+    const client = adapter();
+    const { id } = await client.createSession({
+      title: "状态",
+      directory: path.join(dataDir, "agent"),
+    });
+    fake.sessions.get(id).active = true;
+    let statuses = await client.getSessionStatuses();
+    expect(statuses.get(id)).toBe("busy");
+    // Missing from the authoritative active snapshot: no stale busy.
+    fake.sessions.get(id).active = false;
+    statuses = await client.getSessionStatuses();
+    expect(statuses.has(id)).toBe(false);
+  });
+
   it("lists and replies permissions with once, and lists questions", async () => {
     const client = adapter();
     const { id } = await client.createSession({ title: "t", directory: "/a" });
@@ -564,6 +579,9 @@ class FakeV1 {
   mcp: Record<string, any> = {
     "scientific-workbench": { status: "connected" },
   };
+  requestDirectories: { path: string; directory?: string }[] = [];
+  serverCwd = "/tmp/opencode-server-cwd";
+  active = new Set<string>();
   private sequence = 0;
 
   async start() {
@@ -584,6 +602,10 @@ class FakeV1 {
     const url = new URL(request.url ?? "/", "http://127.0.0.1");
     const method = request.method ?? "GET";
     const parts = url.pathname.split("/").filter(Boolean);
+    const directory = request.headers["x-opencode-directory"] as
+      | string
+      | undefined;
+    this.requestDirectories.push({ path: url.pathname, directory });
     const send = (status: number, body?: unknown) => {
       if (status === 204) {
         response.writeHead(status);
@@ -602,16 +624,31 @@ class FakeV1 {
     if (method === "GET" && url.pathname === "/config/providers")
       return send(200, { providers: this.providers, default: {} });
     if (method === "GET" && url.pathname === "/mcp") return send(200, this.mcp);
+    if (method === "GET" && url.pathname === "/event") {
+      response.writeHead(200, { "content-type": "text/event-stream" });
+      request.on("close", () => response.end());
+      return;
+    }
     if (method === "GET" && url.pathname === "/permission")
       return send(200, this.permissions);
     if (method === "GET" && url.pathname === "/question")
       return send(200, this.questions);
+    if (method === "GET" && url.pathname === "/session/status") {
+      const data: Record<string, unknown> = {};
+      for (const id of this.active) data[id] = { type: "busy" };
+      return send(200, data);
+    }
     if (method === "POST" && url.pathname === "/session") {
       readBody(request).then((body) => {
         const id = `ses_v1_${++this.sequence}`;
-        this.sessions.set(id, { id, title: body.title });
+        // `body.directory` is deliberately ignored: legacy routing is header-only.
+        this.sessions.set(id, {
+          id,
+          title: body.title,
+          directory: directory ?? this.serverCwd,
+        });
         this.messages.set(id, []);
-        send(200, this.sessions.get(id));
+        send(200, { ...this.sessions.get(id), bodyDirectory: body.directory });
       });
       return;
     }
@@ -623,6 +660,7 @@ class FakeV1 {
     ) {
       this.asyncPromptCalls += 1;
       readBody(request).then((body) => {
+        this.active.add(parts[1]);
         const list = this.messages.get(parts[1]) ?? [];
         list.push({
           info: {
@@ -666,6 +704,15 @@ class FakeV1 {
         send(204);
       });
       return;
+    }
+    if (
+      method === "POST" &&
+      parts[0] === "session" &&
+      parts[1] &&
+      parts[2] === "abort"
+    ) {
+      this.active.delete(parts[1]);
+      return send(204);
     }
     if (
       method === "GET" &&
@@ -750,6 +797,62 @@ describe("Legacy OpenCode V1 adapter", () => {
         role: "user",
         text: "请分析",
       });
+    } finally {
+      await v1.stop();
+    }
+  });
+
+  it("routes instance requests to executionDir and ignores a body directory", async () => {
+    const v1 = await new FakeV1().start();
+    try {
+      const executionDir = path.join(dataDir, "agent");
+      const adapter = v1Adapter(v1);
+      const { id } = await adapter.createSession({
+        title: "路由任务",
+        directory: executionDir,
+      });
+      // Legacy routing is header-only; the session records the header value and
+      // never the (unsupported) body directory.
+      expect(v1.sessions.get(id).directory).toBe(executionDir);
+      expect(v1.sessions.get(id).directory).not.toBe(v1.serverCwd);
+      expect(v1.sessions.get(id).bodyDirectory).toBeUndefined();
+
+      await adapter.getSessionStatuses();
+      await adapter.getMcpStatus();
+      const controller = new AbortController();
+      const subscription = adapter.subscribeEvents(() => {}, controller.signal);
+      await new Promise((resolve) => setTimeout(resolve, 40));
+      controller.abort();
+      await subscription;
+
+      for (const endpoint of ["/session", "/session/status", "/mcp", "/event"]) {
+        const entry = v1.requestDirectories.find(
+          (request) => request.path === endpoint,
+        );
+        expect(entry, `missing request for ${endpoint}`).toBeTruthy();
+        expect(entry?.directory, `${endpoint} directory`).toBe(executionDir);
+      }
+    } finally {
+      await v1.stop();
+    }
+  });
+
+  it("treats /session/status as an authoritative snapshot without stale busy", async () => {
+    const v1 = await new FakeV1().start();
+    try {
+      const adapter = v1Adapter(v1);
+      const { id } = await adapter.createSession({
+        title: "状态任务",
+        directory: path.join(dataDir, "agent"),
+      });
+      v1.active.add(id);
+      const busy = await adapter.getSessionStatuses();
+      expect(busy.get(id)).toBe("busy");
+      // Idle event lost: the session leaves the status snapshot and must not
+      // linger as busy from the cached merge.
+      v1.active.delete(id);
+      const idle = await adapter.getSessionStatuses();
+      expect(idle.has(id)).toBe(false);
     } finally {
       await v1.stop();
     }

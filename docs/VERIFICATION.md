@@ -166,3 +166,13 @@
 - 自动回归结果：`pnpm typecheck` 通过；`pnpm build` 通过；`pnpm test` = core6 + web14 + MCP1 + server83（真实S3 2项按设计跳过），共104通过；`pnpm exec playwright test` 44项通过（opencode 14项）。
 - 真实隔离冒烟（`XDG_*` 与 `WORKBENCH_DATA_DIR` 均为临时目录，独立端口 14318/45997，未访问 `~/ScientificWorkbench`，未改用户 OpenCode 配置，未用 4317）：真实 1.18.31 V1；连接/版本、7 个模型、MCP 已连接；`POST /agent-runs` 148ms 返回 202；黑色方块立即出现；真实 completion 文本；深链返回 OpenCode Web HTML；运行中改 baseUrl 409、改 permissionMode 200；浏览器刷新条幅恢复并在 5 秒消失；Server 重启后 running 立即恢复并最终 succeeded（约 1246 字）；OpenCode 经 scientific-workbench MCP 返回临时 Sample 标题 `Smoke Sample`。未触发项：真机 permission（默认策略放行工作目录写）与真实 OpenCode 临时不可达，均标记 NOT MANUALLY VERIFIED。
 - 安全：密码仍只在 `private/opencode-<id>.json`（0600）；`operations.ts`/MCP 无 agent 入口；`prototype/reference.html` 哈希未变。完整首版未完成。
+
+### 2026-09-18 OpenCode 基础层封板（directory routing / stale status）
+
+- L1：`LegacyOpenCodeAdapter` 统一附带 `x-opencode-directory=<executionDir>`（`request` 与 `/event` SSE 共用同一 header 集合）；`createSession` body 只传 `title`。V2 路径不变。
+- L2：`getSessionStatuses()` V1/V2 均改为权威快照重建（`clear`+`set`，不 merge 事件缓存）；`retry` 仍为 running。
+- Fake：E2E `fake-opencode.ts` 与单测 `FakeV1` 记录 `requestDirectories`、以 header 决定 `session.directory`、忽略 `body.directory`；保留 idle 不入 status 的 active-set 语义。
+- 新增测试：`routes instance requests to executionDir and ignores a body directory`、`treats /session/status as an authoritative snapshot without stale busy`、`does not keep stale busy sessions in the V2 active snapshot`、`recovers completion through polling after the idle event is lost`（agent-runs）、E2E `legacy requests route to executionDir and not the server cwd`、`polling recovers completion when the idle event is lost`。
+- 回归：`pnpm typecheck`、`pnpm build` 通过；`pnpm test` = core6 + web14 + MCP1 + server87（真实S3 2项跳过），共108通过；`pnpm exec playwright test` 46项通过。
+- 真实三目录 smoke（`/tmp/swb-opencode-final-smoke/{workbench,agent,server-cwd}`，隔离 XDG，端口14319/45996，未访问 `~/ScientificWorkbench`、未改用户 OpenCode 配置、未用 4317）：真实 1.18.31；POST 0.5s 返回 running；`GET /session/:id` 的 `directory=/private/tmp/swb-opencode-final-smoke/agent`；`cwd-smoke.txt` 只在 agent 目录，server-cwd 与 workbench 目录无该文件；Job succeeded。
+- 未人工验证保留：真实 Permission、真实 OpenCode 临时不可达、真实 V2 Server。冻结原型哈希未变；`operations.ts`/MCP 无 Agent 入口；Workbench dataDir 未被 Agent shell/file tool 直接访问。

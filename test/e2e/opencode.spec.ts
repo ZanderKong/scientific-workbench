@@ -483,3 +483,52 @@ test("completion notice survives a page refresh within its TTL", async ({
   await expect(banner).toBeVisible();
   await expect(banner).toBeHidden({ timeout: 8000 });
 });
+
+test("legacy requests route to executionDir and not the server cwd", async ({
+  page,
+  request,
+}) => {
+  await configure(request, "ask");
+  await page.goto("/");
+  const run = await createRun(request, "目录路由任务");
+  const sessionId = (await sessionIdOf(request, run.id))!;
+  expect(fake.sessionDirectory(sessionId)).toBe(agentDir());
+  expect(fake.sessionDirectory(sessionId)).not.toBe(fake.serverCwd);
+  for (const endpoint of ["/session", "/session/status", "/mcp", "/event"]) {
+    const entries = fake.requestDirectories.filter(
+      (entry) => entry.path === endpoint,
+    );
+    expect(entries.length, `no request for ${endpoint}`).toBeGreaterThan(0);
+    expect(
+      entries.every((entry) => entry.directory === agentDir()),
+      `${endpoint} directory`,
+    ).toBe(true);
+  }
+});
+
+test("polling recovers completion when the idle event is lost", async ({
+  page,
+  request,
+}) => {
+  await configure(request, "ask");
+  await page.goto("/");
+  const run = await createRun(request, "丢失空闲事件任务");
+  const sessionId = (await sessionIdOf(request, run.id))!;
+  expect(fake.busy(sessionId)).toBe(true);
+  // Assistant finished and the status snapshot dropped the session, but no
+  // session.idle event is emitted: only the fallback poll can converge.
+  fake.addAssistant(sessionId, "poll 恢复完成");
+  await expect
+    .poll(async () => {
+      const jobs = (await (await request.get("/api/v1/jobs")).json()) as {
+        id: string;
+        status: string;
+      }[];
+      return jobs.find((job) => job.id === run.id)?.status;
+    })
+    .toBe("succeeded");
+  const job = (await (
+    await request.get(`/api/v1/jobs/${run.id}`)
+  ).json()) as { payload: { resultText?: string } };
+  expect(job.payload.resultText).toBe("poll 恢复完成");
+});
