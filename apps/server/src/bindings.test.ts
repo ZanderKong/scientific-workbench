@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
+import { parseBody } from "@workbench/core";
 import { WorkbenchStore } from "./store";
 const stores: WorkbenchStore[] = [];
 const setup = () => {
@@ -91,5 +92,54 @@ describe("stable object and operation identities", () => {
     expect(store.listData()).toHaveLength(1);
     expect(store.getData(originalData.id)).toEqual(originalData);
     expect(store.readDocument(sample.id).body).toBe(before.body);
+  });
+
+  it("persists an explicit binding, keeps references when omitted and clears on empty array", () => {
+    const store = setup();
+    const water = store.createObject({ canonicalName: "水", role: "material" });
+    const sample = store.createSample({ body: "- [水]｜添加量：80 g" });
+    const doc = store.readDocument(sample.id);
+    const reference = parseBody(sample.id, doc.body).records[0].references[0];
+    store.saveDocument(sample.id, doc.body, doc.head.contentVersion, [
+      {
+        ...reference,
+        objectId: water.id,
+        role: "material",
+        status: "bound",
+      },
+    ]);
+    const explicit = store.readDocument(sample.id).head.references || [];
+    expect(
+      explicit.some(
+        (item) => item.blockId === reference.blockId && item.objectId === water.id,
+      ),
+    ).toBe(true);
+
+    let current = store.readDocument(sample.id);
+    store.saveDocument(sample.id, current.body, current.head.contentVersion);
+    expect(store.readDocument(sample.id).head.references).toHaveLength(
+      current.head.references?.length ?? 0,
+    );
+
+    current = store.readDocument(sample.id);
+    store.saveDocument(sample.id, current.body, current.head.contentVersion, []);
+    expect(store.readDocument(sample.id).head.references).toEqual([]);
+  });
+
+  it("does not honor a binding that points at an object that does not exist", () => {
+    const store = setup();
+    const sample = store.createSample({ body: "- [水]｜添加量：80 g" });
+    const doc = store.readDocument(sample.id);
+    const reference = parseBody(sample.id, doc.body).records[0].references[0];
+    store.saveDocument(sample.id, doc.body, doc.head.contentVersion, [
+      {
+        ...reference,
+        objectId: "missing-object",
+        role: "material",
+        status: "bound",
+      },
+    ]);
+    expect(store.readDocument(sample.id).head.references).toEqual([]);
+    expect(store.getSample(sample.id).properties).toHaveLength(0);
   });
 });

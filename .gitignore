@@ -1,5 +1,6 @@
 node_modules
 dist
+apps/server/src/generated
 *.tsbuildinfo
 .vite
 data

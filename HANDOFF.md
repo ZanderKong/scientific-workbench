@@ -174,3 +174,13 @@
 - 真实三目录 smoke（workbench/agent/server-cwd 三者不同，隔离 XDG，独立端口，未访问 ~/ScientificWorkbench、未改用户 OpenCode 配置、未用 4317）：真实 1.18.31；POST 0.5s 返回 running；`session.directory=agent`；`cwd-smoke.txt` 只在 agent 目录；Job succeeded。
 - 未人工验证项继续保留：真实 Permission、真实 OpenCode 临时不可达、真实 V2 Server。冻结原型未改；`operations.ts`/MCP 无 Agent 入口。
 - 状态：OpenCode External Agent Runtime v1 基础层封板；下一阶段另行讨论业务页面如何创建 Agent Task。
+
+## 2026-09-21 通宵计划 Phase A：Agent Knowledge Layer（优先于上文）
+
+- 执行 `docs/plans/AGENT_KNOWLEDGE_SAMPLE_IMPORT_OVERNIGHT_PLAN.md`。基线 HEAD `310551d`，Node v22.22.3 / pnpm 10.14.0；开工时工作树仅新增 `docs/plans/`。基线记录：typecheck/build PASS，`pnpm test` = core6 / web14 / mcp1 / server87（真实 S3 2 项按设计跳过）。
+- A1 机器契约：新增 `packages/core/src/document-contract.ts`，`document_save` 正式声明 `bindings` 数组 schema；`onRoute` 改为按 operation 声明挂载 body schema（不再只在 required 非空时挂载），旧操作保持 `additionalProperties: true`。`saveDocument` 用纯函数 `sanitizeDocumentBindings` 校验：越界位置拒绝（INVALID_INPUT），指向不存在区块/缺失对象/伪造 create-intent 的绑定不被采纳，保留旧客户端容忍行为；空数组清空 references、省略保留。新增/扩展测试：`packages/core/src/document-contract.test.ts`、`apps/server/src/bindings.test.ts`。
+- A2/A3 知识层：新增 `docs/agent/guide.md`、`manifest.json` 与五组协议 `protocol/common|sample-document|objects-properties|data-attachments|analysis-claims-evidence.md`。新增纯生成/校验函数 `packages/core/src/agent-knowledge.ts` 与 `scripts/build-agent-knowledge.ts`（`--check`），生成物 `apps/server/src/generated/agent-knowledge.ts`（已加入 `.gitignore`，不提交）。验证重复 ID/缺文件/非法路径/符号链接逃逸/循环依赖/非法版本/坏链接/未知操作引用；内容 UTF-8/LF 末尾换行，SHA-256 基于发布文本，重复构建字节一致。root/server 的 typecheck/build/test/start 脚本显式先执行幂等生成，脚本用 `import.meta.url` 定位仓库。
+- A4 暴露：`knowledge_index`/`knowledge_read` 进入 operations；新增 REST `GET /knowledge`、`GET /knowledge/:id`（保留 auth）；`apps/server/src/knowledge.ts` 只读 loader（未知/路径式 ID 规范 404）。MCP 新增 `workbench://knowledge` 与 `workbench://knowledge/{id}`，`workbench://syntax` 保留 URI/Markdown MIME 但正文改由 `protocol-sample-document` 承接（不再手写常量）。
+- 本轮证据（2026-09-21）：`pnpm typecheck` PASS；`pnpm build` PASS；`pnpm test` = core16 / web14 / mcp2 / server94（真实 S3 2 项跳过）；`pnpm agent:knowledge:check` PASS（6 项，bundleHash `2a7a070120736d62b378b44ccc10148ab9da9dfef6bfafd1c8462ff7068b0d0e`）；`pnpm api:spec` 已更新 openapi.json；`git diff --check` PASS。
+- 未修改冻结原型 `prototype/reference.html`（哈希仍 `fe2c41e…f1bb`）、未访问 `~/ScientificWorkbench`、未改用户 OpenCode 配置；测试只用临时目录/独立端口。
+- 下一步：Phase B1 Deterministic Sample Import Backend（`sample-import.ts`、prepare/图片来源校验/source Data、`document_bind_data`、draft 校验与引用物化、whole-batch commit 与最小 receipt、recovery/cancel/backup、API/MCP 暴露与五 Sample 人工 fixture）。A 已可独立使用；B1 不依赖模型。

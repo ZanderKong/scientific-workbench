@@ -25,6 +25,7 @@ import {
   resolveReference,
   normalizeAnalysisLayout,
   blockLines,
+  sanitizeDocumentBindings,
 } from "@workbench/core";
 import { fileLinks } from "@workbench/core/attachments";
 import type {
@@ -636,10 +637,14 @@ export class WorkbenchStore {
       }
       const existing = this.readDocument(id);
       const normalized = ensureBlockIds(body);
+      const references = bindings
+        ? sanitizeDocumentBindings(normalized, bindings, this.searchObjects())
+            .bindings
+        : undefined;
       const hash = sha256(normalized);
       const head = {
         ...existing.head,
-        ...(bindings ? { references: bindings } : {}),
+        ...(references ? { references } : {}),
         contentVersion: row.content_version + 1,
         bodyHash: hash,
         extractionStatus: "pending",

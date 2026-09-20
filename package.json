@@ -8,13 +8,15 @@
   },
   "scripts": {
     "dev": "concurrently -k \"pnpm --filter @workbench/server dev\" \"pnpm --filter @workbench/web dev\"",
-    "build": "pnpm -r build",
+    "build": "tsx scripts/build-agent-knowledge.ts && pnpm -r build",
     "start": "pnpm --filter @workbench/server start",
-    "test": "pnpm -r test",
+    "test": "tsx scripts/build-agent-knowledge.ts && pnpm -r test",
+    "agent:knowledge": "tsx scripts/build-agent-knowledge.ts",
+    "agent:knowledge:check": "tsx scripts/build-agent-knowledge.ts --check",
     "test:e2e": "playwright test",
     "demo": "tsx scripts/create-demo.ts",
     "benchmark": "tsx scripts/benchmark.ts",
-    "typecheck": "pnpm -r typecheck",
+    "typecheck": "tsx scripts/build-agent-knowledge.ts && pnpm -r typecheck",
     "api:spec": "tsx scripts/generate-api-spec.ts",
     "migrate:legacy": "tsx scripts/migrate-legacy.ts"
   },

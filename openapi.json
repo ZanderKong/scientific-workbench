@@ -750,6 +750,77 @@
                   "expectedVersion": {
                     "type": "integer",
                     "minimum": 1
+                  },
+                  "bindings": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "description": "一条正文对象引用绑定。blockId/start/end/rawText 是稳定定位；objectId 绑定已有对象；intentId 只用于明确的创建意图。",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "blockId": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "operationId": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "objectId": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "intentId": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "rawText": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "role": {
+                          "type": "string",
+                          "enum": [
+                            "sample",
+                            "material",
+                            "equipment",
+                            "process",
+                            "other",
+                            "unresolved"
+                          ]
+                        },
+                        "start": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "end": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "bound",
+                            "unresolved",
+                            "ambiguous",
+                            "create-intent"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "blockId",
+                        "rawText",
+                        "start",
+                        "end",
+                        "status"
+                      ]
+                    },
+                    "maxItems": 5000,
+                    "description": "替换文档正文的对象引用绑定；省略时保留已有 references，空数组清空。不能用于修改文件头、版本或 Data 镜像基线。"
                   }
                 },
                 "required": [
@@ -3068,6 +3139,68 @@
             "in": "header",
             "schema": {
               "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "操作结果，实体包含实际版本；分页请求返回items/total/offset/limit"
+          },
+          "401": {
+            "description": "凭据无效"
+          },
+          "403": {
+            "description": "缺少权限"
+          },
+          "409": {
+            "description": "版本或幂等冲突"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/knowledge": {
+      "get": {
+        "operationId": "knowledge_index",
+        "description": "列出服务器内建科研知识内容、版本、摘要与内容哈希",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "操作结果，实体包含实际版本；分页请求返回items/total/offset/limit"
+          },
+          "401": {
+            "description": "凭据无效"
+          },
+          "403": {
+            "description": "缺少权限"
+          },
+          "409": {
+            "description": "版本或幂等冲突"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/knowledge/{id}": {
+      "get": {
+        "operationId": "knowledge_read",
+        "description": "读取指定知识内容正文及其版本与内容哈希",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
             }
           }
         ],

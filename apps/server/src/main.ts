@@ -29,6 +29,13 @@ import {
   type ResolvedOpenCodeConfig,
 } from "./opencode";
 import { AgentRunService } from "./agent-runs";
+import {
+  getKnowledge,
+  knowledgeBundleHash,
+  knowledgeVersion,
+  listKnowledge,
+  KnowledgeNotFoundError,
+} from "./knowledge";
 
 const port = Number(process.env.WORKBENCH_PORT ?? 4317);
 const host = process.env.WORKBENCH_HOST ?? "127.0.0.1";
@@ -159,13 +166,15 @@ app.addHook("onRoute", (route) => {
           },
         }
       : {}),
-    ...(["POST", "PUT"].includes(operation.method) && required.length
+    ...(["POST", "PUT"].includes(operation.method) &&
+    Object.keys(bodyProperties).length
       ? {
           body: {
             type: "object",
             properties: bodyProperties,
             required,
-            additionalProperties: true,
+            additionalProperties:
+              operation.input.additionalProperties === false ? false : true,
           },
         }
       : {}),
@@ -219,6 +228,20 @@ app.get("/api/v1/workspace/settings", async () => ({
   server: { host, port },
   storage: storage.config(),
 }));
+app.get("/api/v1/knowledge", async () => ({
+  version: knowledgeVersion,
+  bundleHash: knowledgeBundleHash,
+  content: listKnowledge(),
+}));
+app.get("/api/v1/knowledge/:id", async (req: any, reply) => {
+  try {
+    return getKnowledge(req.params.id);
+  } catch (error) {
+    if (error instanceof KnowledgeNotFoundError)
+      return reply.code(404).send({ code: "NOT_FOUND", error: error.message });
+    throw error;
+  }
+});
 app.get("/api/v1/storage/s3", async () => storage.config());
 app.put("/api/v1/storage/s3", async (req: any) => {
   const c = storage.configure(req.body ?? {});

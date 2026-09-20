@@ -74,3 +74,21 @@ it('completes the scientific workflow through a real MCP stdio client, including
   expect(job.status, job.error).toBe('succeeded'); expect(fs.existsSync(job.payload!.result!.file)).toBe(true);
   await expect(call('backup_restore', { zipPath: job.payload!.result!.file, targetDir: path.join(root, 'restore-denied') })).rejects.toThrow('restore');
 }, 30000);
+it('serves the same agent knowledge through resources, tools and legacy syntax', async () => {
+  const indexResource = await client.readResource({ uri: 'workbench://knowledge' });
+  const index = JSON.parse((indexResource.contents[0] as { text: string }).text);
+  expect(index.version).toMatch(/^\d{4}-\d{2}-\d{2}/);
+  expect(index.bundleHash).toHaveLength(64);
+  expect(index.content.length).toBeGreaterThanOrEqual(6);
+  const toolIndex = await call<{ bundleHash: string; content: { id: string }[] }>('knowledge_index', {});
+  expect(toolIndex.bundleHash).toBe(index.bundleHash);
+  const commonResource = await client.readResource({ uri: 'workbench://knowledge/protocol-common' });
+  const commonText = (commonResource.contents[0] as { text: string }).text;
+  const commonTool = await call<{ content: string; contentHash: string }>('knowledge_read', { id: 'protocol-common' });
+  expect(commonTool.content).toBe(commonText);
+  const syntax = await client.readResource({ uri: 'workbench://syntax' });
+  const syntaxText = (syntax.contents[0] as { text: string }).text;
+  const sample = await call<{ content: string }>('knowledge_read', { id: 'protocol-sample-document' });
+  expect(syntaxText).toBe(sample.content);
+  await expect(call('knowledge_read', { id: '../guide' })).rejects.toThrow();
+}, 30000);

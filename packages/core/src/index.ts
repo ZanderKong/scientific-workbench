@@ -3,6 +3,8 @@ export * from './hash';
 export * from './markdown';
 export * from './parser';
 export * from './bindings';
+export * from './document-contract';
 export * from './operations';
 export * from './analysis';
+export * from './agent-knowledge';
 export * from "./attachments";

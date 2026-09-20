@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "version": "2026-09-21.1",
+  "content": [
+    {
+      "id": "guide",
+      "path": "guide.md",
+      "title": "Scientific Workbench Agent Guide",
+      "summary": "入口导航：阅读顺序、知识 ID/hash 含义、如何取得工具 schema、与文件协议的关系。",
+      "dependencies": []
+    },
+    {
+      "id": "protocol-common",
+      "path": "protocol/common.md",
+      "title": "通用规则",
+      "summary": "文件优先、稳定身份、保存与提取、版本冲突、幂等、歧义不臆造、权限失败处理。",
+      "dependencies": ["guide"]
+    },
+    {
+      "id": "protocol-sample-document",
+      "path": "protocol/sample-document.md",
+      "title": "样品与正文语法",
+      "summary": "操作父 bullet、对象引用与属性子行真实语法、类型标记、保存与 finalize、共享 Data 绑定。",
+      "dependencies": ["protocol-common"]
+    },
+    {
+      "id": "protocol-objects-properties",
+      "path": "protocol/objects-properties.md",
+      "title": "对象与属性字典",
+      "summary": "对象角色枚举、生命周期、显式复用/创建、属性字典与实例值区别。",
+      "dependencies": ["protocol-common"]
+    },
+    {
+      "id": "protocol-data-attachments",
+      "path": "protocol/data-attachments.md",
+      "title": "Data 与附件",
+      "summary": "Data/Attachment/组件区别、About 与正式绑定、镜像版本冲突、原始与派生、附件安全。",
+      "dependencies": ["protocol-common"]
+    },
+    {
+      "id": "protocol-analysis-claims-evidence",
+      "path": "protocol/analysis-claims-evidence.md",
+      "title": "分析与正式论点",
+      "summary": "Analysis 结构、Data/分析 host 创建正式 Claim、证据冻结与实时上下文区别、导出边界。",
+      "dependencies": ["protocol-common"]
+    }
+  ]
+}

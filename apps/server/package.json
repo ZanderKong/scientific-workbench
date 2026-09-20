@@ -3,11 +3,11 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "tsx watch src/main.ts",
-    "start": "tsx src/main.ts",
-    "build": "tsc -p tsconfig.json",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run --passWithNoTests"
+    "dev": "tsx ../../scripts/build-agent-knowledge.ts && tsx watch src/main.ts",
+    "start": "tsx ../../scripts/build-agent-knowledge.ts && tsx src/main.ts",
+    "build": "tsx ../../scripts/build-agent-knowledge.ts && tsc -p tsconfig.json",
+    "typecheck": "tsx ../../scripts/build-agent-knowledge.ts && tsc -p tsconfig.json --noEmit",
+    "test": "tsx ../../scripts/build-agent-knowledge.ts && vitest run --passWithNoTests"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1130.0",

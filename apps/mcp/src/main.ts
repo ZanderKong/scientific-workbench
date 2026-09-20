@@ -39,9 +39,10 @@ server.setRequestHandler(CallToolRequestSchema, async ({ params }) => {
     return { isError: true, content: [{ type: 'text', text: error instanceof Error ? error.message : String(error) }] };
   }
 });
-const syntax = '# 文档语法\n\n- 父 bullet 为一个操作。\n- `[名称]`、`【名称】`、`［名称］` 引用对象；名称可编辑，修改解除旧绑定。\n- 属性子行：`[对象]｜属性名：文本值`，接受全半角竖线和冒号。无效文字保留，不创建属性。\n- `[数据] 名称` 创建独立Data，子级放描述或附件引用。\n- 样品内 `[论点]` 始终仅作文本。正式论点通过 Data/Analysis host 创建。\n- 正文先保存；完成编辑再提取。更新必须传最新 expectedVersion；409时保留草稿、读取最新后再编辑。\n- 新建建议传 idempotencyKey，重试沿用同一个键。\n';
+const KNOWLEDGE_ID = /^[a-z][a-z0-9-]*$/;
 server.setRequestHandler(ListResourcesRequestSchema, async () => ({ resources: [
   { uri: 'workbench://syntax', name: '规范文档语法', mimeType: 'text/markdown' },
+  { uri: 'workbench://knowledge', name: 'Agent 知识索引', mimeType: 'application/json' },
   { uri: 'workbench://operations', name: 'API与MCP操作规范', mimeType: 'application/json' },
   { uri: 'workbench://dictionary/objects', name: '对象字典', mimeType: 'application/json' },
   { uri: 'workbench://dictionary/properties', name: '属性字典', mimeType: 'application/json' },
@@ -51,10 +52,17 @@ server.setRequestHandler(ListResourceTemplatesRequestSchema, async () => ({ reso
   { uriTemplate: 'workbench://data/{id}', name: 'Data实际正文', mimeType: 'text/markdown' },
   { uriTemplate: 'workbench://analysis/{id}/context', name: '分析上下文', mimeType: 'text/markdown' },
   { uriTemplate: 'workbench://attachment/{id}', name: '图片资源或附件下载入口' },
+  { uriTemplate: 'workbench://knowledge/{id}', name: 'Agent 知识内容', mimeType: 'text/markdown' },
 ] }));
 server.setRequestHandler(ReadResourceRequestSchema, async ({ params: { uri } }) => {
   let text: string, mimeType = 'text/markdown';
-  if (uri === 'workbench://syntax') text = syntax;
+  if (uri === 'workbench://syntax') text = (await (await request('/knowledge/protocol-sample-document')).json()).content;
+  else if (uri === 'workbench://knowledge') { text = await (await request('/knowledge')).text(); mimeType = 'application/json'; }
+  else if (/^workbench:\/\/knowledge\//.test(uri)) {
+    const id = uri.slice('workbench://knowledge/'.length);
+    if (!KNOWLEDGE_ID.test(id)) throw new Error('知识内容 ID 无效');
+    text = (await (await request(`/knowledge/${encodeURIComponent(id)}`)).json()).content;
+  }
   else if (uri === 'workbench://operations') { text = JSON.stringify(operations); mimeType = 'application/json'; }
   else if (/^workbench:\/\/dictionary\/(objects|properties)$/.test(uri)) { text = await (await request('/' + uri.split('/').at(-1))).text(); mimeType = 'application/json'; }
   else {

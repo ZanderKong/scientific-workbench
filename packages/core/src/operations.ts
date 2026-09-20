@@ -1,16 +1,7 @@
 /** Shared, versioned public operation catalogue used by REST documentation and MCP. */
-export interface JsonSchema {
-  type?: string;
-  properties?: Record<string, JsonSchema>;
-  items?: JsonSchema;
-  required?: string[];
-  enum?: string[];
-  minimum?: number;
-  maximum?: number;
-  minLength?: number;
-  additionalProperties?: boolean;
-  description?: string;
-}
+import type { JsonSchema } from "./document-contract";
+import { documentBindingsSchema } from "./document-contract";
+export type { JsonSchema } from "./document-contract";
 export interface Operation {
   name: string;
   description: string;
@@ -215,7 +206,12 @@ export const operations: Operation[] = [
     "按版本保存正文；保存成功后仍可能待提取",
     "PUT",
     "/documents/:id",
-    { id, body: string, expectedVersion: version },
+    {
+      id,
+      body: string,
+      expectedVersion: version,
+      bindings: documentBindingsSchema,
+    },
     ["id", "body", "expectedVersion"],
   ),
   op(
@@ -581,6 +577,20 @@ export const operations: Operation[] = [
     "取消仍在运行的长任务；已经完成的任务保持原状态",
     "POST",
     "/jobs/:id/cancel",
+    { id },
+    ["id"],
+  ),
+  op(
+    "knowledge_index",
+    "列出服务器内建科研知识内容、版本、摘要与内容哈希",
+    "GET",
+    "/knowledge",
+  ),
+  op(
+    "knowledge_read",
+    "读取指定知识内容正文及其版本与内容哈希",
+    "GET",
+    "/knowledge/:id",
     { id },
     ["id"],
   ),
