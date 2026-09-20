@@ -69,3 +69,10 @@ ZIP64 全量备份固定业务文件/清单集合，保护不可变附件；远�
 |VERIFY-001|所有实现|完整PVA样例/性能/逐页复核/指南|全规则映射+人工IME记录|
 
 任务状态只在 HANDOFF 与验收矩阵维护。无证据不标已验证。视觉夹具与科研样例分开，PVA 三次冻融须三个实际操作；CSV/PNG 明确模拟。性能20/100/500操作、5000/50000对象实测。依赖版本 lockfile 固定。迁移先保留旧目录。最终交付全部实现+证据；未验人工项明确保留，不以第一轮完成结束任务。
+
+## 附：2026-09-21 通宵计划“Agent Knowledge Layer 与实验记录导入”状态
+
+- Phase A（Agent Knowledge Layer）：PASS，提交 `c9842cd`。见 `docs/agent/`、`packages/core/src/document-contract.ts`、`packages/core/src/agent-knowledge.ts`、`scripts/build-agent-knowledge.ts`、`apps/server/src/knowledge.ts`、`docs/API_MCP.md`。
+- Phase B1（Deterministic Sample Import Backend）：PASS，提交 `099b40f`。见 `packages/core/src/sample-import.ts`、`apps/server/src/sample-import.ts`、`store.ts` 的 prepare/saveDraft/commit/cancel/retry/bindDataBlock、`document_bind_data` 与 `sample_import_*` 操作、`docs/DATA_PROTOCOL.md` 导入节。
+- Phase B2（AI / Runtime / UI）：BLOCKED。前置 Vision Spike V1/V2 均为 NOT VERIFIED，未启用任何 AI 导入入口/readiness，A/B1 不回滚。证据见 `docs/VERIFICATION.md`、`docs/OPENCODE_INTEGRATION.md` 与 `scripts/spike-opencode-vision.mts`。
+- 本状态不改变第 6 节既定任务门槛，也不把完整首版标记完成。

@@ -193,4 +193,35 @@
 - 恢复/资格：`FileRepository.recoveryRequired()` + Store 包装；journal 前失败不留部分实体，journal/file/index checkpoint 失败后重开由 FileRepository 重放整批；HTTP 对科学实体读取/导入/导出/备份返回 `503 RECOVERY_REQUIRED`（health 报 degraded）；cancel 原子撤销资格、retry 重签新 attempt，旧 save/commit 拒绝。backup 递归包含 `registry/imports`，恢复后无 jobs 缓存仍可返回原 receipt。
 - 测试：`apps/server/src/sample-import.test.ts`（prepare 幂等/图片边界/五 Sample 提交/最小 receipt/关键歧义/CAS/未知字段/资格/三阶段故障恢复）、`document-bind-data.test.ts`、`backup.test.ts` 新增恢复 receipt 用例、`apps/mcp/src/workflow.test.ts` 新增真实 HTTP 确定性导入用例。五 Sample fixture：5 个样品共享 1 个 source Data、1 张原图、1 个显式新过程对象、现有材料/设备复用、页/行 provenance 与 derivedFrom、About=5、每个 head 绑定同一 Data、正文无自动页行。
 - 本轮证据（2026-09-21）：`pnpm typecheck` PASS；`pnpm build` PASS；`pnpm test` = core16 / web14 / mcp3 / server106（真实 S3 2 项跳过）；`pnpm exec playwright test` 46 passed；`pnpm agent:knowledge:check` PASS；`pnpm api:spec` 已更新；`git diff --check` PASS。
-- B1 独立交付（PASS）。未改冻结原型、未访问 `~/ScientificWorkbench`、未改用户 OpenCode 配置。下一步：真实 Vision Spike（`scripts/spike-opencode-vision.ts`，隔离 temp + 独立端口 + 显式 opt-in）；Spike 失败不回滚本阶段。
+- B1 独立交付（PASS）。未改冻结原型、未访问 `~/ScientificWorkbench`、未改用户 OpenCode 配置。下一步：真实 Vision Spike（隔离 temp + 独立端口 + 显式 opt-in）；Spike 失败不回滚本阶段。
+
+## 2026-09-21 通宵计划 Spike / B2 / 回归与最终交接（优先于上文）
+
+- Spike：`scripts/spike-opencode-vision.mts` 隔离 opt-in harness（计划中写 `.ts`，因仓库 scripts 为 CJS 而改名 `.mts` 以保持 ESM，不影响既有脚本）。无 opt-in 时 exit 1；opt-in 但无隔离端点 `SWB_SPIKE_OPENCODE_URL` 时 exit 0 且 `NOT VERIFIED`。未读取/修改用户全局配置，未启动或借用 OpenCode 服务。
+- Spike V1：**NOT VERIFIED**。Spike V2：**NOT VERIFIED**。原因：缺隔离的真实 runtime 端点/凭据；为守规未自行获取秘密或改配置。未证明真实图片 transport、异步时序、restricted profile allow/deny 与无泄漏。
+- Phase B2：**BLOCKED**（前置 Spike 未 PASS）。未实现任何 B2 Skill/profile/readiness/UI，因此产品内不存在可开启的 AI 导入路径（fail closed）；A/B1 未回滚。
+- 完整回归 R1（clean build 后）：`pnpm agent:knowledge:check` PASS；`pnpm api:spec` 更新；`pnpm typecheck` PASS；`pnpm build` PASS；`pnpm test` = core16 / web14 / mcp3 / server106（真实 S3 2 项按设计跳过）；`pnpm exec playwright test` 46 passed；`git diff --check` PASS。
+- R2 静态审核：仅新增 knowledge / 正常 bind / 确定性 import 操作，无 runtime start/orchestration/任意文件读工具；协议不复制参数 schema；无 `await` 在 `Store.commit` 内；新 import 未直接写 SQLite 属性或另写 Markdown parser；committed registry 无 draft/正文/属性/OCR/prompt/凭据；未新增 UI receipt-ID 高亮/自动刷新。
+
+### 交接字段
+
+```text
+本轮开始/结束时间与本地基线：2026-09-21；HEAD 310551d，Node v22.22.3 / pnpm 10.14.0，开工时工作树仅新增计划文件
+实施范围：Phase A（Agent Knowledge Layer）、Phase B1（Deterministic Sample Import Backend）、Vision Spike harness 与受阻分支、回归与交接；未实施 B2
+实际 commits：b670fb3 计划、c9842cd Phase A、099b40f Phase B1、（本文件所在）Spike/回归交接提交
+Phase A：PASS，证据见 docs/VERIFICATION.md 2026-09-21 段（core16/web14/mcp2/server94，bundleHash 2a7a07…，OpenAPI/MCP/REST 同源，legacy syntax 兼容）
+Phase B1：PASS，五 Sample 人工 fixture + 三阶段故障恢复 + 最小 receipt + backup/restore receipt 对账；core16/web14/mcp3/server106 + playwright 46
+Spike V1：NOT VERIFIED，实际 version/flavor/model/contract/profile 未取得（无隔离真实端点）
+Spike V2：NOT VERIFIED，未执行 restricted allow/deny
+Phase B2：BLOCKED，启用 flavor：无
+typecheck/build/unit/MCP/web/E2E：命令与通过数如上；skip：真实 S3 2 项（按设计）
+真实 import smoke：NOT VERIFIED
+历史证据（仅引用，不当本轮执行）：2026-09-13~18 OpenCode runtime/S3/MCP 结果
+受阻行为和关闭方式：AI 图片导入 flavor 未启用任何入口/readiness（B2 未实现），fail closed
+数据/凭据/原型保护情况：未访问 ~/ScientificWorkbench、未改用户 OpenCode 配置、未改冻结原型（fe2c41e…f1bb）
+仍运行服务/端口/PID与原因：无本轮创建的服务；未操作 4317/5173 既有进程
+临时目录清理或保留说明：测试 mkdtemp 与 spike temp 均在 finally 删除；无保留
+下一项最小可执行步骤：在有合法凭据的隔离 temp 中启动真实 OpenCode 服务，设 SWB_SPIKE_OPENCODE_URL 重跑 scripts/spike-opencode-vision.mts，先证 flavor/models/supportsImage，再证图片 transport，之后才评估 B2
+```
+
+- 完整首版仍未完成；未执行项（真实 IME、真实 S3、真实 Vision、旧目录实际转换核对、其余页面人工视觉）保持 NOT VERIFIED。

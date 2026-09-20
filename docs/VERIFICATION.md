@@ -176,3 +176,19 @@
 - 回归：`pnpm typecheck`、`pnpm build` 通过；`pnpm test` = core6 + web14 + MCP1 + server87（真实S3 2项跳过），共108通过；`pnpm exec playwright test` 46项通过。
 - 真实三目录 smoke（`/tmp/swb-opencode-final-smoke/{workbench,agent,server-cwd}`，隔离 XDG，端口14319/45996，未访问 `~/ScientificWorkbench`、未改用户 OpenCode 配置、未用 4317）：真实 1.18.31；POST 0.5s 返回 running；`GET /session/:id` 的 `directory=/private/tmp/swb-opencode-final-smoke/agent`；`cwd-smoke.txt` 只在 agent 目录，server-cwd 与 workbench 目录无该文件；Job succeeded。
 - 未人工验证保留：真实 Permission、真实 OpenCode 临时不可达、真实 V2 Server。冻结原型哈希未变；`operations.ts`/MCP 无 Agent 入口；Workbench dataDir 未被 Agent shell/file tool 直接访问。
+
+### 2026-09-21 通宵计划：Agent Knowledge Layer、Deterministic Import、Vision Spike
+
+- 计划：`docs/plans/AGENT_KNOWLEDGE_SAMPLE_IMPORT_OVERNIGHT_PLAN.md`。基线 HEAD `310551d`，Node v22.22.3 / pnpm 10.14.0；开工时工作树仅新增计划文件。基线记录：typecheck/build PASS，`pnpm test` = core6 / web14 / mcp1 / server87（真实 S3 2 项跳过）。
+- Phase A（PASS，提交 `c9842cd`）：
+  - `document_save` 正式声明 `bindings`（`packages/core/src/document-contract.ts`）；`onRoute` 按 operation 声明挂载 body schema，旧操作保持宽松；`sanitizeDocumentBindings` 拒绝越界位置、忽略不存在区块/缺失对象/伪造意图，空数组清空 references、省略保留。
+  - `docs/agent/guide.md` + `manifest.json` + 五组协议；`packages/core/src/agent-knowledge.ts` 生成/校验（重复 ID、缺文件、非法路径、符号链接逃逸、循环依赖、非法版本、坏链接、未知操作引用、UTF-8/LF、内容 SHA-256、重复构建字节一致）；`scripts/build-agent-knowledge.ts`（`--check`）生成被 gitignore 的 `apps/server/src/generated/agent-knowledge.ts`；root/server 脚本显式先执行幂等生成。
+  - `knowledge_index`/`knowledge_read` 操作；REST `GET /knowledge`、`GET /knowledge/:id`（保留 auth）；MCP `workbench://knowledge`、`workbench://knowledge/{id}`、`workbench://syntax` 改由 `protocol-sample-document` 承接。
+  - 证据：`pnpm typecheck` PASS；`pnpm build` PASS；`pnpm test` = core16 / web14 / mcp2 / server94（S3 2 跳过）；`pnpm agent:knowledge:check` PASS（bundleHash `2a7a070120736d62b378b44ccc10148ab9da9dfef6bfafd1c8462ff7068b0d0e`）；`pnpm api:spec` 更新；`git diff --check` PASS。
+- Phase B1（PASS，提交 `099b40f`）：人工 draft 五 Sample fixture 通过（5 Sample 共享 1 个 source Data、1 张原图、1 个显式新过程对象、现有材料/设备复用、About=5、每 head 绑定同一 Data、真实 parser PropertyValue、最小 receipt）。prepare 图片来源/数量/大小/哈希校验与幂等；draft/commit CAS + fingerprint；`document_bind_data` 独立可用且不改 About；cancel/retry 资格；journal/file/index 三阶段故障恢复与 HTTP `503 RECOVERY_REQUIRED`；backup 递归含 `registry/imports` 且恢复后无 jobs 缓存仍返回原 receipt；committed registry 无 draft/正文/属性副本。
+  - 证据：`pnpm typecheck` PASS；`pnpm build` PASS；`pnpm test` = core16 / web14 / mcp3 / server106（S3 2 跳过）；`pnpm exec playwright test` 46 passed；`pnpm agent:knowledge:check` PASS；`git diff --check` PASS。
+- Vision Spike（V1/V2 NOT VERIFIED，提交见 Spike checkpoint）：
+  - 新增 `scripts/spike-opencode-vision.mts`：默认拒绝真实调用，仅 `SWB_VISION_SPIKE=1` + 显式 `SWB_SPIKE_OPENCODE_URL` 才运行；创建隔离 temp dataDir/executionDir/独立端口，验证目录分离，图片答案仅在像素；不读取/修改用户全局配置，不输出二进制/base64/token/路径。
+  - 实际执行：无 opt-in 时 exit 1 且记录保护生效；opt-in 但无隔离端点时 exit 0，结论 `NOT VERIFIED`，原因“未提供隔离的真实 OpenCode 端点”。因此未取得真实图片 transport、restricted profile allow/deny 或无泄漏证据。
+  - 结论：目标 flavor AI 导入 **BLOCKED**。未启用任何占位入口（B2 未实现，产品内不存在可开启路径）；普通 V1 文本 runtime 与 A/B1 未受影响、未回滚。
+- 安全/隔离：未访问 `~/ScientificWorkbench`；未改用户 OpenCode 配置；未使用 4317 旧服务；未修改冻结原型 `prototype/reference.html`（哈希仍 `fe2c41e…f1bb`）；测试全部使用 mkdtemp 临时目录与独立端口。

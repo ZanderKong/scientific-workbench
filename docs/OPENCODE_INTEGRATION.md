@@ -237,3 +237,14 @@ OpenCode server cwd = /tmp/swb-opencode-final-smoke/server-cwd
   （本轮不做真实 SSE 故障注入）。
 
 未人工验证项继续保留：真实 Permission、真实 OpenCode 临时不可达、真实 V2 Server。
+
+## 2026-09-21 Vision Compatibility Spike：NOT VERIFIED（AI 导入 flavor 关闭）
+
+- 目标：在不改动用户全局 OpenCode 配置、不获取秘密的前提下，验证真实图片 transport、异步提交与 restricted profile 的 allow/deny。计划见 `docs/plans/AGENT_KNOWLEDGE_SAMPLE_IMPORT_OVERNIGHT_PLAN.md` 第 8–9 节。
+- 机制：新增 `scripts/spike-opencode-vision.mts`（独立 opt-in harness）。默认拒绝真实调用；只有 `SWB_VISION_SPIKE=1` 且提供隔离端点 `SWB_SPIKE_OPENCODE_URL`（可选 `SWB_SPIKE_OPENCODE_USERNAME`/`SWB_SPIKE_OPENCODE_PASSWORD`）时才连接。harness 在 temp 下创建彼此分离的 scientific dataDir 与 agent executionDir、独立空闲端口，生成答案仅在像素的 PNG，并且只记录去敏请求结构（字段名、MIME、字节数、状态、耗时），不记录二进制/base64/token/完整 prompt/路径。
+- 实际结果：
+  - 无 opt-in：`exit 1`，记录 `opt-in 保护生效`（保护有效）。
+  - opt-in 且无隔离端点：`exit 0`，`conclusion: NOT VERIFIED`，原因“未提供隔离的真实 OpenCode 端点”。为不读取/修改用户全局配置，未启动或借用已有 OpenCode 服务。
+  - 未执行/未证明：真实版本与 flavor、实际 model identifier、image transport shape、异步时序、restricted profile 正向 allow 与反向 deny、auto-allow 负向、噪声/泄漏检查。
+- 结论：Spike V1/V2 均为 **NOT VERIFIED**。受影响 flavor 的 AI 导入 readiness **关闭（BLOCKED）**：产品内没有任何 AI 导入入口或默认开放路径（Phase B2 未实现），因此不存在半开放风险，也不回滚 Phase A/B1。
+- 下一项最小调查：在隔离 temp 中启动一个使用合法凭据的真实 OpenCode 服务（独立运行目录/端口、精确 PID 追踪），用 `SWB_SPIKE_OPENCODE_URL` 指向它重跑 harness，先确认 `detectOpenCodeFlavor`、`listModels().supportsImage`，再确认图片 transport 后才有资格讨论 B2。禁止升级用户 runtime、同步 prompt 或放宽权限来制造 PASS。
