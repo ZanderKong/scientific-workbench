@@ -30,6 +30,17 @@
 - MCP：`workbench://knowledge` 索引、`workbench://knowledge/{id}` 内容模板；`workbench://syntax` 保留原 URI 与 Markdown MIME，正文改由 `protocol-sample-document` 承接，不再是手写常量。tools-only 客户端可用 `knowledge_index`/`knowledge_read` 取得同一正文与 hash。
 - 服务器内建注入接口只做受控只读读取，不启动 runtime 或模型。知识版本在服务运行期间固定于构建 bundle。
 
+## 确定性实验记录导入
+
+- `document_bind_data`（`POST /documents/:id/blocks/:blockId/bind-data`）把正常 `[数据]` 区块正式绑定到现有 Data，携带 `expectedVersion` 与 `expectedDataVersion`；已绑定同一 Data 幂等，不同 Data 冲突，且不修改 Data 的 About。
+- `sample_import_prepare` → `POST /sample-imports`：`importId` + 有序 `attachmentIds`。服务端按附件身份校验数量、单张/合计大小、真实文件头与声明 MIME，并创建一个 shared source Data 与 prepared 记录；相同 `importId` + 相同来源顺序幂等，顺序变化冲突。
+- `sample_import_get` → `GET /sample-imports/:id`：未提交返回暂态 draft 与服务器规范化后的 block/occurrence，已提交只返回最小 receipt。
+- `sample_import_save_draft` → `PUT /sample-imports/:id/draft`：attempt + record/draft CAS；返回 `recordVersion`、`draftVersion`、`draftHash`、`commitFingerprint`。未知字段与越界结构拒绝。
+- `sample_import_commit` → `POST /sample-imports/:id/commit`：携带身份/hash/version/fingerprint，服务端重算比对后整批创建；相同 fingerprint 重试返回原 receipt，指纹变化冲突。
+- `sample_import_cancel` / `sample_import_retry`：确定性撤销/重签 attempt，不启动模型。
+
+这些确定性 API 服务普通授权调用者；模型侧的 restricted profile 只暴露 `sample_import_get/save_draft/commit` 与必要读取（见 B2 阶段）。长任务恢复期间，科学实体读取/导出/备份返回 `503 RECOVERY_REQUIRED`，`/health` 报 `degraded`。
+
 大附件通过 `/attachments/stream` multipart 流式上传；下载入口仍需认证，不在 URL 中携带 token。MCP 提供受控上传、文本分段和图片资源，不把任意大二进制塞入工具 JSON。长任务返回 job ID，再用 `job_get` 查询；`job_cancel` 可取消仍在运行的备份，取消不会发布部分归档，已经结束的任务返回冲突。失败的附件上传任务可用 `job_retry` 重试。
 
 恢复接口先验证清单、路径和全部哈希，再创建新工作区。普通启动会把验证后的目录写入本机启动选择，下次重启应用后生效；显式设置 `WORKBENCH_DATA_DIR` 时该变量优先，接口会说明没有改变启动选择。

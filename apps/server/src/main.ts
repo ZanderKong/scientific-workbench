@@ -101,6 +101,7 @@ function idempotent<T>(
 }
 
 const app = Fastify({
+  ajv: { customOptions: { removeAdditional: false } },
   logger:
     process.env.NODE_ENV === "production"
       ? false
@@ -119,6 +120,27 @@ const authorization = new LocalAuthorization(
 );
 installAuthorization(app, authorization, port);
 
+app.addHook("onRequest", async (request, reply) => {
+  if (!store.recoveryRequired()) return;
+  const pathname = request.url.split("?")[0];
+  if (!pathname.startsWith("/api/v1/")) return;
+  if (
+    pathname === "/api/v1/health" ||
+    pathname.startsWith("/api/v1/knowledge") ||
+    pathname.startsWith("/api/v1/auth/")
+  )
+    return;
+  if (
+    !/^\/api\/v1\/(samples|documents|data|analyses|claims|objects|properties|attachments|search|workspace|sample-imports|backups|jobs)(\/|$)/.test(
+      pathname,
+    )
+  )
+    return;
+  return reply.code(503).send({
+    code: "RECOVERY_REQUIRED",
+    error: "工作区写入需要恢复，请重新启动服务后再读取",
+  });
+});
 app.addHook("onRoute", (route) => {
   const operation = operations.find(
     (operation) =>
@@ -218,7 +240,11 @@ const webDist = path.resolve(
 if (fs.existsSync(webDist))
   await app.register(fastifyStatic, { root: webDist, prefix: "/" });
 
-app.get("/api/v1/health", async () => ({ ok: true, version: "0.1.0" }));
+app.get("/api/v1/health", async () => ({
+  ok: !store.recoveryRequired(),
+  degraded: store.recoveryRequired(),
+  version: "0.1.0",
+}));
 app.get("/api/v1/openapi.json", async () => openApiDocument());
 app.post("/api/v1/workspace/rebuild", async () => store.rebuildIndex());
 app.get("/api/v1/workspace/status", async () => store.status());
@@ -286,6 +312,25 @@ app.post("/api/v1/samples/batch", async (req: any) =>
     : store.batchSamples(req.body.sourceIds || [], req.body.copies ?? 1),
 );
 
+app.post("/api/v1/sample-imports", async (req: any) =>
+  idempotent(req, () => store.prepareSampleImport(req.body)),
+);
+app.get("/api/v1/sample-imports/:id", async (req: any) =>
+  store.getSampleImport(req.params.id),
+);
+app.put("/api/v1/sample-imports/:id/draft", async (req: any) =>
+  store.saveSampleImportDraft(req.params.id, req.body),
+);
+app.post("/api/v1/sample-imports/:id/commit", async (req: any) =>
+  store.commitSampleImport(req.params.id, req.body),
+);
+app.post("/api/v1/sample-imports/:id/cancel", async (req: any) =>
+  store.cancelSampleImport(req.params.id, req.body ?? {}),
+);
+app.post("/api/v1/sample-imports/:id/retry", async (req: any) =>
+  store.retrySampleImport(req.params.id, req.body),
+);
+
 app.get("/api/v1/documents/:id", async (req: any) => {
   if (req.query?.latest === "true") store.ensureLatest(req.params.id);
   const doc = store.readDocument(req.params.id);
@@ -337,6 +382,17 @@ app.post(
   "/api/v1/documents/:id/blocks/:blockId/resolve-data",
   async (req: any) =>
     store.resolveDataIdentity(req.params.id, req.params.blockId, req.body),
+);
+app.post(
+  "/api/v1/documents/:id/blocks/:blockId/bind-data",
+  async (req: any) =>
+    store.bindDataBlock(
+      req.params.id,
+      req.params.blockId,
+      req.body.dataId,
+      req.body.expectedVersion,
+      req.body.expectedDataVersion,
+    ),
 );
 app.post("/api/v1/documents/:id/data/:dataId/load-latest", async (req: any) =>
   store.resolveDataMirror(
@@ -978,6 +1034,8 @@ app.setErrorHandler((error: any, _request, reply) => {
       currentVersion: error.currentVersion,
       dataId: error.dataId,
     });
+  if (error.code === "NOT_FOUND")
+    return reply.code(404).send({ code: "NOT_FOUND", error: error.message });
   if (error.validation || error.code === "INVALID_INPUT")
     return reply
       .code(400)

@@ -7,4 +7,5 @@ export * from './document-contract';
 export * from './operations';
 export * from './analysis';
 export * from './agent-knowledge';
+export * from './sample-import';
 export * from "./attachments";

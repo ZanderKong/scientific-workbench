@@ -1,6 +1,7 @@
 /** Shared, versioned public operation catalogue used by REST documentation and MCP. */
 import type { JsonSchema } from "./document-contract";
 import { documentBindingsSchema } from "./document-contract";
+import { sampleImportDraftSchema } from "./sample-import";
 export type { JsonSchema } from "./document-contract";
 export interface Operation {
   name: string;
@@ -29,6 +30,7 @@ function op(
   properties: Record<string, JsonSchema> = {},
   required: string[] = [],
   query?: string[],
+  additionalProperties = true,
 ): Operation {
   return {
     name,
@@ -42,7 +44,7 @@ function op(
         ...(method === "POST" ? { idempotencyKey: string } : {}),
       },
       required,
-      additionalProperties: true,
+      additionalProperties,
     },
     query,
   };
@@ -221,6 +223,20 @@ export const operations: Operation[] = [
     "/documents/:id/finalize",
     { id },
     ["id"],
+  ),
+  op(
+    "document_bind_data",
+    "把正常 [数据] 区块正式绑定到现有 Data，不改写 Data 的 About",
+    "POST",
+    "/documents/:id/blocks/:blockId/bind-data",
+    {
+      id,
+      blockId: id,
+      dataId: id,
+      expectedVersion: version,
+      expectedDataVersion: version,
+    },
+    ["id", "blockId", "dataId", "expectedVersion", "expectedDataVersion"],
   ),
   op(
     "document_reload",
@@ -579,6 +595,94 @@ export const operations: Operation[] = [
     "/jobs/:id/cancel",
     { id },
     ["id"],
+  ),
+  op(
+    "sample_import_prepare",
+    "为一次实验记录导入登记有序图片来源并创建一个 shared source Data",
+    "POST",
+    "/sample-imports",
+    {
+      importId: id,
+      attachmentIds: {
+        type: "array",
+        items: id,
+        minItems: 1,
+        maxItems: 10,
+      },
+    },
+    ["importId", "attachmentIds"],
+    undefined,
+    false,
+  ),
+  op(
+    "sample_import_get",
+    "读取导入的暂态 draft 或已提交的最小 receipt",
+    "GET",
+    "/sample-imports/:id",
+    { id },
+    ["id"],
+  ),
+  op(
+    "sample_import_save_draft",
+    "按 CAS 保存暂态 draft，返回版本、hash 与 commit fingerprint",
+    "PUT",
+    "/sample-imports/:id/draft",
+    {
+      id,
+      attemptId: id,
+      expectedVersion: version,
+      expectedDraftVersion: { type: "integer", minimum: 0 },
+      draft: sampleImportDraftSchema,
+    },
+    ["id", "attemptId", "expectedVersion", "expectedDraftVersion", "draft"],
+    undefined,
+    false,
+  ),
+  op(
+    "sample_import_commit",
+    "按已保存 draft 的身份、hash、版本与 fingerprint 确定性提交整批样品",
+    "POST",
+    "/sample-imports/:id/commit",
+    {
+      id,
+      attemptId: id,
+      expectedVersion: version,
+      draftVersion: version,
+      draftHash: id,
+      sourceDataVersion: version,
+      commitFingerprint: id,
+    },
+    [
+      "id",
+      "attemptId",
+      "expectedVersion",
+      "draftVersion",
+      "draftHash",
+      "sourceDataVersion",
+      "commitFingerprint",
+    ],
+    undefined,
+    false,
+  ),
+  op(
+    "sample_import_cancel",
+    "确定性撤销当前 attempt 资格；已提交的导入保持成功",
+    "POST",
+    "/sample-imports/:id/cancel",
+    { id, attemptId: id, expectedVersion: version },
+    ["id"],
+    undefined,
+    false,
+  ),
+  op(
+    "sample_import_retry",
+    "撤销旧 attempt 并签发新 attempt，复用来源 Data 与暂态 draft",
+    "POST",
+    "/sample-imports/:id/retry",
+    { id, expectedVersion: version },
+    ["id", "expectedVersion"],
+    undefined,
+    false,
   ),
   op(
     "knowledge_index",

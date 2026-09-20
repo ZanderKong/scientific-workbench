@@ -895,6 +895,86 @@
         ]
       }
     },
+    "/api/v1/documents/{id}/blocks/{blockId}/bind-data": {
+      "post": {
+        "operationId": "document_bind_data",
+        "description": "把正常 [数据] 区块正式绑定到现有 Data，不改写 Data 的 About",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "blockId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "dataId": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "expectedVersion": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "expectedDataVersion": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                },
+                "required": [
+                  "dataId",
+                  "expectedVersion",
+                  "expectedDataVersion"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "操作结果，实体包含实际版本；分页请求返回items/total/offset/limit"
+          },
+          "401": {
+            "description": "凭据无效"
+          },
+          "403": {
+            "description": "缺少权限"
+          },
+          "409": {
+            "description": "版本或幂等冲突"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
     "/api/v1/documents/{id}/reload": {
       "post": {
         "operationId": "document_reload",
@@ -3142,6 +3222,613 @@
             }
           }
         ],
+        "responses": {
+          "200": {
+            "description": "操作结果，实体包含实际版本；分页请求返回items/total/offset/limit"
+          },
+          "401": {
+            "description": "凭据无效"
+          },
+          "403": {
+            "description": "缺少权限"
+          },
+          "409": {
+            "description": "版本或幂等冲突"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/sample-imports": {
+      "post": {
+        "operationId": "sample_import_prepare",
+        "description": "为一次实验记录导入登记有序图片来源并创建一个 shared source Data",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "importId": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "attachmentIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "minItems": 1,
+                    "maxItems": 10
+                  }
+                },
+                "required": [
+                  "importId",
+                  "attachmentIds"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "操作结果，实体包含实际版本；分页请求返回items/total/offset/limit"
+          },
+          "401": {
+            "description": "凭据无效"
+          },
+          "403": {
+            "description": "缺少权限"
+          },
+          "409": {
+            "description": "版本或幂等冲突"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/sample-imports/{id}": {
+      "get": {
+        "operationId": "sample_import_get",
+        "description": "读取导入的暂态 draft 或已提交的最小 receipt",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "操作结果，实体包含实际版本；分页请求返回items/total/offset/limit"
+          },
+          "401": {
+            "description": "凭据无效"
+          },
+          "403": {
+            "description": "缺少权限"
+          },
+          "409": {
+            "description": "版本或幂等冲突"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/sample-imports/{id}/draft": {
+      "put": {
+        "operationId": "sample_import_save_draft",
+        "description": "按 CAS 保存暂态 draft，返回版本、hash 与 commit fingerprint",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "attemptId": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "expectedVersion": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "expectedDraftVersion": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "draft": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "schemaVersion",
+                      "samples",
+                      "objectIntents",
+                      "ambiguities"
+                    ],
+                    "properties": {
+                      "schemaVersion": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 1
+                      },
+                      "samples": {
+                        "type": "array",
+                        "minItems": 1,
+                        "maxItems": 50,
+                        "items": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "key",
+                            "body",
+                            "sourceMappings",
+                            "references"
+                          ],
+                          "properties": {
+                            "key": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 64
+                            },
+                            "code": {
+                              "type": "string",
+                              "maxLength": 128
+                            },
+                            "title": {
+                              "type": "string",
+                              "maxLength": 512
+                            },
+                            "body": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 200000
+                            },
+                            "sourceMappings": {
+                              "type": "array",
+                              "maxItems": 100,
+                              "items": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "required": [
+                                  "attachmentId",
+                                  "page"
+                                ],
+                                "properties": {
+                                  "attachmentId": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 128
+                                  },
+                                  "page": {
+                                    "type": "integer",
+                                    "minimum": 1
+                                  },
+                                  "componentId": {
+                                    "type": "string",
+                                    "maxLength": 128
+                                  },
+                                  "transcription": {
+                                    "type": "string",
+                                    "maxLength": 200000
+                                  },
+                                  "positions": {
+                                    "type": "string",
+                                    "maxLength": 4000
+                                  }
+                                }
+                              }
+                            },
+                            "references": {
+                              "type": "array",
+                              "maxItems": 2000,
+                              "items": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "required": [
+                                  "blockId",
+                                  "start",
+                                  "end",
+                                  "rawText",
+                                  "target"
+                                ],
+                                "properties": {
+                                  "blockId": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 128
+                                  },
+                                  "start": {
+                                    "type": "integer",
+                                    "minimum": 0
+                                  },
+                                  "end": {
+                                    "type": "integer",
+                                    "minimum": 0
+                                  },
+                                  "rawText": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 512
+                                  },
+                                  "role": {
+                                    "type": "string",
+                                    "maxLength": 32
+                                  },
+                                  "target": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "required": [
+                                      "kind"
+                                    ],
+                                    "properties": {
+                                      "kind": {
+                                        "type": "string",
+                                        "enum": [
+                                          "existing",
+                                          "new",
+                                          "sample"
+                                        ]
+                                      },
+                                      "objectId": {
+                                        "type": "string",
+                                        "maxLength": 128
+                                      },
+                                      "objectKey": {
+                                        "type": "string",
+                                        "maxLength": 64
+                                      },
+                                      "sampleKey": {
+                                        "type": "string",
+                                        "maxLength": 64
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      },
+                      "objectIntents": {
+                        "type": "array",
+                        "maxItems": 200,
+                        "items": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "key",
+                            "canonicalName",
+                            "role"
+                          ],
+                          "properties": {
+                            "key": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 64
+                            },
+                            "canonicalName": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 256
+                            },
+                            "role": {
+                              "type": "string",
+                              "enum": [
+                                "material",
+                                "equipment",
+                                "process"
+                              ]
+                            },
+                            "aliases": {
+                              "type": "array",
+                              "maxItems": 50,
+                              "items": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 256
+                              }
+                            }
+                          }
+                        }
+                      },
+                      "ambiguities": {
+                        "type": "array",
+                        "maxItems": 500,
+                        "items": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "level",
+                            "message"
+                          ],
+                          "properties": {
+                            "level": {
+                              "type": "string",
+                              "enum": [
+                                "critical",
+                                "local"
+                              ]
+                            },
+                            "sampleKey": {
+                              "type": "string",
+                              "maxLength": 64
+                            },
+                            "message": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 2000
+                            },
+                            "resolved": {
+                              "type": "boolean"
+                            },
+                            "resolution": {
+                              "type": "string",
+                              "maxLength": 4000
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                "required": [
+                  "attemptId",
+                  "expectedVersion",
+                  "expectedDraftVersion",
+                  "draft"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "操作结果，实体包含实际版本；分页请求返回items/total/offset/limit"
+          },
+          "401": {
+            "description": "凭据无效"
+          },
+          "403": {
+            "description": "缺少权限"
+          },
+          "409": {
+            "description": "版本或幂等冲突"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/sample-imports/{id}/commit": {
+      "post": {
+        "operationId": "sample_import_commit",
+        "description": "按已保存 draft 的身份、hash、版本与 fingerprint 确定性提交整批样品",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "attemptId": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "expectedVersion": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "draftVersion": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "draftHash": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "sourceDataVersion": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "commitFingerprint": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "attemptId",
+                  "expectedVersion",
+                  "draftVersion",
+                  "draftHash",
+                  "sourceDataVersion",
+                  "commitFingerprint"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "操作结果，实体包含实际版本；分页请求返回items/total/offset/limit"
+          },
+          "401": {
+            "description": "凭据无效"
+          },
+          "403": {
+            "description": "缺少权限"
+          },
+          "409": {
+            "description": "版本或幂等冲突"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/sample-imports/{id}/cancel": {
+      "post": {
+        "operationId": "sample_import_cancel",
+        "description": "确定性撤销当前 attempt 资格；已提交的导入保持成功",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "attemptId": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "expectedVersion": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                },
+                "required": []
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "操作结果，实体包含实际版本；分页请求返回items/total/offset/limit"
+          },
+          "401": {
+            "description": "凭据无效"
+          },
+          "403": {
+            "description": "缺少权限"
+          },
+          "409": {
+            "description": "版本或幂等冲突"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/sample-imports/{id}/retry": {
+      "post": {
+        "operationId": "sample_import_retry",
+        "description": "撤销旧 attempt 并签发新 attempt，复用来源 Data 与暂态 draft",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "expectedVersion": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                },
+                "required": [
+                  "expectedVersion"
+                ]
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "操作结果，实体包含实际版本；分页请求返回items/total/offset/limit"

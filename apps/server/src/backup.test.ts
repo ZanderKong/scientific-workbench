@@ -1,11 +1,16 @@
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
+import { randomUUID } from "node:crypto";
 import { afterEach, describe, expect, it } from "vitest";
 import archiver from "archiver";
 import { pipeline } from "node:stream/promises";
 import { WorkbenchStore } from "./store";
 import { createCompleteBackup, restoreCompleteBackup } from "./backup";
+const IMPORT_PNG = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+  "base64",
+);
 const roots: string[] = [];
 const stores: WorkbenchStore[] = [];
 const setup = () => {
@@ -99,6 +104,69 @@ describe("complete file backups", () => {
       ),
     ).rejects.toMatchObject({ code: "CANCELED" });
     expect(fs.readdirSync(path.join(store.dataDir, "backups"))).toEqual([]);
+  });
+  it("restores committed import receipts without relying on the jobs cache", async () => {
+    const { root, store } = setup();
+    const png = store.saveAttachment(IMPORT_PNG, "record.png", "image/png");
+    const importId = randomUUID();
+    const prepared = store.prepareSampleImport({
+      importId,
+      attachmentIds: [png.id],
+    });
+    const saved = store.saveSampleImportDraft(importId, {
+      attemptId: prepared.attempt.id,
+      expectedVersion: prepared.recordVersion,
+      expectedDraftVersion: 0,
+      draft: {
+        schemaVersion: 1,
+        samples: [
+          {
+            key: "s1",
+            body: "- 记录正文",
+            sourceMappings: [],
+            references: [],
+          },
+        ],
+        objectIntents: [],
+        ambiguities: [],
+      },
+    });
+    const sourceVersion = store.getData(prepared.sourceDataId).version;
+    const committed = store.commitSampleImport(importId, {
+      attemptId: prepared.attempt.id,
+      expectedVersion: saved.recordVersion,
+      draftVersion: saved.draftVersion,
+      draftHash: saved.draftHash,
+      sourceDataVersion: sourceVersion,
+      commitFingerprint: saved.commitFingerprint,
+    });
+    expect(committed.status).toBe("committed");
+    const backup = await createCompleteBackup(store, async () => {
+      throw Error("unexpected remote access");
+    });
+    const zip = path.join(root, "import.zip");
+    fs.copyFileSync(backup.file, zip);
+    store.close();
+    stores.splice(stores.indexOf(store), 1);
+    const target = path.join(root, "restored-import");
+    await restoreCompleteBackup(zip, target, store.dataDir);
+    const recovered = new WorkbenchStore({ dataDir: target });
+    stores.push(recovered);
+    const view = recovered.getSampleImport(importId);
+    expect(view.status).toBe("committed");
+    expect((view as any).receipt.createdSampleIds).toEqual(
+      committed.receipt.createdSampleIds,
+    );
+    const retried = recovered.commitSampleImport(importId, {
+      attemptId: prepared.attempt.id,
+      expectedVersion: saved.recordVersion,
+      draftVersion: saved.draftVersion,
+      draftHash: saved.draftHash,
+      sourceDataVersion: sourceVersion,
+      commitFingerprint: saved.commitFingerprint,
+    });
+    expect(retried.receipt).toEqual(committed.receipt);
+    expect(recovered.listSamples()).toHaveLength(1);
   });
   it("rejects traversal in the manifest before creating a restore directory", async () => {
     const { root, store } = setup();

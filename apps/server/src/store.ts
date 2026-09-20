@@ -26,7 +26,23 @@ import {
   normalizeAnalysisLayout,
   blockLines,
   sanitizeDocumentBindings,
+  sampleImportSourceFingerprint,
+  sampleImportDraftHash,
+  sampleImportCommitFingerprint,
+  validateSampleImportDraft,
+  assertKnownKeys,
+  SAMPLE_IMPORT_CONTRACT_VERSION,
+  SAMPLE_IMPORT_MAX_TOTAL_BYTES,
 } from "@workbench/core";
+import {
+  verifyImageAttachment,
+  sourceDataName,
+  sourceDataBody,
+  withSourceDataBlock,
+  matchReferences,
+  importError,
+  type SampleImportRecord,
+} from "./sample-import";
 import { fileLinks } from "@workbench/core/attachments";
 import type {
   AnalysisRecord,
@@ -45,10 +61,13 @@ import type {
   ReferenceOccurrence,
   Snapshot,
   Lifecycle,
+  ObjectRole,
   RemoteAttachmentLocation,
 } from "@workbench/core";
 export interface StoreOptions {
   dataDir?: string;
+  /** Test-only hook to inject a checkpoint failure; never set in production. */
+  fileCheckpoint?: (phase: "journal" | "file" | "index") => void;
 }
 interface SampleIndexRow {
   id: string;
@@ -111,7 +130,7 @@ export class WorkbenchStore {
       path.join(os.homedir(), "ScientificWorkbench");
     for (const dir of dirs)
       fs.mkdirSync(path.join(this.dataDir, dir), { recursive: true });
-    this.files = new FileRepository(this.dataDir);
+    this.files = new FileRepository(this.dataDir, options.fileCheckpoint);
     const workspaceFile = path.join(this.dataDir, "registry", "workspace.json");
     if (
       !fs.existsSync(workspaceFile) &&
@@ -2658,6 +2677,690 @@ export class WorkbenchStore {
       const b = fs.readFileSync(p);
       return { path: rel, size: b.byteLength, sha256: sha256(b) };
     });
+  }
+  recoveryRequired() {
+    return this.files.recoveryRequired();
+  }
+  private importRelative(importId: string) {
+    if (
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+        importId,
+      )
+    )
+      throw importError("importId 必须是稳定的 UUID");
+    return `registry/imports/${importId}.json`;
+  }
+  private readImport(importId: string): SampleImportRecord {
+    const relative = this.importRelative(importId);
+    if (!this.files.has(relative))
+      throw importError("导入不存在", "NOT_FOUND");
+    const record = JSON.parse(this.files.read(relative)) as SampleImportRecord;
+    if (
+      record?.schema !== "swb.import/2" ||
+      record.importId !== importId ||
+      !record.sourceDataId
+    )
+      throw importError("导入记录格式无效", "CORRUPT");
+    return record;
+  }
+  private writeImport(record: SampleImportRecord) {
+    this.atomicWrite(
+      path.join(this.dataDir, this.importRelative(record.importId)),
+      json(record),
+    );
+  }
+  private importView(record: SampleImportRecord) {
+    const base = {
+      importId: record.importId,
+      status: record.status,
+      sourceDataId: record.sourceDataId,
+      sourceFingerprint: record.sourceFingerprint,
+      recordVersion: record.recordVersion,
+      source: record.source,
+      attempt: { id: record.attempt.id, status: record.attempt.status },
+    };
+    if (record.status === "committed")
+      return { ...base, receipt: record.receipt };
+    return {
+      ...base,
+      draftVersion: record.draftVersion,
+      draftHash: record.draftHash,
+      commitFingerprint: record.commitFingerprint,
+      draft: record.draft,
+      normalized: record.draft
+        ? record.draft.samples.map((sample) => {
+            const body = ensureBlockIds(sample.body);
+            return {
+              key: sample.key,
+              body,
+              occurrences: parseBody(record.importId, body)
+                .records.flatMap((entry) => entry.references)
+                .map(({ blockId, start, end, rawText }) => ({
+                  blockId,
+                  start,
+                  end,
+                  rawText,
+                })),
+            };
+          })
+        : undefined,
+    };
+  }
+  private requireActiveImportAttempt(
+    record: SampleImportRecord,
+    attemptId: unknown,
+  ) {
+    if (
+      typeof attemptId !== "string" ||
+      !attemptId ||
+      record.attempt.id !== attemptId ||
+      record.attempt.status !== "active"
+    )
+      throw Object.assign(
+        new Error("导入执行资格已失效，请重新读取或显式重试"),
+        { code: "CONFLICT" },
+      );
+  }
+  private computeImportFingerprint(record: SampleImportRecord) {
+    const draft = record.draft!;
+    const sourceData = this.getData(record.sourceDataId);
+    const objects = this.searchObjects();
+    const existingIds = new Set<string>();
+    for (const sample of draft.samples)
+      for (const reference of sample.references)
+        if (
+          reference.target.kind === "existing" &&
+          reference.target.objectId
+        )
+          existingIds.add(reference.target.objectId);
+    return sampleImportCommitFingerprint({
+      importId: record.importId,
+      sourceFingerprint: record.sourceFingerprint,
+      draftHash: sampleImportDraftHash(draft),
+      sourceDataVersion: sourceData.version,
+      objects: [...existingIds].map((id) => ({
+        id,
+        version: objects.find((object) => object.id === id)?.version ?? 0,
+      })),
+      intents: draft.objectIntents.map((intent) => ({
+        key: intent.key,
+        canonicalName: intent.canonicalName,
+        role: intent.role,
+      })),
+      contractVersion: SAMPLE_IMPORT_CONTRACT_VERSION,
+    });
+  }
+  prepareSampleImport(input: {
+    importId: string;
+    attachmentIds: string[];
+  }) {
+    return this.commit(() => {
+      assertKnownKeys(input, ["importId", "attachmentIds"], "prepare sample import");
+      const relative = this.importRelative(input.importId);
+      const ids = input.attachmentIds;
+      if (!Array.isArray(ids) || ids.length < 1 || ids.length > 10)
+        throw importError("来源图片数量必须为 1 至 10 张");
+      if (new Set(ids).size !== ids.length)
+        throw importError("来源图片不能重复");
+      const verified = ids.map((id) => {
+        const attachment = this.getAttachment(id);
+        return { attachment, ...verifyImageAttachment(attachment) };
+      });
+      const total = verified.reduce(
+        (sum, item) => sum + item.attachment.sizeBytes,
+        0,
+      );
+      if (total > SAMPLE_IMPORT_MAX_TOTAL_BYTES)
+        throw importError("来源图片合计不能超过 30 MiB");
+      const sources = verified.map((item, index) => ({
+        attachmentId: item.attachment.id,
+        page: index + 1,
+        name: item.attachment.originalName,
+        sha256: item.attachment.sha256,
+        componentId: "",
+      }));
+      const fingerprint = sampleImportSourceFingerprint(sources);
+      if (this.files.has(relative)) {
+        const existing = this.readImport(input.importId);
+        if (existing.sourceFingerprint !== fingerprint)
+          throw Object.assign(
+            new Error("同一 importId 的来源图片已经不同，请重新开始导入"),
+            { code: "CONFLICT" },
+          );
+        return this.importView(existing);
+      }
+      const createdAt = now();
+      const components = sources.map((source, index) => ({
+        id: uuid(),
+        kind: "file" as const,
+        name: source.name,
+        role: "source",
+        creator: "human" as const,
+        provenance: `来源附件 ${index + 1}/${sources.length}`,
+        createdAt,
+        derivedFrom: [] as string[],
+        attachmentId: source.attachmentId,
+      }));
+      sources.forEach((source, index) => {
+        source.componentId = components[index].id;
+      });
+      const data = this.createData({
+        name: sourceDataName(input.importId),
+        description: "实验记录来源",
+        body: sourceDataBody(sources),
+        aboutSampleIds: [],
+        components,
+      });
+      const record: SampleImportRecord = {
+        schema: "swb.import/2",
+        schemaVersion: 1,
+        importId: input.importId,
+        status: "prepared",
+        sourceDataId: data.id,
+        sourceFingerprint: fingerprint,
+        source: sources,
+        recordVersion: 1,
+        draftVersion: 0,
+        attempt: { id: uuid(), status: "active", createdAt },
+        createdAt,
+        updatedAt: createdAt,
+      };
+      this.writeImport(record);
+      return this.importView(record);
+    }, "prepareSampleImport");
+  }
+  getSampleImport(importId: string) {
+    return this.importView(this.readImport(importId));
+  }
+  saveSampleImportDraft(
+    importId: string,
+    input: {
+      attemptId: string;
+      expectedVersion: number;
+      expectedDraftVersion: number;
+      draft: unknown;
+    },
+  ) {
+    return this.commit(() => {
+      assertKnownKeys(
+        input,
+        ["attemptId", "expectedVersion", "expectedDraftVersion", "draft"],
+        "save import draft",
+      );
+      const record = this.readImport(importId);
+      if (record.status === "committed")
+        throw Object.assign(new Error("已提交的导入不能再保存草稿"), {
+          code: "CONFLICT",
+        });
+      if (record.status === "cancelled")
+        throw Object.assign(new Error("导入已取消"), { code: "CONFLICT" });
+      this.requireActiveImportAttempt(record, input.attemptId);
+      if (Number(input.expectedVersion) !== record.recordVersion)
+        throw Object.assign(new Error("导入记录版本冲突"), {
+          code: "CONFLICT",
+          currentVersion: record.recordVersion,
+        });
+      if (Number(input.expectedDraftVersion) !== record.draftVersion)
+        throw Object.assign(new Error("草稿版本冲突"), {
+          code: "CONFLICT",
+          currentVersion: record.draftVersion,
+        });
+      const draft = validateSampleImportDraft(input.draft);
+      const normalized = {
+        ...draft,
+        samples: draft.samples.map((sample) => ({
+          ...sample,
+          body: ensureBlockIds(sample.body),
+        })),
+      };
+      record.draft = normalized;
+      record.draftVersion += 1;
+      record.draftHash = sampleImportDraftHash(normalized);
+      record.status = "draft";
+      record.recordVersion += 1;
+      record.updatedAt = now();
+      record.commitFingerprint = this.computeImportFingerprint(record);
+      this.writeImport(record);
+      return {
+        importId,
+        recordVersion: record.recordVersion,
+        draftVersion: record.draftVersion,
+        draftHash: record.draftHash,
+        commitFingerprint: record.commitFingerprint,
+      };
+    }, "saveSampleImportDraft");
+  }
+  private validateImportDraftSemantics(
+    record: SampleImportRecord,
+    sourceData: DataRecord & { body: string },
+  ) {
+    const draft = record.draft!;
+    const critical = draft.ambiguities.filter(
+      (item) => item.level === "critical" && !item.resolved,
+    );
+    if (critical.length)
+      throw importError(
+        `存在未解决的关键歧义，不能提交：${critical[0].message}`,
+      );
+    const sampleKeys = new Set(draft.samples.map((sample) => sample.key));
+    const sourceByAttachment = new Map(
+      record.source.map((item) => [item.attachmentId, item]),
+    );
+    const objects = this.searchObjects();
+    const objectById = new Map(objects.map((object) => [object.id, object]));
+    for (const sample of draft.samples) {
+      for (const mapping of sample.sourceMappings) {
+        const source = sourceByAttachment.get(mapping.attachmentId);
+        if (!source)
+          throw importError(
+            `样品 ${sample.key} 引用了不在本次导入内的来源附件`,
+          );
+        if (mapping.page !== source.page)
+          throw importError(`样品 ${sample.key} 的来源页序与导入不一致`);
+      }
+      for (const reference of sample.references) {
+        const target = reference.target;
+        if (target.kind === "sample") {
+          if (!sampleKeys.has(target.sampleKey!))
+            throw importError(
+              `样品 ${sample.key} 引用了未知样品 key：${target.sampleKey}`,
+            );
+        } else if (target.kind === "existing") {
+          const object = objectById.get(target.objectId!);
+          if (!object)
+            throw importError(
+              `样品 ${sample.key} 引用了不存在的对象：${target.objectId}`,
+            );
+          if (object.lifecycle !== "active")
+            throw importError(
+              `对象「${object.canonicalName}」已变更（合并/废弃），请重新读取后更新 draft`,
+            );
+          if (reference.role && reference.role !== object.role)
+            throw importError(
+              `样品 ${sample.key} 的对象角色与字典不一致：${object.canonicalName}`,
+            );
+        }
+      }
+      if (sample.code) {
+        if (typeof sample.code !== "string" || !sample.code.trim())
+          throw importError(`样品 ${sample.key} 的编号无效`);
+        if (this.db.prepare("SELECT 1 FROM samples WHERE code=?").get(sample.code))
+          throw importError(`样品编号已存在：${sample.code}`, "CONFLICT");
+      }
+    }
+    for (const intent of draft.objectIntents) {
+      const name = intent.canonicalName.trim();
+      if (objects.some((object) => object.canonicalName === name))
+        throw importError(
+          `新建对象「${name}」与现有对象同名，请明确复用或澄清`,
+        );
+    }
+    // The source Data must still be the exact version the draft was checked against.
+    if (!sourceData.components.length)
+      throw importError("来源 Data 缺少原始图片组件");
+  }
+  commitSampleImport(
+    importId: string,
+    input: {
+      attemptId: string;
+      expectedVersion: number;
+      draftVersion: number;
+      draftHash: string;
+      sourceDataVersion: number;
+      commitFingerprint: string;
+    },
+  ) {
+    return this.commit(() => {
+      assertKnownKeys(
+        input,
+        [
+          "attemptId",
+          "expectedVersion",
+          "draftVersion",
+          "draftHash",
+          "sourceDataVersion",
+          "commitFingerprint",
+        ],
+        "commit sample import",
+      );
+      const record = this.readImport(importId);
+      if (record.status === "committed") {
+        if (
+          !record.receipt ||
+          record.commitFingerprint !== input.commitFingerprint
+        )
+          throw Object.assign(new Error("已提交的导入 fingerprint 不一致"), {
+            code: "CONFLICT",
+          });
+        return { status: "committed" as const, receipt: record.receipt };
+      }
+      if (record.status === "cancelled")
+        throw Object.assign(new Error("导入已取消"), { code: "CONFLICT" });
+      this.requireActiveImportAttempt(record, input.attemptId);
+      if (Number(input.expectedVersion) !== record.recordVersion)
+        throw Object.assign(new Error("导入记录版本冲突"), {
+          code: "CONFLICT",
+          currentVersion: record.recordVersion,
+        });
+      if (Number(input.draftVersion) !== record.draftVersion)
+        throw Object.assign(new Error("草稿版本冲突"), {
+          code: "CONFLICT",
+          currentVersion: record.draftVersion,
+        });
+      if (!record.draft || record.draftHash !== input.draftHash)
+        throw Object.assign(new Error("草稿内容 hash 冲突"), {
+          code: "CONFLICT",
+        });
+      const sourceData = this.getData(record.sourceDataId);
+      if (sourceData.version !== Number(input.sourceDataVersion))
+        throw Object.assign(new Error("来源 Data 版本冲突"), {
+          code: "CONFLICT",
+          currentVersion: sourceData.version,
+        });
+      const computed = this.computeImportFingerprint(record);
+      if (
+        computed !== input.commitFingerprint ||
+        record.commitFingerprint !== input.commitFingerprint
+      )
+        throw Object.assign(new Error("提交 fingerprint 不一致"), {
+          code: "CONFLICT",
+        });
+      this.validateImportDraftSemantics(record, sourceData);
+      const receipt = this.materializeSampleImport(record, sourceData);
+      const committedAt = now();
+      const committed: SampleImportRecord = {
+        schema: "swb.import/2",
+        schemaVersion: 1,
+        importId: record.importId,
+        status: "committed",
+        sourceDataId: record.sourceDataId,
+        sourceFingerprint: record.sourceFingerprint,
+        source: record.source,
+        recordVersion: record.recordVersion + 1,
+        draftVersion: record.draftVersion,
+        commitFingerprint: input.commitFingerprint,
+        attempt: {
+          ...record.attempt,
+          status: "revoked",
+          revokedAt: committedAt,
+        },
+        receipt,
+        createdAt: record.createdAt,
+        updatedAt: committedAt,
+      };
+      this.writeImport(committed);
+      return { status: "committed" as const, receipt };
+    }, "commitSampleImport");
+  }
+  private materializeSampleImport(
+    record: SampleImportRecord,
+    sourceData: DataRecord & { body: string },
+  ) {
+    const draft = record.draft!;
+    const createdObjectIds: string[] = [];
+    const derivedComponentIds: string[] = [];
+    const objectIdByKey = new Map<string, string>();
+    for (const intent of draft.objectIntents) {
+      const created = this.createObject({
+        canonicalName: intent.canonicalName.trim(),
+        role: intent.role,
+        aliases: intent.aliases,
+      });
+      objectIdByKey.set(intent.key, created.id);
+      createdObjectIds.push(created.id);
+    }
+    const sampleIdByKey = new Map<string, string>();
+    const createdSamples: {
+      id: string;
+      candidate: (typeof draft.samples)[number];
+      version: number;
+    }[] = [];
+    for (const candidate of draft.samples) {
+      const created = this.createSample({
+        code: candidate.code,
+        title: candidate.title,
+        body: candidate.body,
+      });
+      sampleIdByKey.set(candidate.key, created.id);
+      createdSamples.push({
+        id: created.id,
+        candidate,
+        version: created.document.head.contentVersion,
+      });
+    }
+    const objectById = new Map(
+      this.searchObjects().map((object) => [object.id, object]),
+    );
+    const dataName = sourceData.name;
+    const sampleIds = createdSamples.map((sample) => sample.id);
+    for (const { id, candidate, version } of createdSamples) {
+      const body = ensureBlockIds(
+        withSourceDataBlock(candidate.body, dataName),
+      );
+      const parsed = parseBody(id, body);
+      const occurrences = parsed.records.flatMap((entry) => entry.references);
+      const matched = matchReferences(occurrences, candidate.references, candidate.key);
+      const bindings: ReferenceOccurrence[] = matched.map(
+        ({ occurrence, candidate: mapping }) => {
+          let objectId: string | undefined;
+          let role: ObjectRole | "unresolved" = "unresolved";
+          if (mapping.target.kind === "existing") {
+            objectId = mapping.target.objectId;
+            role = objectById.get(objectId!)?.role ?? "unresolved";
+          } else if (mapping.target.kind === "new") {
+            objectId = objectIdByKey.get(mapping.target.objectKey!);
+            role =
+              objectId && objectById.get(objectId)
+                ? objectById.get(objectId)!.role
+                : "unresolved";
+          } else {
+            objectId = sampleIdByKey.get(mapping.target.sampleKey!);
+            role = "sample";
+          }
+          return {
+            ...occurrence,
+            operationId: occurrence.blockId,
+            objectId,
+            role,
+            status: "bound" as const,
+          };
+        },
+      );
+      this.saveDocument(id, body, version, bindings);
+      const dataItem = parsed.records.flatMap(
+        (entry) => entry.dataItems || [],
+      )[0];
+      if (!dataItem)
+        throw importError(`样品 ${candidate.key} 缺少来源数据区块`);
+      const current = this.readDocument(id);
+      this.bindDataBlock(
+        id,
+        dataItem.blockId,
+        sourceData.id,
+        current.head.contentVersion,
+        sourceData.version,
+      );
+      const result = this.finalizeDocument(id);
+      if (result.status !== "ready")
+        throw importError(`样品 ${candidate.key} 提取未完成，批次已回滚`);
+    }
+    // Derived transcriptions become external components on the shared source Data.
+    const extraComponents: DataComponent[] = [];
+    for (const sample of draft.samples)
+      for (const mapping of sample.sourceMappings) {
+        if (!mapping.transcription) continue;
+        const source = record.source.find(
+          (item) => item.attachmentId === mapping.attachmentId,
+        );
+        if (!source) throw importError("来源映射引用了未知附件");
+        const component: DataComponent = {
+          id: uuid(),
+          kind: "text",
+          name: `${mapping.page} 页转录`,
+          role: "transcription",
+          creator: "external",
+          provenance: json({
+            page: mapping.page,
+            sourceComponentId: source.componentId,
+            positions: mapping.positions ?? "",
+            model: "sample-import",
+            contractVersion: SAMPLE_IMPORT_CONTRACT_VERSION,
+          }),
+          createdAt: now(),
+          derivedFrom: [source.componentId],
+          content: mapping.transcription,
+        };
+        extraComponents.push(component);
+        derivedComponentIds.push(component.id);
+      }
+    this.updateData(sourceData.id, {
+      expectedVersion: sourceData.version,
+      aboutSampleIds: [...new Set([...sourceData.aboutSampleIds, ...sampleIds])],
+      components: [...sourceData.components, ...extraComponents],
+    });
+    return {
+      schemaVersion: 1 as const,
+      importId: record.importId,
+      sourceDataId: sourceData.id,
+      createdSampleIds: sampleIds,
+      createdObjectIds,
+      derivedComponentIds,
+      commitFingerprint: record.commitFingerprint!,
+      sourceDataVersion: sourceData.version,
+      contractVersion: SAMPLE_IMPORT_CONTRACT_VERSION,
+      committedAt: now(),
+    };
+  }
+  cancelSampleImport(
+    importId: string,
+    input: { attemptId?: string; expectedVersion?: number } = {},
+  ) {
+    return this.commit(() => {
+      assertKnownKeys(input, ["attemptId", "expectedVersion"], "cancel import");
+      const record = this.readImport(importId);
+      if (record.status === "committed") return this.importView(record);
+      if (
+        input.expectedVersion !== undefined &&
+        Number(input.expectedVersion) !== record.recordVersion
+      )
+        throw Object.assign(new Error("导入记录版本冲突"), {
+          code: "CONFLICT",
+          currentVersion: record.recordVersion,
+        });
+      if (input.attemptId && input.attemptId !== record.attempt.id)
+        throw Object.assign(new Error("导入执行资格已失效"), {
+          code: "CONFLICT",
+        });
+      record.attempt = {
+        ...record.attempt,
+        status: "revoked",
+        revokedAt: now(),
+      };
+      record.status = "cancelled";
+      record.recordVersion += 1;
+      record.updatedAt = now();
+      this.writeImport(record);
+      return this.importView(record);
+    }, "cancelSampleImport");
+  }
+  retrySampleImport(importId: string, input: { expectedVersion: number }) {
+    return this.commit(() => {
+      assertKnownKeys(input, ["expectedVersion"], "retry import");
+      const record = this.readImport(importId);
+      if (record.status === "committed")
+        throw Object.assign(new Error("已提交的导入不能重试"), {
+          code: "CONFLICT",
+        });
+      if (Number(input.expectedVersion) !== record.recordVersion)
+        throw Object.assign(new Error("导入记录版本冲突"), {
+          code: "CONFLICT",
+          currentVersion: record.recordVersion,
+        });
+      record.attempt = {
+        id: uuid(),
+        status: "active",
+        createdAt: now(),
+        correlation: record.attempt.correlation,
+      };
+      record.status = record.draft ? "draft" : "prepared";
+      record.recordVersion += 1;
+      record.updatedAt = now();
+      if (record.draft) record.commitFingerprint = this.computeImportFingerprint(record);
+      this.writeImport(record);
+      return this.importView(record);
+    }, "retrySampleImport");
+  }
+  bindDataBlock(
+    documentId: string,
+    blockId: string,
+    dataId: string,
+    expectedVersion: number,
+    expectedDataVersion: number,
+  ) {
+    return this.commit(() => {
+      const row = this.readDocRow(documentId);
+      if (!row) throw new Error("文档不存在");
+      const existing = this.readDocument(documentId);
+      const binding = existing.head.blocks?.[blockId];
+      if (binding?.dataId === dataId)
+        return {
+          id: documentId,
+          blockId,
+          dataId,
+          baseVersion: binding.baseVersion,
+          contentVersion: existing.head.contentVersion,
+          idempotent: true,
+        };
+      if (binding?.dataId)
+        throw Object.assign(new Error("该区块已绑定其他 Data"), {
+          code: "CONFLICT",
+        });
+      if (existing.head.contentVersion !== Number(expectedVersion))
+        throw Object.assign(new Error("样品版本冲突"), {
+          code: "CONFLICT",
+          currentVersion: existing.head.contentVersion,
+        });
+      const parsed = parseBody(documentId, existing.body);
+      if (
+        !parsed.records.some((entry) =>
+          entry.dataItems?.some((item) => item.blockId === blockId),
+        )
+      )
+        throw importError("该区块不是可绑定的 [数据] 区块");
+      const data = this.getData(dataId);
+      if (data.version !== Number(expectedDataVersion))
+        throw Object.assign(new Error("Data 版本冲突"), {
+          code: "CONFLICT",
+          currentVersion: data.version,
+        });
+      this.assertEntityCurrent("data", dataId);
+      const mapping: Record<string, string> = {};
+      const body = replaceDataMirror(
+        existing.body,
+        blockId,
+        data.name,
+        mapDataBlocks(data.body, mapping, "toMirror"),
+      );
+      this.saveDocument(documentId, body, Number(expectedVersion));
+      const saved = this.readDocument(documentId);
+      saved.head.blocks ??= {};
+      saved.head.blocks[blockId] = {
+        kind: "data",
+        dataId,
+        baseVersion: data.version,
+        baseHash: dataMirrorHash(data.body),
+        baseName: data.name,
+        dataBlockIds: mapping,
+      };
+      this.atomicWrite(saved.filePath, serializeDocument(saved));
+      return {
+        id: documentId,
+        blockId,
+        dataId,
+        baseVersion: data.version,
+        contentVersion: saved.head.contentVersion,
+      };
+    }, "bindDataBlock");
   }
   rebuildIndex() {
     const readRegistry = <T>(relative: string): T[] => {

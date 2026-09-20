@@ -74,6 +74,25 @@ it('completes the scientific workflow through a real MCP stdio client, including
   expect(job.status, job.error).toBe('succeeded'); expect(fs.existsSync(job.payload!.result!.file)).toBe(true);
   await expect(call('backup_restore', { zipPath: job.payload!.result!.file, targetDir: path.join(root, 'restore-denied') })).rejects.toThrow('restore');
 }, 30000);
+it('runs a deterministic sample import through the real HTTP contract', async () => {
+  const imagePath = path.join(root, 'record-source.png');
+  fs.writeFileSync(imagePath, Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64'));
+  const file = await call<{ id: string }>('attachment_upload', { filePath: imagePath, mimeType: 'image/png' });
+  const importId = crypto.randomUUID();
+  const prepared = await call<{ sourceDataId: string; attempt: { id: string }; recordVersion: number }>('sample_import_prepare', { importId, attachmentIds: [file.id] });
+  const draft = { schemaVersion: 1, samples: [{ key: 's1', body: '- 记录正文，温度 25 摄氏度', sourceMappings: [], references: [] }], objectIntents: [], ambiguities: [] };
+  const saved = await call<{ recordVersion: number; draftVersion: number; draftHash: string; commitFingerprint: string }>('sample_import_save_draft', { id: importId, attemptId: prepared.attempt.id, expectedVersion: prepared.recordVersion, expectedDraftVersion: 0, draft });
+  await expect(call('sample_import_save_draft', { id: importId, attemptId: prepared.attempt.id, expectedVersion: saved.recordVersion, expectedDraftVersion: saved.draftVersion, draft: { ...draft, surprise: 1 } })).rejects.toThrow(/additional properties|未知字段/);
+  const sourceData = await call<{ version: number }>('data_get', { id: prepared.sourceDataId });
+  const committed = await call<{ status: string; receipt: { createdSampleIds: string[] } }>('sample_import_commit', { id: importId, attemptId: prepared.attempt.id, expectedVersion: saved.recordVersion, draftVersion: saved.draftVersion, draftHash: saved.draftHash, sourceDataVersion: sourceData.version, commitFingerprint: saved.commitFingerprint });
+  expect(committed.status).toBe('committed');
+  expect(committed.receipt.createdSampleIds).toHaveLength(1);
+  const view = await call<{ status: string; draft?: unknown }>('sample_import_get', { id: importId });
+  expect(view.status).toBe('committed');
+  expect(view.draft).toBeUndefined();
+  const sample = await call<{ document: { head: { blocks: Record<string, { dataId?: string }> } } }>('sample_get', { id: committed.receipt.createdSampleIds[0] });
+  expect(Object.values(sample.document.head.blocks).some(binding => binding.dataId === prepared.sourceDataId)).toBe(true);
+}, 30000);
 it('serves the same agent knowledge through resources, tools and legacy syntax', async () => {
   const indexResource = await client.readResource({ uri: 'workbench://knowledge' });
   const index = JSON.parse((indexResource.contents[0] as { text: string }).text);

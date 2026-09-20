@@ -20,6 +20,8 @@ export class FileRepository {
     catch (error) { this.lock.close(); throw new Error('该数据目录已有写入进程，请使用已有服务', { cause: error }); }
   }
   close() { this.lock.exec('ROLLBACK'); this.lock.close(); }
+  /** True after a durable journal could not be completed; all business reads must stop. */
+  recoveryRequired() { return this.poisoned; }
   resolve(relative: string) {
     if (path.isAbsolute(relative) || relative.includes('\\')) throw new Error('业务文件路径必须相对工作区');
     const result = path.resolve(this.root, relative);

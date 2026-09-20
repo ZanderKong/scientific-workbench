@@ -13,6 +13,20 @@
 
 任何具体字段增加必须更新本协议和对应测试，不把聊天作为唯一字段定义来源。
 
+## 实验记录导入（2026-09-21，swb.import/2）
+
+一次导入由调用方生成稳定 `importId`（UUID），服务器签发 `attemptId` 作为执行资格。暂态记录存 `registry/imports/<importId>.json`，不作为 SQLite 业务表；备份按 `registry` 目录递归纳入，恢复后仍可读最小 receipt。
+
+状态只有 `prepared / draft / committed / cancelled`；`recordVersion` 控制 registry CAS，`draftVersion + draftHash` 控制草稿内容 CAS。draft 只含有序来源引用、转录与页/行/表格位置、样品候选（sampleKey/code/title/body）、显式 existing 对象选择与 new-object intent、局部 reference mapping、ambiguity/澄清；没有 properties/processes/observations 投影。所有字段限长、数组有界，未知字段拒绝。
+
+`sample_import_prepare` 复用 `abort` 之后的上传附件：服务端按附件身份校验数量 1–10、单张 ≤10 MiB、合计 ≤30 MiB、实际文件头（JPEG/PNG/WebP）与声明 MIME 相符、哈希与登记一致；不接受本地路径或 URL。prepare 在同一个 Store.commit 中创建 shared source Data（原始 file 组件 `creator:human`、`derivedFrom:[]`、`aboutSampleIds:[]`）与 prepared 记录；相同 importId + source fingerprint 幂等，顺序不同即不同输入。
+
+commit 前服务端重算并比对 import/source identity、draftHash、sourceDataVersion、选定对象版本与契约版本组成的 fingerprint；attempt eligibility 单独校验。提交在同一事务中创建显式允许的新对象、用现有 createSample 分配编号、保存规范正文与对象 bindings、给每个 Sample 绑定指向 shared source Data 的正常 `[数据]` 区块（首次 finalize 前绑定）并 finalize；转录作为 `creator:external` derived component 写入来源 Data，`derivedFrom` 指向原始组件，页/行/表格位置写 provenance，一次 `updateData`（带 expectedVersion）合并 About 与组件。
+
+成功后把原文件替换为 committed 小型记录：仅保留身份/状态、来源 Data 与按需来源审计、实际 model/knowledge/契约版本、最小 receipt（createdSampleIds/sourceDataId/createdObjectIds/derivedComponentIds/fingerprint/版本/时间）与安全错误码。**同一事务内移除完整 draft、临时 object/reference mapping 和澄清全文**，不另建 archive/history 文件。长期内容只服务：证明 commit、相同重试返回原 receipt、防重复、响应丢失/重启对账、基本 audit。
+
+`sample_import_cancel` 原子撤销 active attempt；`sample_import_retry` 撤销旧资格并签发新 attempt，复用来源 Data，旧 save/commit 均拒绝。journal 持久前失败不留部分 Sample/Object（来源 Data/附件保留）；journal 持久后失败由 FileRepository 重放整批，Store 暴露 recovery-required，业务读取/导出/备份在恢复完成前返回 503 RECOVERY_REQUIRED，health 报 degraded。正常 Data 绑定使用 `document_bind_data`：要求现存 `[数据]` 区块、文档与 Data 双版本匹配，写入镜像基线 metadata，不修改 Data 的 About，已绑定同一 Data 幂等、不同 Data 冲突，身份丢失仍走原 repair 操作。
+
 
 ## Analysis 文件扩展（2026-09-13，swb.analysis/2）
 
