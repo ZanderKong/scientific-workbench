@@ -81,3 +81,11 @@ OpenAPI 生成到根目录 `openapi.json`。知识 bundle 生成到被忽略的 
 6. 更新任务交接；未执行的人工、视觉及外部环境验证保持待验证。
 
 `pnpm benchmark` 使用临时工作区测量保存、提取与补全性能。历史验收证据位于 [docs/VERIFICATION.md](docs/VERIFICATION.md)，不代表当前所有功能或平台均已验证。
+
+## 源码与发行物的区别
+
+当前仓库按源码安装运行，没有独立的精简发行包。测试源码和 `audit/` 历史证据会随 clone 下载；生成的 demo 工作区、数据库和测试运行报告被 Git 忽略。
+
+server、MCP 和 core 的现有 TypeScript 配置也会把测试编译进 dist。不要将整个 dist 或默认 `npm pack` 输出直接当作用户发行包；后续发行需要独立构建配置、文件白名单及实际启动验证。当前启动依赖 tsx 和源码 exports，不能简单删除 src。
+
+详见[分发审查](audit/DISTRIBUTION_REVIEW.md)。这些文件存在于源码或构建目录，不代表它们进入网页静态 bundle 或自动写入用户工作区。

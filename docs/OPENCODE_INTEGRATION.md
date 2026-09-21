@@ -76,7 +76,7 @@ Workbench 生成或采用服务端返回的持久 message id（V1 需要 `msg_` 
 
 ## Agent 工作目录
 
-OpenCode 绝不能运行在科研数据目录。默认执行目录为数据目录的同级
+设计上不应让 OpenCode 运行在科研数据目录。默认执行目录为数据目录的同级
 `<dataDir basename>-Agent`。`assertSeparateDirectories()` 拒绝相同路径、互相嵌套和
 symlink 重叠；目录以 `0700` 创建。科研数据仍通过：
 
@@ -84,7 +84,7 @@ symlink 重叠；目录以 `0700` 创建。科研数据仍通过：
 OpenCode -> scientific-workbench MCP -> Workbench API
 ```
 
-访问，OpenCode 不直接读写科研数据目录。
+访问。目录分离与 MCP 访问路径是应用层约定，不构成操作系统沙箱；不能据此断言外部 runtime 的文件工具无法访问其他目录。restricted import profile 的真实限制仍待验证。
 
 Legacy V1 使用实例级 HTTP header 路由工作区：
 
@@ -121,6 +121,8 @@ Workbench 只读取 OpenCode 当前可用模型并选择默认，不管理 Provi
   拒绝；能力未知（`unknown`）允许提交。
 
 ## 权限
+
+以下是普通 runtime 的权限处理方式，不等于已验证的 restricted import profile。`auto-allow` 会批准所属 Session 的待处理请求，使用前应了解其工具能力；它不是只读模式。
 
 - `ask`：pending permission 保持 Job `running`，在 Task Stack 中显示黄色 attention，
   单击 `Allow Once` 只回复 `once`。
@@ -190,7 +192,7 @@ Workbench 不自动修改 OpenCode 配置，也不执行 `opencode mcp add`。Se
 1. Workbench 不管理 OpenCode Provider；
 2. Workbench 不会修改 OpenCode 全局或项目长期权限；
 3. `auto-allow` 仅逐条自动批准 `once`，不是 OpenCode `always`；
-4. OpenCode 不能直接操作 Workbench 科研数据目录；
+4. 目录分离不等于文件访问沙箱，真实工具限制尚需独立验证；
 5. 科研上下文只通过 MCP；
 6. Workbench 只连接已有 OpenCode Server，不自动启动/升级/重启服务；
 7. OpenCode 的启动与认证方法需按实际版本核对；

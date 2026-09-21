@@ -300,3 +300,11 @@ Phase B2：BLOCKED（前置真实 Spike 未 PASS，产品内无 AI 导入入口�
 - Public status explicitly retains the latest Spike R3-R5 findings and the flaky positive test; AI image import remains unavailable and B2 blocked.
 - Validation: relative links in 10 documents exist; shell examples pass bash -n; MCP JSON parses; git diff --check passes. An isolated pnpm demo -> pnpm start smoke returned healthy status and HTTP 200 with built assets. Its service and temporary workspace were cleaned up. No full business regression rerun for this documentation-only change.
 - The user's manual review instance at http://127.0.0.1:14321/ remains healthy and running, with its data unchanged. Next: user manual checks; remaining Spike issues require a separate implementation task.
+
+## 2026-09-21 Distribution review and concise README
+
+- User requested an audit of test material in public files/builds and a README ordered as background/use, quick start, design/benefits. README rewritten accordingly; developer guide now distinguishes source checkout from release artifacts. OpenCode documentation clarifies that directory separation is not an OS sandbox.
+- Review baseline 8583539. Findings recorded in audit/DISTRIBUTION_REVIEW.md: tracked audit assets total 2,274,840 bytes; server/MCP/core dist include compiled tests; npm pack dry-run includes test material without a release whitelist. No GitHub releases existed at query time. Tests and audit assets are source evidence, not automatically served web files.
+- Tracked temporary databases/reports/private directories were not found; common credential patterns did not match current tracked files. This was not a full Git-history or screenshot privacy audit. Historical documents still contain local paths.
+- Validation: changed-document links and bash examples pass; git diff --check clean. npm pack was dry-run only, with scripts disabled, and nothing was published. No production code/build configuration changed; no full business regression rerun.
+- Manual review instance at 127.0.0.1:14321 remains healthy and running. Next: if a distributable package is needed, isolate build/test output and specify package contents without deleting normal tests or historical evidence. Remaining Spike findings are unchanged.
