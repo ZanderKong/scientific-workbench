@@ -292,3 +292,11 @@ Phase B2：BLOCKED（前置真实 Spike 未 PASS，产品内无 AI 导入入口�
 - 本次 `pnpm build` PASS。为人工验收创建独立持久目录 `ScientificWorkbench-manual-review-20260921-14321`（仓库同级），通过现有 demo 脚本生成 4 个模拟样品及关联 Data/Analysis/Claim；仅用于软件验收，不是真实实验数据。
 - 程序在 http://127.0.0.1:14321/ 运行；启动时 WORKBENCH_DATA_DIR 指向上述独立目录，WORKBENCH_HOST=127.0.0.1；本次监听进程 PID 4184，有意保留供用户操作。health 返回 ok=true/degraded=false，首页 HTTP 200。原有 4317/5173 服务未操作，未访问默认用户工作区。
 - 下一步：用户手动检查当前产品页面与编辑流程。人工验收数据保留，不自动删除；AI 导入未开放。
+
+## 2026-09-21 Public documentation refresh
+
+- User requested a new README and public-facing documentation. Rewrote README, development and demo guides; added docs/GETTING_STARTED.md, docs/STATUS.md and docs/README.md; updated API/MCP, migration and OpenCode guidance. Historical implementation records remain, with a current-status pointer.
+- Corrected development URL to 5173 (API proxy to 4317), documented built-server startup, and replaced the personal path in mcp.example.json with a portable placeholder. No license was selected or added.
+- Public status explicitly retains the latest Spike R3-R5 findings and the flaky positive test; AI image import remains unavailable and B2 blocked.
+- Validation: relative links in 10 documents exist; shell examples pass bash -n; MCP JSON parses; git diff --check passes. An isolated pnpm demo -> pnpm start smoke returned healthy status and HTTP 200 with built assets. Its service and temporary workspace were cleaned up. No full business regression rerun for this documentation-only change.
+- The user's manual review instance at http://127.0.0.1:14321/ remains healthy and running, with its data unchanged. Next: user manual checks; remaining Spike issues require a separate implementation task.
