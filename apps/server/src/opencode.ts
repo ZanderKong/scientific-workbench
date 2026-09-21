@@ -102,12 +102,27 @@ export interface NormalizedSession {
   directory?: string;
 }
 
+/**
+ * Tool invocation evidence, when the runtime reports it. Every field is
+ * optional: an absent value must degrade a caller to NOT VERIFIED, never to a
+ * positive conclusion.
+ */
+export interface NormalizedToolCall {
+  name: string;
+  status?: string;
+  output?: string;
+  error?: string;
+}
+
 export interface NormalizedMessage {
   id: string;
   role: "user" | "assistant" | "other";
   created: number;
   completed?: number;
+  /** Request correlation reported by the runtime, when it provides one. */
+  parentId?: string;
   text: string;
+  tools?: NormalizedToolCall[];
 }
 
 export interface NormalizedPermission {
@@ -416,6 +431,37 @@ function safeText(value: unknown, max = 160): string {
     .replace(/(authorization|password|secret|token)\s*[:=]\s*\S+/gi, "$1=***")
     .trim();
   return text.length > max ? `${text.slice(0, max - 1)}…` : text;
+}
+
+/**
+ * Maps runtime tool parts to the optional evidence shape. Parts that do not
+ * match the documented `type: "tool"` shape are ignored rather than guessed.
+ */
+function normalizeToolParts(parts: unknown): NormalizedToolCall[] | undefined {
+  if (!Array.isArray(parts)) return undefined;
+  const calls: NormalizedToolCall[] = [];
+  for (const part of parts) {
+    const value = part as {
+      type?: unknown;
+      tool?: unknown;
+      name?: unknown;
+      state?: { status?: unknown; output?: unknown; error?: unknown };
+      status?: unknown;
+    };
+    if (value?.type !== "tool") continue;
+    const name = String(value.tool ?? value.name ?? "").trim();
+    if (!name) continue;
+    const status = value.state?.status ?? value.status;
+    const output = value.state?.output;
+    const error = value.state?.error;
+    calls.push({
+      name,
+      ...(typeof status === "string" ? { status } : {}),
+      ...(typeof output === "string" ? { output } : {}),
+      ...(typeof error === "string" ? { error } : {}),
+    });
+  }
+  return calls.length ? calls : undefined;
 }
 
 /** Reads the instance directory a runtime reports for one session, if any. */
@@ -769,7 +815,11 @@ export class OpenCodeHttpAdapter implements OpenCodeAdapter {
                 : ("other" as const),
           created: value.time?.created ?? 0,
           completed: value.time?.completed,
+          parentId: (value as { parentID?: string }).parentID
+            ? String((value as { parentID?: string }).parentID)
+            : undefined,
           text,
+          tools: normalizeToolParts((value as { content?: unknown[] }).content),
         };
       });
     } catch (error) {
@@ -1117,10 +1167,12 @@ export class LegacyOpenCodeAdapter implements OpenCodeAdapter {
                 : ("other" as const),
           created: info.time?.created ?? 0,
           completed: info.time?.completed,
+          parentId: info.parentID ? String(info.parentID) : undefined,
           text: (parts as any[])
             .filter((part) => part.type === "text")
             .map((part) => String(part.text ?? ""))
             .join(""),
+          tools: normalizeToolParts(parts),
         };
       },
     );

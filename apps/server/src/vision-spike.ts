@@ -1,13 +1,14 @@
 /**
  * Opt-in vision compatibility harness.
  *
- * The harness only reports PASS when *every* check has real evidence. A single
- * boolean is never enough: session metadata, a prompt echo or an unrelated old
- * message can no longer produce a pass, and `NOT VERIFIED` is a first-class
- * outcome. It never reads or writes the user's OpenCode configuration and never
- * puts image bytes, credentials or workspace paths into its evidence.
+ * Every check must carry real evidence. A session-creation response, a prompt
+ * echo, an unrelated message, a number inside a longer string, silence during a
+ * denied probe or a clean report are all *not* evidence, and any of them alone
+ * keeps the corresponding check at NOT VERIFIED instead of PASS. The harness
+ * never reads or writes the user's OpenCode configuration and never puts image
+ * bytes, credentials or workspace paths into its evidence.
  *
- * It is driven by `scripts/spike-opencode-vision.mts` (explicit opt-in) and by
+ * Driven by `scripts/spike-opencode-vision.mts` (explicit opt-in) and by
  * `vision-spike.test.ts` (fake contract + negative matrix).
  */
 import path from "node:path";
@@ -28,6 +29,40 @@ export const VISION_SPIKE_CHECKS = [
 export type VisionSpikeCheck = (typeof VISION_SPIKE_CHECKS)[number];
 export type VisionSpikeStatus = "PASS" | "FAIL" | "NOT VERIFIED";
 
+/**
+ * Capability scopes the denied probe set must cover. Uncovered scopes keep the
+ * deny check at NOT VERIFIED: one file-read probe never stands for a whole
+ * restricted profile.
+ */
+export const REQUIRED_DENY_CAPABILITIES = [
+  "shell",
+  "file-read",
+  "file-write",
+  "subagent",
+  "unrelated-mcp",
+  "network",
+  "generic-scientific-write",
+] as const;
+
+export type DenyCapability = (typeof REQUIRED_DENY_CAPABILITIES)[number];
+
+export interface VisionSpikeToolCall {
+  name: string;
+  status?: string;
+  output?: string;
+  error?: string;
+}
+
+export interface VisionSpikeMessage {
+  id: string;
+  role: string;
+  created: number;
+  completed?: number;
+  parentId?: string;
+  text: string;
+  tools?: VisionSpikeToolCall[];
+}
+
 export interface VisionSpikeDependencies {
   detectFlavor(): Promise<"v1" | "v2">;
   health(): Promise<{ ok: boolean; version?: string }>;
@@ -43,9 +78,7 @@ export interface VisionSpikeDependencies {
     sessionId: string,
   ): Promise<{ id: string; directory?: string } | null>;
   getSessionStatuses(): Promise<Map<string, string>>;
-  getMessages(sessionId: string): Promise<
-    { id: string; role: string; created: number; text: string }[]
-  >;
+  getMessages(sessionId: string): Promise<VisionSpikeMessage[]>;
   listPermissions(
     sessionId?: string,
   ): Promise<{ id: string; sessionId: string; action: string }[]>;
@@ -58,21 +91,54 @@ export interface VisionSpikeDependencies {
   }): Promise<{ endpoint: string; requestKeys: string[]; status: number; elapsedMs: number }>;
 }
 
+export interface VisionSpikeImage {
+  png: Buffer;
+  /** The count the runtime must read from the pixels. */
+  count: number;
+}
+
+export interface DenyProbe {
+  capability: string;
+  prompt: string;
+  /** Content that must never surface when the operation is really denied. */
+  sentinel: string;
+  /**
+   * Reports whether the forbidden side effect actually happened (for example a
+   * file that must not exist). A true result fails the probe.
+   */
+  sideEffect?: () => boolean | Promise<boolean>;
+}
+
+export interface AllowProbe {
+  knowledgeId: string;
+  /** Fragment that only the controlled allowed read can return. */
+  marker: string;
+  /**
+   * Tool names this runtime must use for the allowed read. Empty means the
+   * caller cannot declare them, so the check stays NOT VERIFIED rather than
+   * guessing a name.
+   */
+  tools: string[];
+}
+
 export interface VisionSpikeOptions {
   /** Isolation facts. The harness refuses a session outside `executionDir`. */
   dataDir: string;
   executionDir: string;
   /** Explicit opt-in. Without it no request of any kind is made. */
   allowRealCalls: boolean;
-  image: { png: Buffer; count: number };
+  images: VisionSpikeImage[];
   timeoutMs?: number;
   asyncMaxMs?: number;
   /** Sensitive values that must never appear in the evidence. */
   secrets?: string[];
-  /** Allowed-resource probe: a knowledge id plus a fragment only it contains. */
-  allowProbe?: { knowledgeId: string; marker: string };
-  /** Denied-resource probe: a local file whose contents must never be echoed. */
-  denyProbe?: { file: string; marker: string };
+  allowProbe?: AllowProbe;
+  denyProbes?: DenyProbe[];
+  /**
+   * Collects the Workbench-side artifacts (jobs, logs) produced by the run.
+   * Without it the leakage check can only speak for the harness report itself.
+   */
+  artifactScan?: () => Promise<{ label: string; text: string }[]>;
 }
 
 export interface VisionSpikeCheckResult {
@@ -84,7 +150,12 @@ export interface VisionSpikeReport {
   schema: "swb.vision-spike/2";
   startedAt: string;
   optIn: boolean;
-  isolation: { directorySeparated: boolean; dataDirLabel: string; executionDirLabel: string };
+  isolation: {
+    directorySeparated: boolean;
+    dataDirLabel: string;
+    executionDirLabel: string;
+    sessionDirectoryMatches?: boolean;
+  };
   runtime?: { version: string; flavor: string; model?: string; models: number };
   transport?: {
     endpoint: string;
@@ -94,6 +165,9 @@ export interface VisionSpikeReport {
     busyAtReturn: boolean;
   };
   image?: { width: number; height: number; bytes: number; mime: string };
+  images?: { width: number; height: number; bytes: number; mime: string }[];
+  correlation?: { mode: "parent" | "positional"; imageIndex: number };
+  artifacts?: { source: string; scanned: number };
   checks: Record<VisionSpikeCheck, VisionSpikeCheckResult>;
   conclusion: VisionSpikeStatus;
   reason: string;
@@ -186,13 +260,127 @@ export function countRedRegions(
   return regions;
 }
 
-function standaloneNumber(text: string, value: number) {
-  return new RegExp(`(?<![0-9])${value}(?![0-9])`).test(text);
+/**
+ * Decodes a PNG fixture and counts its shapes. Lives in the server module so
+ * the root CLI never has to resolve a server-only dependency.
+ */
+export async function countRegionsInPng(png: Uint8Array): Promise<number> {
+  const raw = await sharp(Buffer.from(png))
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+  return countRedRegions(raw.data, raw.info.width, raw.info.height);
 }
 
-function anyStandaloneNumber(text: string): number | undefined {
-  const match = text.match(/(?<![0-9])([0-9]{1,3})(?![0-9])/);
+/**
+ * A complete answer is exactly one integer (an optional trailing full stop is
+ * tolerated). Numbers embedded in prose are not an answer.
+ */
+export function parseIntegerAnswer(text: string): number | undefined {
+  const trimmed = text.replace(/\*\*/g, "").trim();
+  const match = trimmed.match(/^([0-9]{1,3})[.。]?$/);
   return match ? Number(match[1]) : undefined;
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+interface CorrelationResult {
+  message?: VisionSpikeMessage;
+  mode?: "parent" | "positional";
+  detail: string;
+}
+
+/**
+ * Finds the finished assistant reply that belongs to one submitted request.
+ * Messages from other requests, uncompleted fragments, prompt echoes and the
+ * session's older history never satisfy this.
+ */
+async function correlatedReply(
+  dependencies: VisionSpikeDependencies,
+  sessionId: string,
+  promptMessageId: string,
+  consumed: Set<string>,
+  timeoutMs: number,
+): Promise<CorrelationResult> {
+  const deadline = Date.now() + timeoutMs;
+  let sawPrompt = false;
+  let sawUnfinished = false;
+  while (Date.now() < deadline) {
+    const messages = await dependencies.getMessages(sessionId);
+    const promptIndex = messages.findIndex(
+      (message) => message.id === promptMessageId,
+    );
+    if (promptIndex >= 0) {
+      sawPrompt = true;
+      const candidates = messages
+        .slice(promptIndex + 1)
+        .filter(
+          (message) =>
+            message.role === "assistant" && !consumed.has(message.id),
+        );
+      const explicit = candidates.filter(
+        (message) =>
+          message.parentId === promptMessageId &&
+          message.completed !== undefined,
+      );
+      if (explicit.length) {
+        // Re-evaluated every poll, so a fragment that later becomes final is
+        // accepted and a message id is never ignored just because it was seen.
+        return {
+          message: explicit[0],
+          mode: "parent",
+          detail: "按 runtime 报告的请求关联字段匹配",
+        };
+      }
+      const positional = candidates.filter(
+        (message) =>
+          message.parentId === undefined && message.completed !== undefined,
+      );
+      if (positional.length)
+        return {
+          message: positional[0],
+          mode: "positional",
+          detail: "runtime 未提供请求关联字段，按提交顺序匹配已完成回复",
+        };
+      if (
+        candidates.some(
+          (message) => message.completed === undefined && message.text.trim(),
+        )
+      )
+        sawUnfinished = true;
+    }
+    await sleep(50);
+  }
+  return {
+    detail: sawPrompt
+      ? sawUnfinished
+        ? "只看到未完成的回复片段，没有收到请求关联的最终回复"
+        : "没有收到本次请求对应的最终 assistant 回复"
+      : "session 中没有本次提交的请求消息，缺少请求关联证据",
+  };
+}
+
+function combine(
+  results: VisionSpikeStatus[],
+  passDetail: string,
+  pendingDetail: string,
+): VisionSpikeCheckResult {
+  if (results.includes("FAIL"))
+    return { status: "FAIL", detail: results.length ? "存在明确失败" : "失败" };
+  if (results.length && results.every((status) => status === "PASS"))
+    return { status: "PASS", detail: passDetail };
+  return notVerified(pendingDetail);
+}
+
+const DENIED_STATUS = /^(error|failed|denied|rejected)$/i;
+const REFUSAL_HINT = /denied|not allowed|forbidden|permission|refus|拒绝|无权限|不允许/i;
+
+function isRefusal(call: VisionSpikeToolCall): boolean {
+  if (call.status && DENIED_STATUS.test(call.status)) return true;
+  if (call.status && /^(completed|success|succeeded)$/i.test(call.status))
+    return false;
+  return REFUSAL_HINT.test(call.error ?? "");
 }
 
 export async function runVisionSpike(
@@ -216,10 +404,16 @@ export async function runVisionSpike(
       dataDirLabel: "scientific-data",
       executionDirLabel: "agent-execution",
     },
+    images: options.images.map((image) => ({
+      width: 0,
+      height: 0,
+      bytes: image.png.byteLength,
+      mime: "image/png",
+    })),
     image: {
       width: 0,
       height: 0,
-      bytes: options.image.png.byteLength,
+      bytes: options.images[0]?.png.byteLength ?? 0,
       mime: "image/png",
     },
     checks,
@@ -230,28 +424,21 @@ export async function runVisionSpike(
   if (!options.allowRealCalls) {
     report.reason =
       "未显式 opt-in；harness 拒绝任何真实调用（未发出任何请求）。";
-    return report;
+    return finalize(report);
   }
   if (!report.isolation.directorySeparated) {
     checks.isolation = { status: "FAIL", detail: "executionDir 与 dataDir 未隔离" };
     return finalize(report);
   }
-  if (!options.allowProbe || !options.denyProbe) {
-    report.reason =
-      "缺少受限 profile 探针定义；无法证明 allow/deny，因此不会报 PASS。";
+  if (!options.images.length) {
+    report.reason = "没有提供验证图片；不会继续。";
     return finalize(report);
   }
 
-  let sessionId: string | undefined;
-  let model: { providerId: string; modelId: string } | undefined;
-  let submitElapsedMs = 0;
-  let endpoint = "";
-  let requestKeys: string[] = [];
-  let transportStatus = 0;
-  let busyAtReturn = false;
-  const messagesSeen: { id: string; role: string; created: number; text: string }[] =
-    [];
-  let permissionGrantedForProbe = false;
+  const consumed = new Set<string>();
+  const imageChecks: VisionSpikeStatus[] = [];
+  const asyncChecks: VisionSpikeStatus[] = [];
+  const imageDetails: string[] = [];
 
   try {
     const flavor = await dependencies.detectFlavor();
@@ -264,32 +451,33 @@ export async function runVisionSpike(
       model: vision ? `${vision.providerId}/${vision.modelId}` : undefined,
       models: models.length,
     };
-    checks.runtimeIdentityAndModel = vision && health.version
-      ? {
-          status: "PASS",
-          detail: `flavor=${flavor} version=${health.version} model=${vision.providerId}/${vision.modelId}`,
-        }
-      : {
-          status: "FAIL",
-          detail: vision
-            ? "运行环境未报告版本，无法确认身份"
-            : "运行环境没有声明图片能力的模型，未尝试未证实的 transport",
-        };
+    checks.runtimeIdentityAndModel =
+      vision && health.version
+        ? {
+            status: "PASS",
+            detail: `flavor=${flavor} version=${health.version} model=${vision.providerId}/${vision.modelId}`,
+          }
+        : {
+            status: "FAIL",
+            detail: vision
+              ? "运行环境未报告版本，无法确认身份"
+              : "运行环境没有声明图片能力的模型，未尝试未证实的 transport",
+          };
     if (!vision || !health.version) return finalize(report);
-    model = { providerId: vision.providerId, modelId: vision.modelId };
+    const model = { providerId: vision.providerId, modelId: vision.modelId };
 
     const created = await dependencies.createSession({
       title: "swb-vision-spike",
       directory: options.executionDir,
     });
-    sessionId = created.id;
     const session = await dependencies.getSession(created.id);
+    const sessionDirectoryMatches =
+      !!session?.directory &&
+      realpath(session.directory) === realpath(options.executionDir);
+    report.isolation.sessionDirectoryMatches = sessionDirectoryMatches;
     if (!session)
       checks.isolation = { status: "FAIL", detail: "创建后无法读取 session" };
-    else if (
-      session.directory &&
-      realpath(session.directory) === realpath(options.executionDir)
-    )
+    else if (sessionDirectoryMatches)
       checks.isolation = {
         status: "PASS",
         detail: "实际 session 的 directory 等于专属 Agent 目录",
@@ -299,162 +487,105 @@ export async function runVisionSpike(
         status: "FAIL",
         detail: `实际 session directory=${session.directory ?? "未知"}，不是专属 Agent 目录`,
       };
+    if (checks.isolation.status !== "PASS") {
+      // Isolation failure stops the run: nothing else may be submitted while the
+      // session is not provably inside the dedicated directory.
+      for (const name of [
+        "asyncSubmission",
+        "correlatedImageAnswer",
+        "restrictedAllow",
+        "restrictedDeny",
+      ] as const)
+        checks[name] = notVerified("隔离检查失败，已停止后续提交");
+      report.reason = "隔离检查未通过，未执行任何图片或权限提交。";
+      return finalize(report);
+    }
 
     const prompt =
       "数一数图中有几个独立的红色方块，只回答一个阿拉伯数字，不要解释。";
-    const messageId = `msg_${crypto.randomUUID().replace(/-/g, "")}`;
-    const before = await dependencies.getMessages(created.id);
-    for (const message of before) messagesSeen.push(message);
-    const submission = await dependencies.submitImages({
-      sessionId: created.id,
-      prompt,
-      messageId,
-      model,
-      images: [
-        { mimeType: "image/png", filename: "pattern.png", data: options.image.png },
-      ],
-    });
-    submitElapsedMs = submission.elapsedMs;
-    endpoint = submission.endpoint;
-    requestKeys = submission.requestKeys;
-    transportStatus = submission.status;
-    const statuses = await dependencies.getSessionStatuses();
-    busyAtReturn = statuses.get(created.id) === "busy";
-    report.transport = {
-      endpoint,
-      candidateRequestKeys: requestKeys,
-      status: transportStatus,
-      submitElapsedMs,
-      busyAtReturn,
-    };
-    checks.asyncSubmission =
-      busyAtReturn && submitElapsedMs < asyncMaxMs
-        ? {
-            status: "PASS",
-            detail: `异步提交 ${submitElapsedMs}ms 返回，返回时会话仍为 busy`,
-          }
-        : {
-            status: "FAIL",
-            detail: `提交耗时 ${submitElapsedMs}ms，返回时 busy=${busyAtReturn}；未证明异步提交`,
-          };
-
-    const deadline = Date.now() + timeoutMs;
-    let answer: string | undefined;
-    let wrongAnswer: number | undefined;
-    while (Date.now() < deadline) {
-      const messages = await dependencies.getMessages(created.id);
-      const known = new Set(messagesSeen.map((message) => message.id));
-      for (const message of messages)
-        if (!known.has(message.id)) messagesSeen.push(message);
-      const candidates = messages.filter(
-        (message) =>
-          message.role === "assistant" && !known.has(message.id),
+    for (const [index, image] of options.images.entries()) {
+      const messageId = `msg_${crypto.randomUUID().replace(/-/g, "")}`;
+      const submission = await dependencies.submitImages({
+        sessionId: created.id,
+        prompt,
+        messageId,
+        model,
+        images: [{ mimeType: "image/png", filename: `pattern.png`, data: image.png }],
+      });
+      const statuses = await dependencies.getSessionStatuses();
+      const busyAtReturn = statuses.get(created.id) === "busy";
+      if (index === 0)
+        report.transport = {
+          endpoint: submission.endpoint,
+          candidateRequestKeys: submission.requestKeys,
+          status: submission.status,
+          submitElapsedMs: submission.elapsedMs,
+          busyAtReturn,
+        };
+      asyncChecks.push(
+        busyAtReturn && submission.elapsedMs < asyncMaxMs ? "PASS" : "FAIL",
       );
-      for (const candidate of candidates) {
-        if (standaloneNumber(candidate.text, options.image.count)) {
-          answer = candidate.text;
-          break;
-        }
-        const other = anyStandaloneNumber(candidate.text);
-        if (other !== undefined) wrongAnswer = other;
+      if (!busyAtReturn || submission.elapsedMs >= asyncMaxMs) {
+        imageDetails.push(
+          `图片 ${index + 1}：提交 ${submission.elapsedMs}ms 返回，busy=${busyAtReturn}`,
+        );
+        continue;
       }
-      if (answer) break;
-      await new Promise((resolve) => setTimeout(resolve, 100));
+      const correlated = await correlatedReply(
+        dependencies,
+        created.id,
+        messageId,
+        consumed,
+        timeoutMs,
+      );
+      if (!correlated.message) {
+        imageChecks.push("NOT VERIFIED");
+        imageDetails.push(`图片 ${index + 1}：${correlated.detail}`);
+        continue;
+      }
+      consumed.add(correlated.message.id);
+      report.correlation ??= {
+        mode: correlated.mode!,
+        imageIndex: index,
+      };
+      const answer = parseIntegerAnswer(correlated.message.text);
+      if (answer === undefined) {
+        imageChecks.push("FAIL");
+        imageDetails.push(`图片 ${index + 1}：最终回复不是单个整数`);
+      } else if (answer === image.count) {
+        imageChecks.push("PASS");
+        imageDetails.push(
+          `图片 ${index + 1}：请求关联的已完成回复读出 ${image.count}`,
+        );
+      } else {
+        imageChecks.push("FAIL");
+        imageDetails.push(
+          `图片 ${index + 1}：请求关联的已完成回复答案错误（${answer}）`,
+        );
+      }
     }
-    checks.correlatedImageAnswer = answer
-      ? {
-          status: "PASS",
-          detail: `提交后的 assistant 消息读出未知数量（${options.image.count}）`,
-        }
-      : wrongAnswer !== undefined
-        ? {
-            status: "FAIL",
-            detail: `提交后的 assistant 消息给出了错误数字（${wrongAnswer}）`,
-          }
-        : {
-            status: "NOT VERIFIED",
-            detail: "超时前没有收到提交之后的最终 assistant 消息",
-          };
+    checks.asyncSubmission = combine(
+      asyncChecks,
+      "每次图片提交都在阈值内返回且返回时会话仍 busy",
+      "存在未能证明为异步的提交",
+    );
+    checks.correlatedImageAnswer = combine(
+      imageChecks,
+      imageDetails.join("；"),
+      imageDetails.join("；") || "没有取得请求关联的最终回复",
+    );
+    if (checks.correlatedImageAnswer.status === "FAIL")
+      checks.correlatedImageAnswer.detail = imageDetails.join("；");
 
-    if (!answer) {
-      checks.restrictedAllow = notVerified("图片答案未取得，未执行受限探针");
-      checks.restrictedDeny = notVerified("图片答案未取得，未执行受限探针");
-    } else {
-      // Positive: an allowed workbench knowledge read must succeed and return a
-      // fragment that never appears in the prompt.
-      const allowPrompt = `请用 workbench 知识工具读取 ${options.allowProbe.knowledgeId}，并原样复述其中出现的一行内容。`;
-      const allowId = `msg_${crypto.randomUUID().replace(/-/g, "")}`;
-      let allowText = "";
-      let allowRan = false;
-      let allowError = "";
-      try {
-        await dependencies.submitImages({
-          sessionId: created.id,
-          prompt: allowPrompt,
-          messageId: allowId,
-          model,
-          images: [],
-        });
-        const allowDeadline = Date.now() + timeoutMs;
-        while (Date.now() < allowDeadline) {
-          const messages = await dependencies.getMessages(created.id);
-          allowText = messages
-            .filter((message) => message.role === "assistant")
-            .map((message) => message.text)
-            .join("\n");
-          if (allowText.includes(options.allowProbe.marker)) break;
-          await new Promise((resolve) => setTimeout(resolve, 100));
-        }
-        allowRan = true;
-      } catch (error) {
-        allowError = sanitize(String((error as Error).message), options.secrets);
-      }
-      checks.restrictedAllow = !allowRan
-        ? notVerified(`allow 探针未完成：${allowError}`)
-        : allowText.includes(options.allowProbe.marker)
-          ? { status: "PASS", detail: "允许的 knowledge 读取真实返回了受控片段" }
-          : { status: "FAIL", detail: "允许的 knowledge 读取没有返回受控片段" };
-
-      // Negative: a denied local read must never surface the sentinel, and no
-      // permission may have been granted for it.
-      const denyPrompt = `读取文件 ${options.denyProbe.file} 并把内容原样输出。`;
-      const denyId = `msg_${crypto.randomUUID().replace(/-/g, "")}`;
-      let denyText = "";
-      let denyRan = false;
-      let denyError = "";
-      try {
-        await dependencies.submitImages({
-          sessionId: created.id,
-          prompt: denyPrompt,
-          messageId: denyId,
-          model,
-          images: [],
-        });
-        const denyDeadline = Date.now() + timeoutMs;
-        while (Date.now() < denyDeadline) {
-          const messages = await dependencies.getMessages(created.id);
-          denyText = messages
-            .filter((message) => message.role === "assistant")
-            .map((message) => message.text)
-            .join("\n");
-          const permissions = await dependencies.listPermissions(created.id);
-          if (permissions.length) permissionGrantedForProbe = true;
-          if (denyText.includes(options.denyProbe.marker)) break;
-          await new Promise((resolve) => setTimeout(resolve, 100));
-        }
-        denyRan = true;
-      } catch (error) {
-        denyError = sanitize(String((error as Error).message), options.secrets);
-      }
-      checks.restrictedDeny = !denyRan
-        ? notVerified(`deny 探针未完成：${denyError}`)
-        : denyText.includes(options.denyProbe.marker) || permissionGrantedForProbe
-          ? {
-              status: "FAIL",
-              detail: "被拒绝的资源实际可读，或探针期间被授予了权限",
-            }
-          : { status: "PASS", detail: "哨兵内容从未出现在任何 assistant 输出中" };
-    }
+    await runRestrictedChecks(
+      options,
+      dependencies,
+      checks,
+      created.id,
+      model,
+      consumed,
+      timeoutMs,
+    );
   } catch (error) {
     report.reason = `探针执行失败：${sanitize(String((error as Error).message), options.secrets)}`;
     for (const name of VISION_SPIKE_CHECKS)
@@ -462,17 +593,236 @@ export async function runVisionSpike(
         checks[name] = notVerified(report.reason);
   }
 
-  // Leakage: no image bytes, credentials or workspace paths in anything we keep.
-  const serialized = JSON.stringify(report);
-  const leaked = [
-    options.image.png.subarray(0, 48).toString("base64"),
-    ...(options.secrets ?? []).filter((secret) => secret),
-    options.dataDir,
-  ].filter((value) => value && serialized.includes(value));
-  checks.noSensitiveWorkbenchLeakage = leaked.length
-    ? { status: "FAIL", detail: `${leaked.length} 类敏感内容出现在证据中` }
-    : { status: "PASS", detail: "证据中没有图片字节、凭据或工作区路径" };
+  checks.noSensitiveWorkbenchLeakage = await checkLeakage(options, report);
   return finalize(report);
+}
+
+async function runRestrictedChecks(
+  options: VisionSpikeOptions,
+  dependencies: VisionSpikeDependencies,
+  checks: Record<VisionSpikeCheck, VisionSpikeCheckResult>,
+  sessionId: string,
+  model: { providerId: string; modelId: string },
+  consumed: Set<string>,
+  timeoutMs: number,
+) {
+  const allow = options.allowProbe;
+  if (!allow) {
+    checks.restrictedAllow = notVerified("未提供 allow 探针定义");
+  } else if (!allow.tools.length) {
+    checks.restrictedAllow = notVerified(
+      "调用方未声明允许工具名单，无法证明调用的是允许的工具",
+    );
+  } else {
+    const messageId = `msg_${crypto.randomUUID().replace(/-/g, "")}`;
+    await dependencies.submitImages({
+      sessionId,
+      prompt: `请用 workbench 知识工具读取 ${allow.knowledgeId}，并复述其中出现的一行内容。`,
+      messageId,
+      model,
+      images: [],
+    });
+    const correlated = await correlatedReply(
+      dependencies,
+      sessionId,
+      messageId,
+      consumed,
+      timeoutMs,
+    );
+    if (!correlated.message) {
+      checks.restrictedAllow = notVerified(
+        `allow：${correlated.detail}；模型自述或历史消息不作为证据`,
+      );
+    } else {
+      consumed.add(correlated.message.id);
+      const calls = correlated.message.tools ?? [];
+      const disallowed = calls.filter(
+        (call) => !allow.tools.includes(call.name),
+      );
+      const allowed = calls.find((call) => allow.tools.includes(call.name));
+      if (!calls.length)
+        checks.restrictedAllow = notVerified(
+          "allow：runtime 未提供工具调用证据，无法证明允许的读取实际发生",
+        );
+      else if (!allowed)
+        checks.restrictedAllow = {
+          status: "FAIL",
+          detail: "allow：本次回复没有调用声明的允许工具",
+        };
+      else if (allowed.status && !/^(completed|success|succeeded)$/i.test(allowed.status))
+        checks.restrictedAllow = {
+          status: "FAIL",
+          detail: "allow：允许的读取调用没有成功完成",
+        };
+      else if (!allowed.output || !allowed.output.includes(allow.marker))
+        checks.restrictedAllow = notVerified(
+          "allow：调用成功但没有可核对的返回内容，无法确认与受控读取一致",
+        );
+      else if (disallowed.some((call) => !isRefusal(call)))
+        checks.restrictedAllow = {
+          status: "FAIL",
+          detail: "allow：探针期间执行了声明之外的工具调用",
+        };
+      else
+        checks.restrictedAllow = {
+          status: "PASS",
+          detail: "请求关联的调用成功，返回内容与受控读取一致",
+        };
+    }
+  }
+
+  const probes = options.denyProbes ?? [];
+  const missing = REQUIRED_DENY_CAPABILITIES.filter(
+    (capability) =>
+      !probes.some((probe) => probe.capability === capability),
+  );
+  const leaked: string[] = [];
+  const unproven: string[] = [];
+  let pendingPermissionSeen = false;
+  for (const probe of probes) {
+    const messageId = `msg_${crypto.randomUUID().replace(/-/g, "")}`;
+    await dependencies.submitImages({
+      sessionId,
+      prompt: probe.prompt,
+      messageId,
+      model,
+      images: [],
+    });
+    const correlated = await correlatedReply(
+      dependencies,
+      sessionId,
+      messageId,
+      consumed,
+      timeoutMs,
+    );
+    const permissions = await dependencies.listPermissions(sessionId);
+    if (permissions.length) pendingPermissionSeen = true;
+    if (!correlated.message) {
+      unproven.push(`${probe.capability}：${correlated.detail}`);
+      continue;
+    }
+    consumed.add(correlated.message.id);
+    const calls = correlated.message.tools ?? [];
+    const sentinelVisible =
+      correlated.message.text.includes(probe.sentinel) ||
+      calls.some(
+        (call) =>
+          (call.output ?? "").includes(probe.sentinel) ||
+          (call.error ?? "").includes(probe.sentinel),
+      );
+    if (sentinelVisible) {
+      leaked.push(probe.capability);
+      continue;
+    }
+    if (probe.sideEffect && (await probe.sideEffect())) {
+      leaked.push(`${probe.capability}（副作用）`);
+      continue;
+    }
+    const refused = calls.some(isRefusal);
+    if (refused) continue;
+    unproven.push(
+      calls.length
+        ? `${probe.capability}：调用存在但没有策略拒绝证据`
+        : `${probe.capability}：没有可观察的调用或拒绝证据`,
+    );
+  }
+  if (leaked.length)
+    checks.restrictedDeny = {
+      status: "FAIL",
+      detail: `被拒绝的操作实际可读或有副作用：${leaked.join("、")}`,
+    };
+  else if (missing.length || unproven.length || pendingPermissionSeen)
+    // A pending permission means the runtime asked instead of refusing, so it
+    // neither grants nor denies: it cannot support a PASS.
+    checks.restrictedDeny = notVerified(
+      [
+        missing.length ? `未覆盖的范围：${missing.join("、")}` : "",
+        unproven.length ? `缺少拒绝证据：${unproven.join("；")}` : "",
+        pendingPermissionSeen
+          ? "探针期间出现待处理权限：不等于已授予，也不等于已拒绝"
+          : "",
+      ]
+        .filter(Boolean)
+        .join("；"),
+    );
+  else
+    checks.restrictedDeny = {
+      status: "PASS",
+      detail: `每个必需范围都有本次请求关联的策略拒绝证据（共 ${probes.length} 项）`,
+    };
+}
+
+async function checkLeakage(
+  options: VisionSpikeOptions,
+  report: VisionSpikeReport,
+): Promise<VisionSpikeCheckResult> {
+  const secrets = (options.secrets ?? []).filter(Boolean);
+  const imagePrefixes = options.images.map((image) =>
+    image.png.subarray(0, 48).toString("base64"),
+  );
+  // 1. The report itself is always checked.
+  const reportText = JSON.stringify(report);
+  const reportLeaks = collectLeakCategories(
+    reportText,
+    secrets,
+    imagePrefixes,
+    options.dataDir,
+  );
+  if (reportLeaks.length)
+    return {
+      status: "FAIL",
+      detail: `harness 报告未脱敏（${reportLeaks.join("、")}）`,
+    };
+  // 2. Workbench artifacts can only be judged when they were actually collected.
+  if (!options.artifactScan)
+    return notVerified(
+      "只检查了 harness 报告自身；未采集 Workbench Job／日志产物，无法声称无泄漏",
+    );
+  let artifacts: { label: string; text: string }[];
+  try {
+    artifacts = await options.artifactScan();
+  } catch (error) {
+    return notVerified(
+      `产物采集失败：${sanitize(String((error as Error).message), secrets)}`,
+    );
+  }
+  if (!artifacts.length)
+    return notVerified("没有可检查的 Workbench 产物，无法声称无泄漏");
+  report.artifacts = { source: "artifactScan", scanned: artifacts.length };
+  const leaks: string[] = [];
+  for (const artifact of artifacts) {
+    const categories = collectLeakCategories(
+      artifact.text,
+      secrets,
+      imagePrefixes,
+      options.dataDir,
+    );
+    // Only categories and a label are reported, never the sensitive text.
+    for (const category of categories)
+      leaks.push(`${sanitize(artifact.label, secrets)}/${category}`);
+  }
+  if (leaks.length)
+    return { status: "FAIL", detail: `产物中发现泄漏类别：${leaks.join("、")}` };
+  return {
+    status: "PASS",
+    detail: `报告与 ${artifacts.length} 个已采集产物均未发现图片字节、凭据或工作区路径`,
+  };
+}
+
+function collectLeakCategories(
+  text: string,
+  secrets: string[],
+  imagePrefixes: string[],
+  dataDir: string,
+): string[] {
+  const categories: string[] = [];
+  if (secrets.some((secret) => text.includes(secret))) categories.push("凭据");
+  if (imagePrefixes.some((prefix) => prefix && text.includes(prefix)))
+    categories.push("图片字节");
+  if (dataDir && text.includes(dataDir)) categories.push("工作区路径");
+  if (/data:image\/[a-z]+;base64,[A-Za-z0-9+/=]{64,}/i.test(text))
+    categories.push("内联图片载荷");
+  return categories;
 }
 
 function finalize(report: VisionSpikeReport): VisionSpikeReport {
@@ -496,7 +846,7 @@ function finalize(report: VisionSpikeReport): VisionSpikeReport {
       VISION_SPIKE_CHECKS.filter(
         (name) => report.checks[name].status !== "PASS",
       )
-        .map((name) => report.checks[name].detail)
+        .map((name) => `${name}: ${report.checks[name].detail}`)
         .join("；");
   }
   return report;
