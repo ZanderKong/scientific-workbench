@@ -49,6 +49,7 @@ import {
   importError,
   conflictError,
   type ImportProvenanceEntry,
+  type ImageVerificationPhase,
   type ResolvedSourceBlock,
   type SampleImportRecord,
   type VerifiedImage,
@@ -78,6 +79,14 @@ export interface StoreOptions {
   dataDir?: string;
   /** Test-only hook to inject a checkpoint failure; never set in production. */
   fileCheckpoint?: (phase: "journal" | "file" | "index") => void;
+  /**
+   * Test-only pause point inside source-image verification. It only delays the
+   * check so a race can be reproduced deterministically; it never skips one.
+   */
+  imageVerificationPhase?: (
+    phase: ImageVerificationPhase,
+    attachmentId: string,
+  ) => void | Promise<void>;
 }
 interface SampleIndexRow {
   id: string;
@@ -131,6 +140,7 @@ export class WorkbenchStore {
   readonly dataDir: string;
   readonly db: Database.Database;
   private readonly files: FileRepository;
+  private readonly imageVerificationPhase: StoreOptions["imageVerificationPhase"];
   private commitDepth = 0;
   private writtenDocuments = new Set<string>();
   constructor(options: StoreOptions = {}) {
@@ -140,6 +150,7 @@ export class WorkbenchStore {
       path.join(os.homedir(), "ScientificWorkbench");
     for (const dir of dirs)
       fs.mkdirSync(path.join(this.dataDir, dir), { recursive: true });
+    this.imageVerificationPhase = options.imageVerificationPhase;
     this.files = new FileRepository(this.dataDir, options.fileCheckpoint);
     const workspaceFile = path.join(this.dataDir, "registry", "workspace.json");
     if (
@@ -2861,7 +2872,9 @@ export class WorkbenchStore {
       const attachment = this.getAttachment(id);
       verified.push({
         attachment,
-        image: await verifyImageAttachment(attachment),
+        image: await verifyImageAttachment(attachment, {
+          onPhase: this.imageVerificationPhase,
+        }),
       });
     }
     const total = verified.reduce((sum, item) => sum + item.image.sizeBytes, 0);

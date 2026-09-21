@@ -66,19 +66,6 @@ export interface FileIdentity {
   mtimeMs: number;
 }
 
-export function fileIdentityOf(file: string): FileIdentity {
-  const stat = fs.statSync(file);
-  return { ino: String(stat.ino), size: stat.size, mtimeMs: stat.mtimeMs };
-}
-
-function sameIdentity(left: FileIdentity, right: FileIdentity): boolean {
-  return (
-    left.ino === right.ino &&
-    left.size === right.size &&
-    left.mtimeMs === right.mtimeMs
-  );
-}
-
 export function sha256File(file: string): string {
   const hash = crypto.createHash("sha256");
   const fd = fs.openSync(file, "r");
@@ -104,6 +91,91 @@ export const IMAGE_MIME_BY_FORMAT: Record<string, string> = {
   jpeg: "image/jpeg",
   webp: "image/webp",
 };
+
+/** Narrow test seam: pause points inside source-image verification. It never
+ * skips a check, and no product path passes it. */
+export type ImageVerificationPhase = "bytes-read" | "decode-finished";
+export interface ImageVerificationHooks {
+  onPhase?: (
+    phase: ImageVerificationPhase,
+    attachmentId: string,
+  ) => void | Promise<void>;
+}
+
+function assertNotSymlink(file: string) {
+  let link: fs.Stats;
+  try {
+    link = fs.lstatSync(file);
+  } catch {
+    throw importError("来源图片字节缺失");
+  }
+  if (link.isSymbolicLink()) throw importError("来源图片不允许符号链接");
+}
+
+export interface ReadImageBytes {
+  bytes: Buffer;
+  digest: string;
+  identity: FileIdentity;
+}
+
+/**
+ * Reads the bytes through one file descriptor, so the digest and the file
+ * identity describe the same object even if the path is replaced meanwhile.
+ */
+export function readImageFile(file: string): ReadImageBytes {
+  assertNotSymlink(file);
+  const fd = fs.openSync(file, "r");
+  try {
+    const stat = fs.fstatSync(fd);
+    if (!stat.isFile()) throw importError("来源图片不是普通文件");
+    if (stat.size <= 0) throw importError("来源图片为空");
+    if (stat.size > SAMPLE_IMPORT_MAX_IMAGE_BYTES)
+      throw importError("单张图片不能超过 10 MiB");
+    const bytes = Buffer.allocUnsafe(stat.size);
+    const hash = crypto.createHash("sha256");
+    let offset = 0;
+    while (offset < stat.size) {
+      const read = fs.readSync(fd, bytes, offset, stat.size - offset, offset);
+      if (!read) break;
+      hash.update(bytes.subarray(offset, offset + read));
+      offset += read;
+    }
+    if (offset !== stat.size) throw importError("来源图片读取不完整");
+    return {
+      bytes,
+      digest: hash.digest("hex"),
+      identity: {
+        ino: String(stat.ino),
+        size: stat.size,
+        mtimeMs: stat.mtimeMs,
+      },
+    };
+  } finally {
+    fs.closeSync(fd);
+  }
+}
+
+/** Content digest of whatever the path currently points at. */
+function currentContentDigest(file: string): string {
+  assertNotSymlink(file);
+  const fd = fs.openSync(file, "r");
+  const buffer = Buffer.allocUnsafe(1024 * 1024);
+  const hash = crypto.createHash("sha256");
+  try {
+    let position = 0;
+    let read = 0;
+    do {
+      read = fs.readSync(fd, buffer, 0, buffer.length, position);
+      if (read) {
+        hash.update(buffer.subarray(0, read));
+        position += read;
+      }
+    } while (read);
+  } finally {
+    fs.closeSync(fd);
+  }
+  return hash.digest("hex");
+}
 
 export interface DecodedImage {
   mimeType: string;
@@ -176,65 +248,62 @@ export interface VerifiedImage {
  * with the declared MIME, the bytes with the recorded hash, and the pixels must
  * decode completely. Async by design: image decoding stays outside the
  * synchronous store transaction.
+ *
+ * The verified digest and the file identity come from one file descriptor, and
+ * the path is re-read after decoding, so a replacement that lands inside the
+ * asynchronous decode window is detected instead of being accepted.
  */
 export async function verifyImageAttachment(
   attachment: Attachment,
+  hooks: ImageVerificationHooks = {},
 ): Promise<VerifiedImage> {
   if (attachment.remoteOnly)
     throw importError("来源图片必须本地可读，不能只保留远端副本");
   const file = attachment.localPath;
   if (!file) throw importError("来源图片缺少本地路径");
-  let stat: fs.Stats;
-  try {
-    if (fs.lstatSync(file).isSymbolicLink())
-      throw importError("来源图片不允许符号链接");
-    stat = fs.statSync(file);
-  } catch (error) {
-    if ((error as { code?: string }).code === "INVALID_INPUT") throw error;
-    throw importError("来源图片字节缺失");
-  }
-  if (!stat.isFile()) throw importError("来源图片不是普通文件");
-  if (stat.size <= 0) throw importError("来源图片为空");
-  if (stat.size > SAMPLE_IMPORT_MAX_IMAGE_BYTES)
-    throw importError("单张图片不能超过 10 MiB");
-  const bytes = fs.readFileSync(file);
-  const sniffed = sniffImageMime(bytes.subarray(0, 16));
+  const read = readImageFile(file);
+  const sniffed = sniffImageMime(read.bytes.subarray(0, 16));
   if (!sniffed) throw importError("无法识别图片格式（仅支持 JPEG/PNG/WebP）");
   if (sniffed !== attachment.mimeType)
     throw importError("图片声明类型与文件内容不符");
-  const digest = crypto.createHash("sha256").update(bytes).digest("hex");
-  if (digest !== attachment.sha256)
+  if (read.digest !== attachment.sha256)
     throw importError("附件内容与登记哈希不符");
-  const decoded = await decodeImageBytes(bytes, sniffed);
+  await hooks.onPhase?.("bytes-read", attachment.id);
+  const decoded = await decodeImageBytes(read.bytes, sniffed);
+  await hooks.onPhase?.("decode-finished", attachment.id);
+  // Decoding is asynchronous: the path must still resolve to exactly the bytes
+  // that were verified, otherwise the swap happened during the decode window.
+  if (currentContentDigest(file) !== read.digest)
+    throw importError("来源图片在验证期间被改动，请重新开始导入");
   return {
     mimeType: decoded.mimeType,
-    sizeBytes: bytes.byteLength,
+    sizeBytes: read.bytes.byteLength,
     width: decoded.width,
     height: decoded.height,
-    sha256: digest,
-    identity: fileIdentityOf(file),
+    sha256: read.digest,
+    identity: read.identity,
   };
 }
 
-/** Re-checks, inside the synchronous transaction, that the verified bytes are
- * still the bytes registered for that attachment. */
+/**
+ * Re-checks, inside the synchronous transaction, that the current file content
+ * is still exactly the verified content. Comparing the registry hash, the size
+ * or the mtime is not enough: the bytes themselves are re-read and re-hashed.
+ */
 export function assertVerifiedImageUnchanged(
   attachment: Attachment,
   verified: VerifiedImage,
 ): void {
   if (attachment.sha256 !== verified.sha256)
     throw importError("附件在验证后已被替换，请重新开始导入");
-  let identity: FileIdentity;
-  try {
-    if (fs.lstatSync(attachment.localPath).isSymbolicLink())
-      throw importError("来源图片不允许符号链接");
-    identity = fileIdentityOf(attachment.localPath);
-  } catch (error) {
-    if ((error as { code?: string }).code === "INVALID_INPUT") throw error;
-    throw importError("来源图片字节缺失");
-  }
-  if (!sameIdentity(identity, verified.identity) || identity.size !== verified.sizeBytes)
-    throw importError("来源图片在验证后被改动，请重新开始导入");
+  const file = attachment.localPath;
+  if (!file) throw importError("来源图片缺少本地路径");
+  const digest = currentContentDigest(file);
+  if (digest !== verified.sha256)
+    throw importError("来源图片内容已变化，请重新开始导入");
+  const stat = fs.statSync(file);
+  if (stat.size !== verified.sizeBytes)
+    throw importError("来源图片大小已变化，请重新开始导入");
 }
 
 export function sourceDataName(importId: string): string {

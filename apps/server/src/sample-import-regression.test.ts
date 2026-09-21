@@ -623,6 +623,69 @@ describe("F06 real image decoding", () => {
     );
   });
 
+  it("refuses a source image replaced while its pixels are being decoded", async () => {
+    const { store } = setup();
+    const attachment = store.saveAttachment(PNG, "race.png", "image/png");
+    const start = store.prepareSampleImport({
+      importId: randomUUID(),
+      attachmentIds: [attachment.id],
+    });
+    // The call above has already read the original bytes and is awaiting the
+    // asynchronous pixel decode; this overwrite lands inside that window.
+    fs.writeFileSync(attachment.localPath, Buffer.alloc(PNG.length, 0x7f));
+    await expect(start).rejects.toThrow();
+    expect(store.listData()).toHaveLength(0);
+    const importsDir = path.join(store.dataDir, "registry", "imports");
+    expect(fs.existsSync(importsDir) ? fs.readdirSync(importsDir) : []).toEqual(
+      [],
+    );
+  });
+
+  it("re-checks the current file content before persisting a verified image", async () => {
+    const { store } = setup();
+    const attachment = store.saveAttachment(PNG, "swap.png", "image/png");
+    const verified = await verifyImageAttachment(store.getAttachment(attachment.id));
+    expect(verified.sha256).toBe(attachment.sha256);
+    // Same length, different bytes: size and mtime are not sufficient evidence.
+    fs.writeFileSync(attachment.localPath, Buffer.alloc(PNG.length, 0x11));
+    expect(() =>
+      assertVerifiedImageUnchanged(store.getAttachment(attachment.id), verified),
+    ).toThrowError(/已被替换|已被改动|内容已变化|不一致/);
+  });
+
+  it("rejects the whole batch when an earlier image changes during a later decode", async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "swb-import-race2-"));
+    roots.push(root);
+    const first = new WorkbenchStore({ dataDir: root });
+    const firstImage = first.saveAttachment(PNG, "one.png", "image/png");
+    const secondImage = first.saveAttachment(JPEG, "two.jpg", "image/jpeg");
+    first.close();
+    stores.splice(stores.indexOf(first), 1);
+    // A controlled pause point: while the second image is being decoded, the
+    // first image file is replaced with same-length different bytes.
+    const store = new WorkbenchStore({
+      dataDir: root,
+      imageVerificationPhase: (phase, attachmentId) => {
+        if (phase === "bytes-read" && attachmentId === secondImage.id)
+          fs.writeFileSync(firstImage.localPath, Buffer.alloc(PNG.length, 0x2a));
+      },
+    });
+    stores.push(store);
+    await expect(
+      store.prepareSampleImport({
+        importId: randomUUID(),
+        attachmentIds: [firstImage.id, secondImage.id],
+      }),
+    ).rejects.toThrowError(/内容已变化|已被替换|被改动/);
+    expect(store.listData()).toHaveLength(0);
+    const importsDir = path.join(store.dataDir, "registry", "imports");
+    expect(fs.existsSync(importsDir) ? fs.readdirSync(importsDir) : []).toEqual(
+      [],
+    );
+    // The user's uploaded bytes are never removed by a failed verification.
+    expect(fs.existsSync(secondImage.localPath)).toBe(true);
+  });
+
   it("rejects a symlinked attachment path", async () => {
     const { store } = setup();
     const attachment = store.saveAttachment(PNG, "record.png", "image/png");
@@ -650,7 +713,7 @@ describe("F06 real image decoding", () => {
     fs.writeFileSync(attachment.localPath, Buffer.alloc(before.length, 0x7f));
     expect(() =>
       assertVerifiedImageUnchanged(store.getAttachment(attachment.id), verified),
-    ).toThrowError(/验证后被改动|已被替换/);
+    ).toThrowError(/内容已变化|已被替换/);
   });
 });
 
