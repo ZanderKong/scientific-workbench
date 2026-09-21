@@ -33,10 +33,10 @@
 ## 确定性实验记录导入
 
 - `document_bind_data`（`POST /documents/:id/blocks/:blockId/bind-data`）把正常 `[数据]` 区块正式绑定到现有 Data，携带 `expectedVersion` 与 `expectedDataVersion`；已绑定同一 Data 幂等，不同 Data 冲突，且不修改 Data 的 About。
-- `sample_import_prepare` → `POST /sample-imports`：`importId` + 有序 `attachmentIds`。服务端按附件身份校验数量、单张/合计大小、真实文件头与声明 MIME，并创建一个 shared source Data 与 prepared 记录；相同 `importId` + 相同来源顺序幂等，顺序变化冲突。
-- `sample_import_get` → `GET /sample-imports/:id`：未提交返回暂态 draft 与服务器规范化后的 block/occurrence，已提交只返回最小 receipt。
-- `sample_import_save_draft` → `PUT /sample-imports/:id/draft`：attempt + record/draft CAS；返回 `recordVersion`、`draftVersion`、`draftHash`、`commitFingerprint`。未知字段与越界结构拒绝。
-- `sample_import_commit` → `POST /sample-imports/:id/commit`：携带身份/hash/version/fingerprint，服务端重算比对后整批创建；相同 fingerprint 重试返回原 receipt，指纹变化冲突。
+- `sample_import_prepare` → `POST /sample-imports`：`importId` + 有序 `attachmentIds`。服务端按附件身份校验数量、单张/合计大小、真实文件头与声明 MIME，并**完整解码像素**（含显式像素预算与符号链接拒绝，解码在同步事务之外）；返回不含 draft 的小型确认。业务幂等身份是 `importId` + 来源 fingerprint，因此该路由不使用通用响应缓存；相同来源幂等，顺序或内容变化冲突。`Idempotency-Key` 头不会创建第二个 import。
+- `sample_import_get` → `GET /sample-imports/:id`：唯一返回暂态 draft 与服务器规范化 block/occurrence 的入口；已提交只返回最小 receipt。
+- `sample_import_save_draft` → `PUT /sample-imports/:id/draft`：attempt + record/draft CAS；只返回 `recordVersion`、`draftVersion`、`draftHash`、`commitFingerprint`。未知字段与越界结构拒绝。来源区块必须用 `sourceBlockId` 显式定位，不允许按位置绑定，也不允许覆写正文里已有的 `[数据]` 区块。
+- `sample_import_commit` → `POST /sample-imports/:id/commit`：携带身份/hash/version/fingerprint，服务端重算比对后整批创建；全批预检查先于任何实体创建，含显式来源区块解析与「待确认/无法辨认/无法识别/未确认」属性值拒绝。只有与已提交记录 `submissionHash`（由请求身份算出，排除 Idempotency-Key 头）完全一致的请求才返回原 receipt，其余身份/版本/hash 变化返回 409；缺少 proof 的旧记录 POST 返回 409 并提示改用 GET 对账。
 - `sample_import_cancel` / `sample_import_retry`：确定性撤销/重签 attempt，不启动模型。
 
 这些确定性 API 服务普通授权调用者；模型侧的 restricted profile 只暴露 `sample_import_get/save_draft/commit` 与必要读取（见 B2 阶段）。长任务恢复期间，科学实体读取/导出/备份返回 `503 RECOVERY_REQUIRED`，`/health` 报 `degraded`。

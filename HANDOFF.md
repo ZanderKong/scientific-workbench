@@ -225,3 +225,19 @@ typecheck/build/unit/MCP/web/E2E：命令与通过数如上；skip：真实 S3 2
 ```
 
 - 完整首版仍未完成；未执行项（真实 IME、真实 S3、真实 Vision、旧目录实际转换核对、其余页面人工视觉）保持 NOT VERIFIED。
+
+## 2026-09-21 审核问题修复 F01–F08（优先于上文）
+
+- 执行 `docs/plans/AGENT_KNOWLEDGE_SAMPLE_IMPORT_REVIEW_FIX_PLAN.md`。基线 HEAD `abe00d2`，Node v22.22.3 / pnpm 10.14.0。**修订上一条记录**：Phase B1 的“PASS”证据不足——上一轮 44 项断言建立在错误行为上；历史记录保留，但 B1 结论以本轮为准。
+- 先复现再修：临时 R0 探针在修复前代码上 7/7 失败（F02 覆写科研正文、F03 prepare 返回完整 draft、F04 待确认值进入 property_values、F05 positions-only 无正式映射、F06 12 字节伪 JPEG 通过、F08 receipt 来源版本落后、F07 换 attemptId 仍 success）；`sample-import-http.test.ts` 修复前 3/4 失败。探针已删除，反例保留在正式测试中。
+- F02：`sourceBlockId` 显式来源身份；删除 Data 正则，改由 `ensureBlockIds` + `parseBody` 判定；无 `[数据]` 时后端追加专用 placeholder；已有 `[数据]` 未指定、多个 `[数据]`、错误 ID、非空未知子树全部拒绝且零实体写入。
+- F03：prepare 只返回小型确认且不再走通用 `Idempotency-Key` 响应缓存；启动时按 `POST:/api/v1/sample-imports:` 命名空间限定清理旧缓存（无匹配不写、损坏 JSON 抛错、其他缓存保留）。
+- F04：全批预检查用真实 parser 检查 `PropertyValue.valueText`，「待确认/无法辨认/无法识别/未确认」拒绝整批；改写为普通观察可提交；critical `resolved=true` 需非空 resolution。
+- F05/F08：新增每 import 一个 `import-provenance` 组件（`swb.import-provenance/1`，只存 sampleId/componentId/page/positions）；提交顺序改为「先 updateData → 再按最终版本绑定 → 再 finalize」，`receipt.sourceDataVersion` = `Data.version` = 每个镜像 `baseVersion`；不再写虚构的 `model: "sample-import"`。
+- F06：新增 `sharp@0.35.4`（仅 server），`verifyImageAttachment` 完整解码像素 + 像素预算 50MP + 符号链接拒绝 + 验证后替换复核；旧假 PNG/魔数 JPEG/WebP 夹具全部换成真实 16×16 图（`apps/server/src/test-images.ts`），MCP workflow 夹具同步替换。
+- F07：新增 `submissionHash` + `replayProofVersion`；已提交记录只按该 hash 返回原 receipt，任一身份/版本/hash 变化 409；实体事后编辑不影响原 receipt；缺 proof 的旧记录 POST 返回 409 并提示 GET 对账。
+- F01：`scripts/spike-opencode-vision.mts` 改为薄 CLI，逻辑移入 `apps/server/src/vision-spike.ts`；transport 走边界内实验接口并按 flavor 选端点；结论是七项检查的合取（isolation/runtimeIdentityAndModel/asyncSubmission/correlatedImageAnswer/restrictedAllow/restrictedDeny/noSensitiveWorkbenchLeakage），metadata、prompt 回显、旧消息、其他 session 都不能产生 PASS。
+- 本轮证据（2026-09-21）：`vitest` 目标 10 文件 60 passed；`pnpm test` = core16 / web14 / mcp3 / server151（真实 S3 2 项跳过）；`pnpm exec playwright test` 46 passed；`pnpm typecheck` / `pnpm build` / `pnpm agent:knowledge:check`（bundleHash `2a7a0701…8b0d0e`）/ `pnpm api:spec` / `git diff --check` 全部 PASS。测试计数较上轮新增 45 项（regression 24 + http 4 + vision-spike 18，扣除并入旧文件的调整）。
+- Spike 真实状态：V1 **NOT VERIFIED**、V2 **NOT VERIFIED**（无合法隔离端点/凭据，未发出任何真实调用）；Phase B2 仍 **BLOCKED**，产品内无 AI 导入入口。
+- 未改：冻结原型 `prototype/reference.html`（哈希仍 `fe2c41e…f1bb`）、`packages/core/src/operations.ts` 的既有操作语义、用户 OpenCode 全局配置；未访问 `~/ScientificWorkbench`；未使用 4317。测试只用 mkdtemp 与随机空闲端口。
+- 下一项最小可执行步骤：在隔离 temp 中启动使用合法凭据的真实 OpenCode 服务（独立目录/端口/PID 追踪），设 `SWB_SPIKE_OPENCODE_URL` 重跑 `scripts/spike-opencode-vision.mts`，先取得 session directory 证据与 `supportsImage` 模型，再确认图片 transport，之后才评估 B2。其余待验收项（真实 IME、真实 S3 之外的核对、旧目录转换核对、页面人工视觉）继续有效，完整首版未完成。

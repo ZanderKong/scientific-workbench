@@ -17,13 +17,21 @@
 
 一次导入由调用方生成稳定 `importId`（UUID），服务器签发 `attemptId` 作为执行资格。暂态记录存 `registry/imports/<importId>.json`，不作为 SQLite 业务表；备份按 `registry` 目录递归纳入，恢复后仍可读最小 receipt。
 
-状态只有 `prepared / draft / committed / cancelled`；`recordVersion` 控制 registry CAS，`draftVersion + draftHash` 控制草稿内容 CAS。draft 只含有序来源引用、转录与页/行/表格位置、样品候选（sampleKey/code/title/body）、显式 existing 对象选择与 new-object intent、局部 reference mapping、ambiguity/澄清；没有 properties/processes/observations 投影。所有字段限长、数组有界，未知字段拒绝。
+状态只有 `prepared / draft / committed / cancelled`；`recordVersion` 控制 registry CAS，`draftVersion + draftHash` 控制草稿内容 CAS。draft 只含有序来源引用、转录与页/行/表格位置、样品候选（sampleKey/code/title/body/sourceBlockId）、显式 existing 对象选择与 new-object intent、局部 reference mapping、ambiguity/澄清；没有 properties/processes/observations 投影。所有字段限长、数组有界，未知字段拒绝。
 
-`sample_import_prepare` 复用 `abort` 之后的上传附件：服务端按附件身份校验数量 1–10、单张 ≤10 MiB、合计 ≤30 MiB、实际文件头（JPEG/PNG/WebP）与声明 MIME 相符、哈希与登记一致；不接受本地路径或 URL。prepare 在同一个 Store.commit 中创建 shared source Data（原始 file 组件 `creator:human`、`derivedFrom:[]`、`aboutSampleIds:[]`）与 prepared 记录；相同 importId + source fingerprint 幂等，顺序不同即不同输入。
+`sourceBlockId` 是唯一允许的来源区块**定位字段**（暂态，不进入 Sample 领域结构）。它必须匹配真实 parser 识别出的稳定 `[数据]` 区块 ID：未提供且正文没有 `[数据]` 区块时由后端追加专用来源 placeholder 并只按该 ID 绑定；已存在 `[数据]` 区块却未显式指定时返回可行动的 `INVALID_INPUT` 并保留完整 draft；指定了非空未知子树、重复 `[数据]` 区块或错误 ID 一律拒绝。不允许按位置猜测来源，也不允许用来源 Data 覆写正文。
 
-commit 前服务端重算并比对 import/source identity、draftHash、sourceDataVersion、选定对象版本与契约版本组成的 fingerprint；attempt eligibility 单独校验。提交在同一事务中创建显式允许的新对象、用现有 createSample 分配编号、保存规范正文与对象 bindings、给每个 Sample 绑定指向 shared source Data 的正常 `[数据]` 区块（首次 finalize 前绑定）并 finalize；转录作为 `creator:external` derived component 写入来源 Data，`derivedFrom` 指向原始组件，页/行/表格位置写 provenance，一次 `updateData`（带 expectedVersion）合并 About 与组件。
+`sample_import_prepare` 复用 `abort` 之后的上传附件：服务端按附件身份校验数量 1–10、单张 ≤10 MiB、合计 ≤30 MiB、实际文件头（JPEG/PNG/WebP）与声明 MIME 相符、哈希与登记一致，并且**完整解码像素**（JPEG/PNG/WebP；超出显式像素预算即拒绝）；不接受本地路径或 URL，附件路径不接受符号链接。解码是异步的，在同步 Store 事务之外完成；进入事务时再次核对附件身份、哈希、大小与源指纹，防止校验到提交之间被替换。
 
-成功后把原文件替换为 committed 小型记录：仅保留身份/状态、来源 Data 与按需来源审计、实际 model/knowledge/契约版本、最小 receipt（createdSampleIds/sourceDataId/createdObjectIds/derivedComponentIds/fingerprint/版本/时间）与安全错误码。**同一事务内移除完整 draft、临时 object/reference mapping 和澄清全文**，不另建 archive/history 文件。长期内容只服务：证明 commit、相同重试返回原 receipt、防重复、响应丢失/重启对账、基本 audit。
+prepare 只返回小型确认（importId/status/sourceDataId/sourceFingerprint/recordVersion/source/attempt），**不返回 draft 或规范化正文**；读取正文只能显式 `sample_import_get`。prepare 的业务幂等身份是 `importId + source fingerprint`，因此该路由不使用通用响应缓存；启动时在 journal 恢复与索引重建完成后、业务 ready 前，按 `POST:/api/v1/sample-imports:` 命名空间清理旧版本遗留的 prepare 响应缓存（无匹配不写文件，损坏 JSON 报错而不吞掉），其他操作缓存不受影响。prepare 在同一个 Store.commit 中创建 shared source Data（原始 file 组件 `creator:human`、`derivedFrom:[]`、`aboutSampleIds:[]`）与 prepared 记录；相同 importId + source fingerprint 幂等，顺序不同即不同输入。
+
+commit 前服务端重算并比对 import/source identity、draftHash、sourceDataVersion、选定对象版本与契约版本组成的 fingerprint；attempt eligibility 单独校验。全批预检查在**任何 createObject/createSample 之前**完成：解析来源区块、校验引用与来源映射、拒绝未解决关键歧义与「只翻布尔值」的假解决，并用真实 parser 逐项检查即将提取的 `PropertyValue.valueText`——值中包含「待确认/无法辨认/无法识别/未确认」的局部不确定标记时拒绝整批（不替换为 0、空值或默认单位，也不删除语句后偷偷提交），调用者把该行改写为普通观察后即可提交。
+
+提交顺序固定为：校验 → 创建显式对象与全部 Sample 身份 → 由 `sampleKey` 解析正式 ID 并构造派生组件 → 一次 `updateData`（带 expectedVersion）合并 About 与组件 → 取得更新后的来源 Data/version → 保存每个 Sample 正文与 bindings，并把专用来源区块绑定到**更新后**的 Data → finalize 全部 Sample（要求 ready、引用完整、镜像 baseVersion 等于正式 Data 版本）→ 写最小 receipt 并移除完整 draft。转录与来源映射都是 `creator:external` derived component：转录组件 `derivedFrom` 指向原始组件；每个 import 固定只有一个 `role: import-provenance` 的文本组件汇总位置关系，其 provenance 保存 `swb.import-provenance/1` 版本化映射（最终 sampleId、raw source componentId、page、positions），只存 ID 与位置，不存 Sample 属性/Process/Observation/完整 Markdown。没有位置映射时不凭空制造页行。B1 是无模型的确定性导入，因此不写 `model` 等未知身份字段。
+
+成功后把原文件替换为 committed 小型记录：仅保留身份/状态、来源 Data 与按需来源审计、契约版本、最小 receipt（createdSampleIds/sourceDataId/createdObjectIds/derivedComponentIds/fingerprint/提交后 sourceDataVersion/时间）、`replayProofVersion` + `submissionHash` 与安全错误码。**同一事务内移除完整 draft、临时 object/reference mapping 和澄清全文**，不另建 archive/history 文件。长期内容只服务：证明 commit、相同重试返回原 receipt、防重复、响应丢失/重启对账、基本 audit。
+
+`submissionHash` 是对本次已通过 schema 验证的提交请求身份（importId、attemptId、expectedVersion、draftVersion、draftHash、输入 sourceDataVersion、commitFingerprint、契约与 proof 版本）的 canonical hash，排除传输层 Idempotency-Key，且不能由当前科学实体重新计算。已提交记录的 replay 只按该 hash 判定：任何身份/版本/hash 字段变化返回 409；正式实体事后编辑或改名不改变原 receipt。缺少可靠 proof 的旧 `swb.import/2` committed 记录仍可 GET 对账返回原 receipt，但 POST 返回明确 409 并提示使用 GET，不反向补造提交证明。receipt 的 `sourceDataVersion` 表示**本次提交完成后的正式来源版本**，输入 `sourceDataVersion` 只是校验用旧基线，两者不混用。
 
 `sample_import_cancel` 原子撤销 active attempt；`sample_import_retry` 撤销旧资格并签发新 attempt，复用来源 Data，旧 save/commit 均拒绝。journal 持久前失败不留部分 Sample/Object（来源 Data/附件保留）；journal 持久后失败由 FileRepository 重放整批，Store 暴露 recovery-required，业务读取/导出/备份在恢复完成前返回 503 RECOVERY_REQUIRED，health 报 degraded。正常 Data 绑定使用 `document_bind_data`：要求现存 `[数据]` 区块、文档与 Data 双版本匹配，写入镜像基线 metadata，不修改 Data 的 About，已绑定同一 Data 幂等、不同 Data 冲突，身份丢失仍走原 repair 操作。
 

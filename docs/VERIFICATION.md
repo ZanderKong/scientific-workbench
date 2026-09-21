@@ -192,3 +192,21 @@
   - 实际执行：无 opt-in 时 exit 1 且记录保护生效；opt-in 但无隔离端点时 exit 0，结论 `NOT VERIFIED`，原因“未提供隔离的真实 OpenCode 端点”。因此未取得真实图片 transport、restricted profile allow/deny 或无泄漏证据。
   - 结论：目标 flavor AI 导入 **BLOCKED**。未启用任何占位入口（B2 未实现，产品内不存在可开启路径）；普通 V1 文本 runtime 与 A/B1 未受影响、未回滚。
 - 安全/隔离：未访问 `~/ScientificWorkbench`；未改用户 OpenCode 配置；未使用 4317 旧服务；未修改冻结原型 `prototype/reference.html`（哈希仍 `fe2c41e…f1bb`）；测试全部使用 mkdtemp 临时目录与独立端口。
+
+### 2026-09-21 审核问题修复（F01–F08）
+
+- 计划：`docs/plans/AGENT_KNOWLEDGE_SAMPLE_IMPORT_REVIEW_FIX_PLAN.md`。基线 HEAD `abe00d2`，Node v22.22.3 / pnpm 10.14.0；开工时工作树仅新增该计划文件。
+- **修订此前证据**：2026-09-21 上游记录的 Phase B1 “PASS” 证据不足。上一轮 44 项通过的断言建立在“第一个 `[数据]` 区块就是来源”“prepare 可以返回完整 draft”“12 字节魔数即有效图片”等错误行为上，本轮已用修复前代码实际复现问题。历史记录保留，不重写为“当时已经覆盖”。
+- R0（先复现，再修）：临时探针 `r0-prefix-probe.test.ts`（已删除）在修复前代码上运行，7 项全部失败且对应 F02/F03/F04/F05/F06/F07/F08：`[数据] 实测温度` 的子行 `温度为37度` 在提交后被覆写丢失；prepare 返回 `schemaVersion/samples/...` 完整 draft；`[水]｜添加量：待确认` 进入 `property_values`（`['待确认']`）；positions-only mapping 在正式 Data 上没有任何组件；12 字节伪 JPEG 被 `verifyImageAttachment` 接受；`receipt.sourceDataVersion=1` 而提交后 Data.version=2；已提交后换 `attemptId` 仍返回 success。
+- R0 HTTP：`sample-import-http.test.ts` 在修复前代码上运行，3/4 失败：prepare 响应含 draft；HTTP 层不拒绝待确认属性；换 `attemptId` 的提交返回 200 原 receipt（应为 409）。修复后 4/4 通过。
+- F02 显式来源身份：`SampleImportCandidate.sourceBlockId` 为唯一来源定位字段；`resolveSourceDataBlock` 只用 `ensureBlockIds` + 真实 `parseBody` 判定，删除 import helper 里的 Data 正则。未指定且无 `[数据]` 时后端追加专用 placeholder 并只按该 ID 绑定；已存在 `[数据]` 却未指定、两个 `[数据]` 区块、错误 ID、非空未知子树全部拒绝并保留完整 draft。
+- F03 prepare 最小化：prepare 只返回小型确认（无 draft/normalized），路由不再走通用 `Idempotency-Key` 响应缓存；`purgeLegacyPrepareCache` 在 journal 恢复与索引重建后、业务 ready 前按 `POST:/api/v1/sample-imports:` 命名空间清理旧缓存（无匹配不写文件、损坏 JSON 抛错、其他缓存保留）。HTTP 用新 Idempotency-Key 重复 prepare 后，`registry/imports`、`jobs/`、`data/` 均无正文哨兵。
+- F04 不确定值：全批预检查用真实 `parseBody` 检查即将提取的 `valueText`，命中「待确认/无法辨认/无法识别/未确认」即拒绝整批且零实体写入；改写为普通观察后可提交，该文字留在 Sample 正文但不产生 `PropertyValue`；critical ambiguity `resolved=true` 但无 `resolution` 也被拒绝。
+- F05/F08 provenance 与版本：新增每 import 一个 `role: import-provenance` 文本组件，provenance 为 `swb.import-provenance/1` 版本化映射（最终 sampleId / raw componentId / page / positions），只存 ID 与位置；删除 `model: "sample-import"` 虚构身份。提交顺序改为「先一次 updateData → 再按更新后版本绑定每个来源区块 → 再 finalize」，因此 `receipt.sourceDataVersion`、`Data.version` 与每个 Sample 镜像 `baseVersion` 三者一致；componentId 与 page 不一致会拒绝。
+- F06 图片解码：新增依赖 `sharp@0.35.4`（仅 `apps/server`；core 仍只做轻量魔数识别）。`verifyImageAttachment` 现在完整解码像素、带显式像素预算（`SAMPLE_IMPORT_MAX_PIXELS = 50_000_000`）、拒绝符号链接、以实际字节数计总量，并在同步事务内用文件身份 + 登记哈希复核「验证后被替换」。旧夹具（1×1 假 PNG、魔数拼接 JPEG/WebP）全部换成真实可解码 16×16 图，损坏夹具由有效图截断生成。
+- F07 精确 replay：新增 `submissionHash`（请求身份 canonical hash，排除 Idempotency-Key 与传输层）与 `replayProofVersion`；已提交记录只按该 hash 返回原 receipt，`attemptId/draftHash/draftVersion/sourceDataVersion/expectedVersion` 任一变化返回 409，实体事后编辑不改变原 receipt，缺 proof 的旧记录 POST 返回 409 并提示 GET 对账。
+- 证据命令（G1）：`vitest run` sample-import/sample-import-regression/sample-import-http/document-bind-data/backup/file-rebuild/file-repository/data-sync/data-identity/bindings = 60 passed；`pnpm agent:knowledge:check` PASS（6 项，bundleHash `2a7a0701…8b0d0e`）；`pnpm api:spec` 已更新 `openapi.json`；`pnpm typecheck` 4 包 PASS；`pnpm build` PASS；`pnpm test` = core16 / web14 / mcp3 / server151（真实 S3 2 项按设计跳过）；`pnpm exec playwright test` 46 passed；`git diff --check` PASS。
+- G1 人工核对（临时 workspace，未使用用户目录）：committed record 仅含身份/状态/contract/receipt/`replayProofVersion`/`submissionHash`，无 draft；`jobs/idempotency.json` 根本不存在；来源 Data v2 的组件为 raw file（human）+ `import-provenance`（external，derivedFrom raw）+ 转录（external），provenance 记录 5 个 sampleId 与各自 `行1-3…行13-15`；Sample 正文保留全部科研文本并追加一个 `[数据] 实验记录 …` placeholder，head 绑定 `baseVersion=2` 等于 receipt 与 Data 版本，6 条 references 全部 bound。
+- F01 Spike：见 `docs/OPENCODE_INTEGRATION.md` 的 2026-09-21 段。harness 重写为七项合取，`vision-spike.test.ts` 18 项负向矩阵通过；真实 V1/V2 仍 NOT VERIFIED（无隔离真实端点/凭据，未发出任何真实调用），B2 仍未实现。
+- 安全/隔离：未访问 `~/ScientificWorkbench`；未改用户 OpenCode 全局配置；未使用 4317；未修改冻结原型 `prototype/reference.html`；测试只用 mkdtemp 临时目录与随机空闲端口，e2e 用 14317 且 `reuseExistingServer:false`。
+- 未完成/未验证：真实 Vision 与 restricted profile（NOT VERIFIED）、Phase B2（BLOCKED）、真实 macOS 中文输入法、实际旧工作区 DOC-002 转换核对、其余页面人工视觉复核。完整首版仍未完成。
