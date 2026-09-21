@@ -198,7 +198,10 @@ export interface VisionSpikeReport {
     candidateRequestKeys: string[];
     status: number;
     submitElapsedMs: number;
+    /** Supplementary: the status map may lag the runtime by a few ms. */
     busyAtReturn: boolean;
+    /** Decisive: a finished reply already existed when submit returned. */
+    replyExistedAtReturn: boolean;
   };
   image?: { width: number; height: number; bytes: number; mime: string };
   images?: { width: number; height: number; bytes: number; mime: string }[];
@@ -596,6 +599,17 @@ export async function runVisionSpike(
         model,
         images: [{ mimeType: "image/png", filename: `pattern.png`, data: image.png }],
       });
+      // The decisive evidence that the request was submitted asynchronously is
+      // that the finished reply did not exist yet when submit returned. The
+      // runtime status map is recorded as supplementary evidence only, because
+      // it can lag a genuinely asynchronous runtime by a few milliseconds.
+      const atReturn = await dependencies.getMessages(created.id);
+      const replyExistedAtReturn = atReturn.some(
+        (message) =>
+          message.role === "assistant" &&
+          message.parentId === messageId &&
+          message.completed !== undefined,
+      );
       const statuses = await dependencies.getSessionStatuses();
       const busyAtReturn = statuses.get(created.id) === "busy";
       if (index === 0)
@@ -605,13 +619,16 @@ export async function runVisionSpike(
           status: submission.status,
           submitElapsedMs: submission.elapsedMs,
           busyAtReturn,
+          replyExistedAtReturn,
         };
       asyncChecks.push(
-        busyAtReturn && submission.elapsedMs < asyncMaxMs ? "PASS" : "FAIL",
+        !replyExistedAtReturn && submission.elapsedMs < asyncMaxMs
+          ? "PASS"
+          : "FAIL",
       );
-      if (!busyAtReturn || submission.elapsedMs >= asyncMaxMs) {
+      if (replyExistedAtReturn || submission.elapsedMs >= asyncMaxMs) {
         imageDetails.push(
-          `图片 ${index + 1}：提交 ${submission.elapsedMs}ms 返回，busy=${busyAtReturn}`,
+          `图片 ${index + 1}：提交 ${submission.elapsedMs}ms 返回，返回时已有最终回复=${replyExistedAtReturn}，busy=${busyAtReturn}`,
         );
         continue;
       }
@@ -647,7 +664,7 @@ export async function runVisionSpike(
     }
     checks.asyncSubmission = combine(
       asyncChecks,
-      "每次图片提交都在阈值内返回且返回时会话仍 busy",
+      "每次图片提交都在阈值内返回，且返回时尚不存在最终回复",
       "存在未能证明为异步的提交",
     );
     checks.correlatedImageAnswer = combine(

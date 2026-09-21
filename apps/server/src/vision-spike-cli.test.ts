@@ -70,6 +70,15 @@ class FakeEndpoint {
   active = new Set<string>();
   private sequence = 0;
   private messages = new Map<string, any[]>();
+  /**
+   * Replies are queued at submit time and only materialise on a later read, so
+   * the endpoint behaves asynchronously without any timer deciding the
+   * outcome: the read right after submit never sees the answer, while the
+   * following poll does.
+   */
+  private queued = new Map<string, any[]>();
+  /** List reads observed since the newest queued reply was queued. */
+  private queuedReads = new Map<string, number>();
 
   async start() {
     this.server = http.createServer((request, response) =>
@@ -128,6 +137,7 @@ class FakeEndpoint {
     if (method === "GET" && url.pathname === "/permission") return send(200, []);
     if (method === "GET" && url.pathname === "/session/status") {
       const data: Record<string, unknown> = {};
+      for (const id of this.queued.keys()) data[id] = { type: "busy" };
       for (const id of this.active) data[id] = { type: "busy" };
       return send(200, data);
     }
@@ -156,6 +166,7 @@ class FakeEndpoint {
         role: "user",
         time: { created: Date.now() },
       });
+      const queued: any[] = [];
       if (image) {
         // The fake reads the pixels itself, so the image answers are genuine.
         const decoded = Buffer.from(String(image.url).split(",")[1] ?? "", "base64");
@@ -163,35 +174,41 @@ class FakeEndpoint {
           .raw()
           .toBuffer({ resolveWithObject: true });
         const count = countRedRegions(raw.data, raw.info.width, raw.info.height);
-        this.push(sessionId, "assistant", [{ type: "text", text: `${count}` }], {
-          id: `msg_a_${++this.sequence}`,
-          role: "assistant",
-          parentID: messageId,
-          time: { created: Date.now(), completed: Date.now() },
-        });
-      } else {
-        // A refusal-with-evidence reply for every restricted probe.
-        this.push(
-          sessionId,
-          "assistant",
-          [
-            { type: "text", text: "该操作被拒绝。" },
-            {
-              type: "tool",
-              tool: "bash",
-              state: { status: "error", error: "permission denied by policy" },
-            },
-          ],
-          {
+        queued.push({
+          info: {
             id: `msg_a_${++this.sequence}`,
             role: "assistant",
             parentID: messageId,
             time: { created: Date.now(), completed: Date.now() },
           },
-        );
+          parts: [{ type: "text", text: `${count}` }],
+        });
+      } else {
+        // A refusal-with-evidence reply for every restricted probe, referring
+        // to the operation it was supposed to perform.
+        queued.push({
+          info: {
+            id: `msg_a_${++this.sequence}`,
+            role: "assistant",
+            parentID: messageId,
+            time: { created: Date.now(), completed: Date.now() },
+          },
+          parts: [
+            { type: "text", text: "该操作被拒绝。" },
+            {
+              type: "tool",
+              tool: "bash",
+              state: {
+                status: "error",
+                error: "permission denied by policy",
+                input: { request: body.parts },
+              },
+            },
+          ],
+        });
       }
-      this.active.add(sessionId);
-      setTimeout(() => this.active.delete(sessionId), 200);
+      this.queued.set(sessionId, queued);
+      this.queuedReads.set(sessionId, 0);
       return send(204);
     }
     if (
@@ -202,8 +219,22 @@ class FakeEndpoint {
       this.syncPromptCalls++;
       return send(200, { id: "msg_sync" });
     }
-    if (method === "GET" && segments[0] === "session" && segments[2] === "message")
-      return send(200, this.messages.get(segments[1]) ?? []);
+    if (method === "GET" && segments[0] === "session" && segments[2] === "message") {
+      const sessionId = segments[1];
+      const entries = this.queued.get(sessionId);
+      if (entries?.length) {
+        const reads = (this.queuedReads.get(sessionId) ?? 0) + 1;
+        this.queuedReads.set(sessionId, reads);
+        // The read right after submit must not see the answer; the poll does.
+        if (reads >= 2) {
+          const list = this.messages.get(sessionId) ?? [];
+          list.push(...entries);
+          this.messages.set(sessionId, list);
+          this.queued.delete(sessionId);
+        }
+      }
+      return send(200, this.messages.get(sessionId) ?? []);
+    }
     if (method === "GET" && segments[0] === "session" && segments.length === 2)
       return send(200, {
         id: segments[1],

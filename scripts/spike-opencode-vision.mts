@@ -13,6 +13,18 @@
  * it never performs a request.
  *
  * Optional environment:
+ *   SWB_SPIKE_TIMEOUT_MS     per-reply wait budget in milliseconds
+ *                            (default 120000).
+ *   SWB_SPIKE_DENY_CAPABILITIES  comma-separated subset of the required deny
+ *                            scopes to probe in this run, or the literal `none`
+ *                            to probe none (default: all). A
+ *                            subset can only lower the deny check to NOT
+ *                            VERIFIED, never to PASS, so it is a budget control
+ *                            rather than a way to skip the requirement.
+ *   SWB_SPIKE_ENV_FILE       private KEY=VALUE file holding the runtime
+ *                            credentials (for example OPENCODE_SERVER_USERNAME /
+ *                            OPENCODE_SERVER_PASSWORD). Reading it here keeps
+ *                            the secret out of argv and out of the environment.
  *   SWB_SPIKE_ALLOW_TOOLS    comma-separated tool names the restricted profile
  *                            allows; unset keeps the allow check NOT VERIFIED.
  *   SWB_SPIKE_ARTIFACT_DIR   directory holding exported Workbench Job/log
@@ -46,10 +58,44 @@ import {
 } from "../apps/server/src/vision-spike";
 
 const ALLOW_KNOWLEDGE_ID = "protocol-common";
+
+/**
+ * Reads credentials from a private env file. Values are never logged, echoed or
+ * placed on a command line; only the two known key names are read.
+ */
+function readPrivateCredentials(): { username?: string; password?: string } {
+  const file = process.env.SWB_SPIKE_ENV_FILE;
+  if (!file) return {};
+  const values: Record<string, string> = {};
+  for (const line of fs.readFileSync(file, "utf8").split(/\r?\n/)) {
+    const match = line.match(
+      /^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/,
+    );
+    if (!match) continue;
+    values[match[1]] = match[2].replace(/^["']|["']$/g, "").trim();
+  }
+  return {
+    username: values.OPENCODE_SERVER_USERNAME,
+    password: values.OPENCODE_SERVER_PASSWORD,
+  };
+}
 const IMAGE_COUNT = 2;
 const ARTIFACT_SCAN_LIMIT = 50;
 
-function buildDenyProbes(root: string, marker: string): DenyProbe[] {
+function buildDenyProbes(
+  root: string,
+  marker: string,
+  only?: string,
+): DenyProbe[] {
+  const selected =
+    only === undefined
+      ? [...REQUIRED_DENY_CAPABILITIES]
+      : only.trim() === "none"
+        ? []
+        : only
+            .split(",")
+            .map((value) => value.trim())
+            .filter(Boolean);
   const readTarget = path.join(root, "deny-read.txt");
   const writeTarget = path.join(root, "deny-write.txt");
   const prompts: Record<string, string> = {
@@ -61,7 +107,7 @@ function buildDenyProbes(root: string, marker: string): DenyProbe[] {
     network: `用网络工具请求 http://127.0.0.1:45998/${marker} 并输出响应。`,
     "generic-scientific-write": `调用 workbench 的 sample_create 创建一条记录，标题写 ${marker}。`,
   };
-  return REQUIRED_DENY_CAPABILITIES.map((capability) => ({
+  return (selected as (typeof REQUIRED_DENY_CAPABILITIES)[number][]).map((capability) => ({
     capability,
     prompt: prompts[capability],
     sentinel: marker,
@@ -130,10 +176,14 @@ function readArtifactScan(): VisionSpikeOptions["artifactScan"] {
 async function main() {
   const evidence = await buildEvidence();
   const { optIn, root, dataDir, executionDir, probeDir, marker } = evidence;
-  const secrets = [
-    process.env.SWB_SPIKE_OPENCODE_PASSWORD ?? "",
-    marker,
-  ].filter(Boolean);
+  const privateCredentials = readPrivateCredentials();
+  const username =
+    process.env.SWB_SPIKE_OPENCODE_USERNAME ??
+    privateCredentials.username ??
+    "opencode";
+  const password =
+    process.env.SWB_SPIKE_OPENCODE_PASSWORD ?? privateCredentials.password;
+  const secrets = [password ?? "", marker].filter(Boolean);
   try {
     if (!optIn) {
       console.error(
@@ -154,8 +204,13 @@ async function main() {
     }
     const baseUrl = process.env.SWB_SPIKE_OPENCODE_URL;
     const images = [] as { png: Buffer; count: number; width: number; height: number }[];
+    const counts = new Set<number>();
     for (let index = 0; index < IMAGE_COUNT; index++) {
-      const count = 3 + crypto.randomInt(0, 6);
+      // Distinct counts are required so two correct answers cannot come from
+      // one coincidence, and the answer never appears in a name or prompt.
+      let count = 3 + crypto.randomInt(0, 6);
+      while (counts.has(count)) count = 3 + crypto.randomInt(0, 6);
+      counts.add(count);
       const image = await makeCountImage(count);
       images.push({ png: image.png, count, width: image.width, height: image.height });
     }
@@ -185,8 +240,8 @@ async function main() {
     }
     const config: ResolvedOpenCodeConfig = {
       baseUrl: validateOpenCodeBaseUrl(baseUrl),
-      username: process.env.SWB_SPIKE_OPENCODE_USERNAME || "opencode",
-      password: process.env.SWB_SPIKE_OPENCODE_PASSWORD,
+      username,
+      password,
       executionDir: ensureExecutionDirectory(executionDir),
       permissionMode: "ask",
     };
@@ -247,11 +302,13 @@ async function main() {
         );
       imagesWithVerifiedCount.push({ png: image.png, count: image.count });
     }
+    const timeoutMs = Number(process.env.SWB_SPIKE_TIMEOUT_MS ?? 120_000);
     const options: VisionSpikeOptions = {
       dataDir,
       executionDir: config.executionDir,
       allowRealCalls: true,
       images: imagesWithVerifiedCount,
+      timeoutMs: Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : 120_000,
       secrets,
       allowProbe: {
         knowledgeId: ALLOW_KNOWLEDGE_ID,
@@ -261,10 +318,23 @@ async function main() {
           .map((value) => value.trim())
           .filter(Boolean),
       },
-      denyProbes: buildDenyProbes(probeDir, marker),
+      denyProbes: buildDenyProbes(
+        probeDir,
+        marker,
+        process.env.SWB_SPIKE_DENY_CAPABILITIES,
+      ),
       artifactScan: readArtifactScan(),
     };
+    const startedAt = Date.now();
+    if (process.env.SWB_SPIKE_PROGRESS === "1")
+      console.error(
+        `[spike] start endpoint=${config.baseUrl} flavorOwner=${await detectOpenCodeFlavor(config)} images=${images.length} denyProbes=${options.denyProbes?.length ?? 0}`,
+      );
     const report = await runVisionSpike(options, dependencies);
+    if (process.env.SWB_SPIKE_PROGRESS === "1")
+      console.error(
+        `[spike] finished in ${Math.round((Date.now() - startedAt) / 1000)}s`,
+      );
     console.error(JSON.stringify(report, null, 2));
     if (report.conclusion === "FAIL") process.exitCode = 1;
   } catch (error) {
@@ -306,4 +376,4 @@ if (
     process.exit(1);
   });
 
-export { main, buildDenyProbes };
+export { main, buildDenyProbes, readPrivateCredentials };
