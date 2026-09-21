@@ -98,6 +98,8 @@ export interface NormalizedSession {
   id: string;
   parentId?: string;
   title?: string;
+  /** The instance directory the runtime actually reports for this session. */
+  directory?: string;
 }
 
 export interface NormalizedMessage {
@@ -416,6 +418,15 @@ function safeText(value: unknown, max = 160): string {
   return text.length > max ? `${text.slice(0, max - 1)}…` : text;
 }
 
+/** Reads the instance directory a runtime reports for one session, if any. */
+function sessionDirectory(session: unknown): string | undefined {
+  const value = session as
+    | { directory?: unknown; location?: { directory?: unknown } }
+    | undefined;
+  const directory = value?.directory ?? value?.location?.directory;
+  return typeof directory === "string" && directory ? directory : undefined;
+}
+
 export function permissionSummary(permission: {
   action?: string;
   resources?: string[];
@@ -701,6 +712,7 @@ export class OpenCodeHttpAdapter implements OpenCodeAdapter {
         id: session.id,
         parentId: session.parentID,
         title: session.title,
+        directory: sessionDirectory(session),
       };
     } catch (error) {
       if (isTaggedError(error, "SessionNotFoundError")) return null;
@@ -1063,6 +1075,7 @@ export class LegacyOpenCodeAdapter implements OpenCodeAdapter {
         id: String(session.id),
         parentId: session.parentID,
         title: session.title,
+        directory: sessionDirectory(session),
       };
     } catch (error) {
       if (error instanceof OpenCodeError && error.status === 404) return null;
@@ -1424,4 +1437,119 @@ export function createOpenCodeAdapter(
   config: ResolvedOpenCodeConfig,
 ): OpenCodeAdapter {
   return new CompatOpenCodeAdapter(config);
+}
+
+/**
+ * EXPERIMENTAL image transport, used only by the opt-in vision spike harness.
+ *
+ * It deliberately is *not* part of `OpenCodeAdapter`, so no product code path
+ * can reach it and no unverified flavor is enabled by importing it. It still
+ * goes through the same authentication, directory routing and error handling as
+ * every other request. The image part shape below is a documented candidate,
+ * not a verified contract: the harness records whether a real runtime accepts
+ * it, and nothing is promoted to production before that evidence exists.
+ */
+export interface OpenCodeImageInput {
+  mimeType: string;
+  filename: string;
+  data: Uint8Array;
+}
+
+export interface ExperimentalImagePromptResult {
+  promptMessageId: string;
+  /** Sanitized description of the endpoint and body shape that was attempted. */
+  candidate: string;
+  endpoint: string;
+  requestKeys: string[];
+  status: number;
+  elapsedMs: number;
+}
+
+export const EXPERIMENTAL_IMAGE_CANDIDATES: Record<string, string> = {
+  v1: "/session/:id/prompt_async",
+  v2: "/api/session/:id/prompt",
+};
+
+export async function submitExperimentalImagePrompt(
+  config: ResolvedOpenCodeConfig,
+  flavor: OpenCodeFlavor,
+  input: {
+    sessionId: string;
+    prompt: string;
+    messageId: string;
+    model?: OpenCodeModelRef;
+    images: OpenCodeImageInput[];
+  },
+): Promise<ExperimentalImagePromptResult> {
+  const headers = {
+    ...openCodeAuthHeaders(config),
+    "x-opencode-directory": config.executionDir,
+    "content-type": "application/json",
+  };
+  const parts = [
+    { type: "text", text: input.prompt },
+    ...input.images.map((image) => ({
+      type: "file",
+      mime: image.mimeType,
+      filename: image.filename,
+      url: `data:${image.mimeType};base64,${Buffer.from(image.data).toString("base64")}`,
+    })),
+  ];
+  const body = {
+    messageID: input.messageId,
+    parts,
+    ...(input.model
+      ? {
+          model: {
+            providerID: input.model.providerId,
+            modelID: input.model.modelId,
+          },
+        }
+      : {}),
+  };
+  const endpoint =
+    flavor === "v2"
+      ? `/api/session/${encodeURIComponent(input.sessionId)}/prompt`
+      : `/session/${encodeURIComponent(input.sessionId)}/prompt_async`;
+  const startedAt = Date.now();
+  let response: Response;
+  try {
+    response = await fetch(`${config.baseUrl}${endpoint}`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(body),
+    });
+  } catch (error) {
+    throw new OpenCodeError(
+      "OPENCODE_UNREACHABLE",
+      "无法连接 OpenCode Server",
+      0,
+      safeText((error as { message?: string }).message ?? error),
+    );
+  }
+  const elapsedMs = Date.now() - startedAt;
+  if (response.status === 401)
+    throw new OpenCodeError(
+      "OPENCODE_AUTH_FAILED",
+      "OpenCode 认证失败，请检查用户名和密码",
+      401,
+    );
+  if (!response.ok) {
+    const text = await response.text().catch(() => "");
+    throw new OpenCodeError(
+      "OPENCODE_UNREACHABLE",
+      `OpenCode 图片请求失败（${response.status}）`,
+      response.status,
+      safeText(text, 200),
+    );
+  }
+  await response.text().catch(() => "");
+  return {
+    promptMessageId: input.messageId,
+    candidate: `${flavor}:file-part-data-url`,
+    endpoint,
+    requestKeys: Object.keys(body),
+    status: response.status,
+    elapsedMs,
+  };
 }
