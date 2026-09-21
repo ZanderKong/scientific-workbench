@@ -284,3 +284,11 @@ Phase B2：BLOCKED（前置真实 Spike 未 PASS，产品内无 AI 导入入口�
 临时资源清理情况：CLI 集成测试的 success/failure 路径均清理；所有测试用 mkdtemp 临时目录，测试结束删除
 下一项最小可执行步骤：在隔离 temp 中用合法凭据启动真实 OpenCode（独立目录/端口/PID 追踪），设 SWB_SPIKE_OPENCODE_URL 与 SWB_SPIKE_ALLOW_TOOLS，并用 SWB_SPIKE_ARTIFACT_DIR 导出本次 Job/日志后重跑 CLI；先取得 session directory 证据、supportsImage 模型与工具调用轨迹，再逐项评估七项合取
 ```
+
+## 2026-09-21 GitHub 公开与人工验收实例
+
+- 用户明确授权将本地 main 上传 GitHub 并将仓库设为公开；已推送实现 HEAD `4f3bafb`，远端默认分支 main，visibility PUBLIC。此次未修补或宣称关闭最新审查问题。
+- 最新审查：R1 图片竞态与 R2 CLI 修复可接受；R3 顺序匹配降级、R4 普通工具错误误认权限拒绝、R5 产物来源/范围证据不足仍待处理。局部 108 项首次 107 通过/1 失败，失败的 Spike 正向测试单跑通过，存在 10ms busy 定时器时序不稳定。真实 Vision 仍 NOT VERIFIED，B2 BLOCKED。
+- 本次 `pnpm build` PASS。为人工验收创建独立持久目录 `ScientificWorkbench-manual-review-20260921-14321`（仓库同级），通过现有 demo 脚本生成 4 个模拟样品及关联 Data/Analysis/Claim；仅用于软件验收，不是真实实验数据。
+- 程序在 http://127.0.0.1:14321/ 运行；启动时 WORKBENCH_DATA_DIR 指向上述独立目录，WORKBENCH_HOST=127.0.0.1；本次监听进程 PID 4184，有意保留供用户操作。health 返回 ok=true/degraded=false，首页 HTTP 200。原有 4317/5173 服务未操作，未访问默认用户工作区。
+- 下一步：用户手动检查当前产品页面与编辑流程。人工验收数据保留，不自动删除；AI 导入未开放。
