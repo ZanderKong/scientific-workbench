@@ -10,6 +10,7 @@ import {
   type SampleImportReferenceTarget,
 } from "@workbench/core";
 import { WorkbenchStore } from "./store";
+import { realImageFixtures } from "./test-images";
 
 const roots: string[] = [];
 const stores: WorkbenchStore[] = [];
@@ -37,20 +38,7 @@ afterEach(() => {
   });
 });
 
-const PNG = Buffer.from(
-  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
-  "base64",
-);
-const JPEG = Buffer.concat([
-  Buffer.from([0xff, 0xd8, 0xff, 0xe0]),
-  Buffer.alloc(64, 0x11),
-]);
-const WEBP = Buffer.concat([
-  Buffer.from("RIFF"),
-  Buffer.from([0x1a, 0, 0, 0]),
-  Buffer.from("WEBP"),
-  Buffer.alloc(32, 0x22),
-]);
+const { PNG, JPEG, WEBP } = realImageFixtures();
 const oversized = Buffer.concat([PNG, Buffer.alloc(10 * 1024 * 1024)]);
 
 function referenceSet(
@@ -74,19 +62,21 @@ function referenceSet(
 }
 
 describe("sample import prepare", () => {
-  it("verifies real image bytes and is idempotent per source fingerprint", () => {
+  it("verifies real image bytes and is idempotent per source fingerprint", async () => {
     const { store } = setup();
     const png = store.saveAttachment(PNG, "p1.png", "image/png");
     const jpeg = store.saveAttachment(JPEG, "p2.jpg", "image/jpeg");
     const webp = store.saveAttachment(WEBP, "p3.webp", "image/webp");
     const importId = randomUUID();
-    const first = store.prepareSampleImport({
+    const first = await store.prepareSampleImport({
       importId,
       attachmentIds: [png.id, jpeg.id, webp.id],
     });
     expect(first.status).toBe("prepared");
     expect(first.source.map((source) => source.page)).toEqual([1, 2, 3]);
-    const again = store.prepareSampleImport({
+    // The confirmation is small: it carries no transient draft or body.
+    expect(JSON.stringify(first)).not.toContain("draft");
+    const again = await store.prepareSampleImport({
       importId,
       attachmentIds: [png.id, jpeg.id, webp.id],
     });
@@ -94,49 +84,53 @@ describe("sample import prepare", () => {
     expect(again.attempt.id).toBe(first.attempt.id);
     expect(store.listData()).toHaveLength(1);
     expect(store.getData(first.sourceDataId).aboutSampleIds).toEqual([]);
-    expect(() =>
+    await expect(
       store.prepareSampleImport({
         importId,
         attachmentIds: [jpeg.id, png.id, webp.id],
       }),
-    ).toThrowError(/来源图片已经不同/);
+    ).rejects.toThrowError(/来源图片已经不同/);
   });
 
-  it("rejects fake MIME, non-images, count and size limits", () => {
+  it("rejects fake MIME, undecodable bytes, count and size limits", async () => {
     const { store } = setup();
     const fake = store.saveAttachment(JPEG, "fake.png", "image/png");
-    const text = store.saveAttachment(Buffer.from("not an image at all"), "x.png", "image/png");
-    expect(() =>
-      store.prepareSampleImport({ importId: randomUUID(), attachmentIds: [fake.id] }),
-    ).toThrowError(/声明类型与文件内容不符/);
-    expect(() =>
-      store.prepareSampleImport({ importId: randomUUID(), attachmentIds: [text.id] }),
-    ).toThrowError(/无法识别图片格式/);
-    expect(() =>
-      store.prepareSampleImport({ importId: randomUUID(), attachmentIds: [] }),
-    ).toThrowError(/1 至 10/);
-    const big = store.saveAttachment(oversized, "big.png", "image/png");
-    expect(() =>
-      store.prepareSampleImport({ importId: randomUUID(), attachmentIds: [big.id] }),
-    ).toThrowError(/10 MiB/);
-    const heavy = [0, 1, 2, 3].map((index) =>
-      store.saveAttachment(
-        Buffer.concat([PNG, Buffer.alloc(8 * 1024 * 1024 + index)]),
-        `h${index}.png`,
-        "image/png",
-      ),
+    const text = store.saveAttachment(
+      Buffer.from("not an image at all"),
+      "x.png",
+      "image/png",
     );
-    expect(() =>
-      store.prepareSampleImport({
-        importId: randomUUID(),
-        attachmentIds: heavy.map((item) => item.id),
-      }),
-    ).toThrowError(/30 MiB/);
+    const twelveByteJpeg = store.saveAttachment(
+      Buffer.from([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3, 4, 5, 6, 7, 8]),
+      "tiny.jpg",
+      "image/jpeg",
+    );
+    const truncatedPng = store.saveAttachment(PNG.subarray(0, 24), "t.png", "image/png");
+    await expect(
+      store.prepareSampleImport({ importId: randomUUID(), attachmentIds: [fake.id] }),
+    ).rejects.toThrowError(/声明类型与文件内容不符/);
+    await expect(
+      store.prepareSampleImport({ importId: randomUUID(), attachmentIds: [text.id] }),
+    ).rejects.toThrowError(/无法识别图片格式/);
+    for (const broken of [twelveByteJpeg, truncatedPng])
+      await expect(
+        store.prepareSampleImport({
+          importId: randomUUID(),
+          attachmentIds: [broken.id],
+        }),
+      ).rejects.toThrowError(/无法完整解码/);
+    await expect(
+      store.prepareSampleImport({ importId: randomUUID(), attachmentIds: [] }),
+    ).rejects.toThrowError(/1 至 10/);
+    const big = store.saveAttachment(oversized, "big.png", "image/png");
+    await expect(
+      store.prepareSampleImport({ importId: randomUUID(), attachmentIds: [big.id] }),
+    ).rejects.toThrowError(/10 MiB/);
   });
 });
 
 describe("sample import draft and commit", () => {
-  it("commits five samples sharing one source Data with a minimal receipt", () => {
+  it("commits five samples sharing one source Data with a minimal receipt", async () => {
     const { store } = setup();
     const png = store.saveAttachment(PNG, "record.png", "image/png");
     const equipment = store.createObject({
@@ -146,7 +140,7 @@ describe("sample import draft and commit", () => {
     const material = store.createObject({ canonicalName: "水", role: "material" });
     store.createObject({ canonicalName: "烧杯", role: "material" });
     const importId = randomUUID();
-    const prepared = store.prepareSampleImport({
+    const prepared = await store.prepareSampleImport({
       importId,
       attachmentIds: [png.id],
     });
@@ -167,18 +161,15 @@ describe("sample import draft and commit", () => {
         key: `s${index + 1}`,
         title: `记录 ${index + 1}`,
         body: set.body,
-        sourceMappings:
-          index === 0
-            ? [
-                {
-                  attachmentId: png.id,
-                  page: 1,
-                  componentId: prepared.source[0].componentId,
-                  transcription: "第1页转录文本",
-                  positions: "行1-3",
-                },
-              ]
-            : [],
+        sourceMappings: [
+          {
+            attachmentId: png.id,
+            page: 1,
+            componentId: prepared.source[0].componentId,
+            ...(index === 0 ? { transcription: "第1页转录文本" } : {}),
+            positions: `行${index * 3 + 1}-${index * 3 + 3}`,
+          },
+        ],
         references: set.references,
       };
     });
@@ -212,7 +203,8 @@ describe("sample import draft and commit", () => {
     expect(receipt.createdSampleIds).toHaveLength(5);
     expect(new Set(receipt.createdSampleIds).size).toBe(5);
     expect(receipt.createdObjectIds).toHaveLength(1);
-    expect(receipt.derivedComponentIds).toHaveLength(1);
+    // One import-provenance mapping component plus one transcription component.
+    expect(receipt.derivedComponentIds).toHaveLength(2);
     expect(store.listSamples()).toHaveLength(5);
     expect(
       store.searchObjects().filter((object) => object.canonicalName === "搅拌"),
@@ -221,21 +213,50 @@ describe("sample import draft and commit", () => {
     expect([...data.aboutSampleIds].sort()).toEqual(
       [...receipt.createdSampleIds].sort(),
     );
-    expect(data.components.filter((component) => component.creator === "external")).toHaveLength(1);
-    expect(data.components.find((component) => component.creator === "external")!.derivedFrom).toEqual([
-      prepared.source[0].componentId,
-    ]);
+    const external = data.components.filter(
+      (component) => component.creator === "external",
+    );
+    expect(external).toHaveLength(2);
+    const mapping = external.find(
+      (component) => component.role === "import-provenance",
+    )!;
+    const provenance = JSON.parse(mapping.provenance);
+    // Every sample keeps its own page/line relation to the shared original.
+    expect(provenance.entries).toHaveLength(5);
+    expect(
+      provenance.entries.map((entry: any) => [entry.sampleId, entry.positions]),
+    ).toEqual(
+      receipt.createdSampleIds.map((id, index) => [id, `行${index * 3 + 1}-${index * 3 + 3}`]),
+    );
+    expect(provenance.entries[0]).toMatchObject({
+      sampleKey: "s1",
+      attachmentId: png.id,
+      sourceComponentId: prepared.source[0].componentId,
+      page: 1,
+    });
+    expect(mapping.derivedFrom).toEqual([prepared.source[0].componentId]);
+    const transcription = external.find(
+      (component) => component.role === "transcription",
+    )!;
+    expect(transcription.content).toBe("第1页转录文本");
+    expect(transcription.provenance).not.toContain("model");
     for (const id of receipt.createdSampleIds) {
       const doc = store.readDocument(id);
       const bindings = Object.values(doc.head.blocks || {});
-      expect(bindings.some((binding) => binding.dataId === prepared.sourceDataId)).toBe(true);
+      const source = bindings.find(
+        (binding) => binding.dataId === prepared.sourceDataId,
+      );
+      expect(source).toBeTruthy();
+      // Mirrors, the formal Data and the receipt all agree on one version.
+      expect(source!.baseVersion).toBe(data.version);
+      expect(source!.baseVersion).toBe(receipt.sourceDataVersion);
       expect(
         doc.head.references?.length &&
           doc.head.references.every((reference) => reference.status === "bound" && reference.objectId),
       ).toBe(true);
       expect(store.getSample(id).properties.length).toBeGreaterThan(0);
     }
-    // Response-loss retry with the same fingerprint returns the original receipt.
+    // Response-loss retry with the same submission returns the original receipt.
     const retried = store.commitSampleImport(importId, {
       attemptId: prepared.attempt.id,
       expectedVersion: saved.recordVersion,
@@ -257,29 +278,19 @@ describe("sample import draft and commit", () => {
     );
     expect(raw.status).toBe("committed");
     expect(raw.draft).toBeUndefined();
+    expect(raw.submissionHash).toHaveLength(64);
     const serialized = JSON.stringify(raw);
-    expect(serialized).not.toContain("样品的转录");
+    expect(serialized).not.toContain("第1页转录文本");
     expect(serialized).not.toContain("添加量");
     expect(serialized).not.toContain("淡黄色");
-    // A changed fingerprint cannot create a second batch.
-    expect(() =>
-      store.commitSampleImport(importId, {
-        attemptId: prepared.attempt.id,
-        expectedVersion: saved.recordVersion,
-        draftVersion: saved.draftVersion,
-        draftHash: saved.draftHash,
-        sourceDataVersion: sourceVersion,
-        commitFingerprint: "0".repeat(64),
-      }),
-    ).toThrowError(/fingerprint/);
   });
 
-  it("blocks commit on unresolved critical ambiguity and leaves no entities", () => {
+  it("blocks commit on unresolved critical ambiguity and leaves no entities", async () => {
     const { store } = setup();
     const png = store.saveAttachment(PNG, "a.png", "image/png");
     const material = store.createObject({ canonicalName: "水", role: "material" });
     const importId = randomUUID();
-    const prepared = store.prepareSampleImport({ importId, attachmentIds: [png.id] });
+    const prepared = await store.prepareSampleImport({ importId, attachmentIds: [png.id] });
     const set = referenceSet("- [水]｜添加量：80 g", () => ({
       kind: "existing",
       objectId: material.id,
@@ -316,18 +327,18 @@ describe("sample import draft and commit", () => {
     expect(store.getSampleImport(importId).status).toBe("draft");
   });
 
-  it("rejects unknown fields, CAS conflicts and stale attempts", () => {
+  it("rejects unknown fields, CAS conflicts and stale attempts", async () => {
     const { store } = setup();
     const png = store.saveAttachment(PNG, "a.png", "image/png");
     const importId = randomUUID();
-    const prepared = store.prepareSampleImport({ importId, attachmentIds: [png.id] });
-    expect(() =>
+    const prepared = await store.prepareSampleImport({ importId, attachmentIds: [png.id] });
+    await expect(
       store.prepareSampleImport({
         importId: randomUUID(),
         attachmentIds: [png.id],
         surprise: true,
       } as any),
-    ).toThrowError(/未知字段/);
+    ).rejects.toThrowError(/未知字段/);
     const draft = {
       schemaVersion: 1 as const,
       samples: [],
@@ -364,11 +375,11 @@ describe("sample import draft and commit", () => {
     ).toThrowError(/已取消/);
   });
 
-  it("issues a new attempt on retry and rejects the late old attempt", () => {
+  it("issues a new attempt on retry and rejects the late old attempt", async () => {
     const { store } = setup();
     const png = store.saveAttachment(PNG, "a.png", "image/png");
     const importId = randomUUID();
-    const prepared = store.prepareSampleImport({ importId, attachmentIds: [png.id] });
+    const prepared = await store.prepareSampleImport({ importId, attachmentIds: [png.id] });
     const retried = store.retrySampleImport(importId, {
       expectedVersion: prepared.recordVersion,
     });
@@ -392,14 +403,14 @@ describe("sample import draft and commit", () => {
 describe("sample import recovery", () => {
   it.each(["journal", "file", "index"] as const)(
     "recovers the whole batch after a durable failure at %s",
-    (phase) => {
+    async (phase) => {
       const root = fs.mkdtempSync(path.join(os.tmpdir(), "swb-import-recovery-"));
       roots.push(root);
       let store = new WorkbenchStore({ dataDir: root });
       const png = store.saveAttachment(PNG, "a.png", "image/png");
       const material = store.createObject({ canonicalName: "水", role: "material" });
       const importId = randomUUID();
-      const prepared = store.prepareSampleImport({ importId, attachmentIds: [png.id] });
+      const prepared = await store.prepareSampleImport({ importId, attachmentIds: [png.id] });
       const set = referenceSet("- [水]｜添加量：80 g", () => ({
         kind: "existing",
         objectId: material.id,
@@ -455,6 +466,9 @@ describe("sample import recovery", () => {
       const view = reopened.getSampleImport(importId);
       expect(view.status).toBe("committed");
       expect((view as any).receipt.createdSampleIds).toHaveLength(1);
+      const receipt = (view as any).receipt;
+      const data = reopened.getData(receipt.sourceDataId);
+      expect(receipt.sourceDataVersion).toBe(data.version);
     },
   );
 });

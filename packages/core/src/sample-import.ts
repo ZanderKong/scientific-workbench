@@ -7,9 +7,17 @@ import { sha256 } from "./hash";
 import { CREATABLE_ROLES, type JsonSchema } from "./document-contract";
 
 export const SAMPLE_IMPORT_CONTRACT_VERSION = 1;
+/** Replay-proof format of the committed record's submission hash. */
+export const SAMPLE_IMPORT_REPLAY_PROOF_VERSION = 1;
 export const SAMPLE_IMPORT_MAX_IMAGES = 10;
 export const SAMPLE_IMPORT_MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 export const SAMPLE_IMPORT_MAX_TOTAL_BYTES = 30 * 1024 * 1024;
+/**
+ * Resource budget for decoding a source image. This is a server resource
+ * boundary against decompression bombs, not a statement about the scientific
+ * content of the picture.
+ */
+export const SAMPLE_IMPORT_MAX_PIXELS = 50_000_000;
 export const SAMPLE_IMPORT_IMAGE_MIME = [
   "image/jpeg",
   "image/png",
@@ -56,6 +64,13 @@ export interface SampleImportCandidate {
   code?: string;
   title?: string;
   body: string;
+  /**
+   * Transient locator for the one `[数据]` block this candidate's record is
+   * imported from. It must match a stable Data block ID found by the real
+   * parser. Omitted only when the body carries no Data block at all; the
+   * backend then appends its own empty source placeholder.
+   */
+  sourceBlockId?: string;
   sourceMappings: SampleImportSourceMapping[];
   references: SampleImportReference[];
 }
@@ -90,9 +105,42 @@ export interface SampleImportReceipt {
   createdObjectIds: string[];
   derivedComponentIds: string[];
   commitFingerprint: string;
+  /** Formal source Data version after this commit finished. */
   sourceDataVersion: number;
   contractVersion: number;
   committedAt: string;
+}
+
+/**
+ * Minimal prepare/cancel confirmation. It deliberately carries no draft or
+ * normalized body, so a response cache can never hold transient scientific
+ * text. Reading the draft requires an explicit `sample_import_get`.
+ */
+export interface SampleImportConfirm {
+  importId: string;
+  status: SampleImportStatus;
+  sourceDataId: string;
+  sourceFingerprint: string;
+  recordVersion: number;
+  source: SampleImportSource[];
+  attempt: { id: string; status: SampleImportAttemptStatus };
+}
+
+/** Placeholder words that mark a value as locally unresolved by the caller. */
+export const SAMPLE_IMPORT_UNCERTAIN_MARKERS = [
+  "待确认",
+  "无法辨认",
+  "无法识别",
+  "未确认",
+] as const;
+
+/** Returns the marker found in a would-be property value, if any. */
+export function uncertainPropertyMarker(
+  valueText: string,
+): string | undefined {
+  return SAMPLE_IMPORT_UNCERTAIN_MARKERS.find((marker) =>
+    valueText.includes(marker),
+  );
 }
 
 export const sampleImportDraftSchema: JsonSchema = {
@@ -114,6 +162,7 @@ export const sampleImportDraftSchema: JsonSchema = {
           code: { type: "string", maxLength: 128 },
           title: { type: "string", maxLength: 512 },
           body: { type: "string", minLength: 1, maxLength: 200000 },
+          sourceBlockId: { type: "string", minLength: 1, maxLength: 128 },
           sourceMappings: {
             type: "array",
             maxItems: 100,
@@ -234,7 +283,15 @@ export function validateSampleImportDraft(
   for (const sample of draft.samples) {
     assertKnownKeys(
       sample,
-      ["key", "code", "title", "body", "sourceMappings", "references"],
+      [
+        "key",
+        "code",
+        "title",
+        "body",
+        "sourceBlockId",
+        "sourceMappings",
+        "references",
+      ],
       "sample candidate",
     );
     if (typeof sample.key !== "string" || !sample.key.trim())
@@ -248,6 +305,11 @@ export function validateSampleImportDraft(
       invalid("样品 code 必须是字符串");
     if (sample.title !== undefined && typeof sample.title !== "string")
       invalid("样品 title 必须是字符串");
+    if (
+      sample.sourceBlockId !== undefined &&
+      (typeof sample.sourceBlockId !== "string" || !sample.sourceBlockId.trim())
+    )
+      invalid("样品 sourceBlockId 必须是非空字符串");
     if (!Array.isArray(sample.sourceMappings) || !Array.isArray(sample.references))
       invalid("sourceMappings/references 必须是数组");
     for (const mapping of sample.sourceMappings) {
@@ -381,6 +443,31 @@ export function sampleImportCommitFingerprint(
       intents: [...input.intents].sort((a, b) => a.key.localeCompare(b.key)),
     }),
   );
+}
+
+/**
+ * Identity of one concrete commit submission. It is computed from the request
+ * fields the server itself validated, so an already-committed import can only
+ * answer the exact same request with its original receipt. Transport headers
+ * (such as an idempotency key) are deliberately excluded, and it can never be
+ * recomputed from the current state of the scientific entities.
+ */
+export interface SampleImportSubmissionHashInput {
+  importId: string;
+  attemptId: string;
+  expectedVersion: number;
+  draftVersion: number;
+  draftHash: string;
+  sourceDataVersion: number;
+  commitFingerprint: string;
+  contractVersion: number;
+  proofVersion: number;
+}
+
+export function sampleImportSubmissionHash(
+  input: SampleImportSubmissionHashInput,
+): string {
+  return sha256(canonicalJson({ ...input }));
 }
 
 /** Detect real image bytes; the declared MIME must agree with the file header. */

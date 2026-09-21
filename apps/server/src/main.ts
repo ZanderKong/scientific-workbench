@@ -312,8 +312,11 @@ app.post("/api/v1/samples/batch", async (req: any) =>
     : store.batchSamples(req.body.sourceIds || [], req.body.copies ?? 1),
 );
 
+// Prepare has its own business idempotency (importId + source fingerprint), so
+// it deliberately does not go through the generic response cache: that cache
+// would keep a full transient draft in jobs/idempotency.json.
 app.post("/api/v1/sample-imports", async (req: any) =>
-  idempotent(req, () => store.prepareSampleImport(req.body)),
+  store.prepareSampleImport(req.body),
 );
 app.get("/api/v1/sample-imports/:id", async (req: any) =>
   store.getSampleImport(req.params.id),

@@ -9,6 +9,8 @@ import { afterAll, beforeAll, expect, it } from 'vitest';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 
+const REAL_PNG_BASE64 =
+  'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAIAAACQkWg2AAAACXBIWXMAAAPoAAAD6AG1e1JrAAABtUlEQVQokQXBMQEAIAgEQBoYwfU3IhiBCEYwghGIYAQjsP5mBCJQwTuBCJugC1UwhCaYwiXYQhcc4RWE8AlSWCKUhtbYG7RxNFjjbFiNu8EbT8NtjIbXmA3VBNLZOnqndoxO65idq2N3esfpvB3R+Tqys7pQFE3ZFaocClNOxVJuhSuP4ipD8ZSpKBXIYBvogzowBm1gDq6BPegDZ/AOxOAbyMEaQjE0YzeocRjMOA3LuA1uPIZrDMMzpqFMIJNtok/qxJi0iTm5JvakT5zJOxGTbyInawploS32BV0cC7Y4F9biXvDFs3AXY+Et5kItgWy2jb6pG2PTNubm2tibvnE270Zsvo3crC0UR3N2hzqHw5zTsZzb4c7juM5wPGc6ygVy2A76oR6MQzuYh+tgH/rBObwHcfgO8rCOUC7aZb/Qy3Fhl/NiXe4LvzwX9zIu3mVe1BVIsAV6UAMjaIEZXIEd9MAJ3kAEXyCDFUJ5aI/9QR/Hgz3Oh/W4H/zxPNzHeHiP+VBPIMmW6ElNjKQlZnIldtITJ3kTkXyJTFYKpdCKvaDFUbDiLKziLnjxFG4xCq+YhaoPiXFmMCvBcBwAAAAASUVORK5CYII=';
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'swb-mcp-'));
 let serverProcess: ChildProcess, client: Client, transport: StdioClientTransport;
 const token = crypto.randomUUID();
@@ -76,7 +78,9 @@ it('completes the scientific workflow through a real MCP stdio client, including
 }, 30000);
 it('runs a deterministic sample import through the real HTTP contract', async () => {
   const imagePath = path.join(root, 'record-source.png');
-  fs.writeFileSync(imagePath, Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64'));
+  // A real, fully decodable 16×16 PNG. The previous 1×1 byte string was not a
+  // valid image and is now correctly rejected by the import decoder.
+  fs.writeFileSync(imagePath, Buffer.from(REAL_PNG_BASE64, 'base64'));
   const file = await call<{ id: string }>('attachment_upload', { filePath: imagePath, mimeType: 'image/png' });
   const importId = crypto.randomUUID();
   const prepared = await call<{ sourceDataId: string; attempt: { id: string }; recordVersion: number }>('sample_import_prepare', { importId, attachmentIds: [file.id] });

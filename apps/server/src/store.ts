@@ -29,19 +29,29 @@ import {
   sampleImportSourceFingerprint,
   sampleImportDraftHash,
   sampleImportCommitFingerprint,
+  sampleImportSubmissionHash,
+  uncertainPropertyMarker,
   validateSampleImportDraft,
   assertKnownKeys,
   SAMPLE_IMPORT_CONTRACT_VERSION,
   SAMPLE_IMPORT_MAX_TOTAL_BYTES,
+  SAMPLE_IMPORT_REPLAY_PROOF_VERSION,
+  type SampleImportConfirm,
 } from "@workbench/core";
 import {
   verifyImageAttachment,
+  assertVerifiedImageUnchanged,
   sourceDataName,
   sourceDataBody,
-  withSourceDataBlock,
+  resolveSourceDataBlock,
   matchReferences,
+  importProvenanceComponent,
   importError,
+  conflictError,
+  type ImportProvenanceEntry,
+  type ResolvedSourceBlock,
   type SampleImportRecord,
+  type VerifiedImage,
 } from "./sample-import";
 import { fileLinks } from "@workbench/core/attachments";
 import type {
@@ -162,6 +172,9 @@ export class WorkbenchStore {
           "initialize",
         );
       this.files.acknowledgeRecovery(recovered);
+      // Journal recovery and index rebuild have finished; drop the legacy
+      // prepare response cache before any business request is served.
+      this.purgeLegacyPrepareCache();
     } catch (error) {
       this.db.close();
       this.files.close();
@@ -2746,6 +2759,44 @@ export class WorkbenchStore {
         : undefined,
     };
   }
+  /** Small confirmation view; never contains draft or normalized bodies. */
+  private importConfirm(record: SampleImportRecord): SampleImportConfirm {
+    return {
+      importId: record.importId,
+      status: record.status,
+      sourceDataId: record.sourceDataId,
+      sourceFingerprint: record.sourceFingerprint,
+      recordVersion: record.recordVersion,
+      source: record.source,
+      attempt: { id: record.attempt.id, status: record.attempt.status },
+    };
+  }
+  /**
+   * Removes only the legacy generic response cache for the prepare route. Older
+   * builds cached a full transient view (including draft bodies) under
+   * `POST:/api/v1/sample-imports:<key>`. Other operation caches are kept, the
+   * file is only rewritten when something actually matched, and a corrupt cache
+   * file is reported instead of being silently discarded.
+   */
+  private purgeLegacyPrepareCache() {
+    const relative = "jobs/idempotency.json";
+    if (!this.files.has(relative)) return;
+    const records = JSON.parse(this.files.read(relative)) as Record<
+      string,
+      unknown
+    >;
+    const prefix = "POST:/api/v1/sample-imports:";
+    const stale = Object.keys(records).filter((key) => key.startsWith(prefix));
+    if (!stale.length) return;
+    this.commit(() => {
+      const current = JSON.parse(this.files.read(relative)) as Record<
+        string,
+        unknown
+      >;
+      for (const key of stale) delete current[key];
+      this.atomicWrite(path.join(this.dataDir, relative), json(current));
+    }, "purgeLegacyPrepareCache");
+  }
   private requireActiveImportAttempt(
     record: SampleImportRecord,
     attemptId: unknown,
@@ -2790,44 +2841,59 @@ export class WorkbenchStore {
       contractVersion: SAMPLE_IMPORT_CONTRACT_VERSION,
     });
   }
-  prepareSampleImport(input: {
+  /**
+   * Async entry point: image decoding happens here, outside the synchronous
+   * store transaction, and every call site must await it explicitly. The
+   * private step below re-checks the verified identity before persisting.
+   */
+  async prepareSampleImport(input: {
     importId: string;
     attachmentIds: string[];
-  }) {
-    return this.commit(() => {
-      assertKnownKeys(input, ["importId", "attachmentIds"], "prepare sample import");
-      const relative = this.importRelative(input.importId);
-      const ids = input.attachmentIds;
-      if (!Array.isArray(ids) || ids.length < 1 || ids.length > 10)
-        throw importError("来源图片数量必须为 1 至 10 张");
-      if (new Set(ids).size !== ids.length)
-        throw importError("来源图片不能重复");
-      const verified = ids.map((id) => {
-        const attachment = this.getAttachment(id);
-        return { attachment, ...verifyImageAttachment(attachment) };
+  }): Promise<SampleImportConfirm> {
+    assertKnownKeys(input, ["importId", "attachmentIds"], "prepare sample import");
+    const ids = input.attachmentIds;
+    if (!Array.isArray(ids) || ids.length < 1 || ids.length > 10)
+      throw importError("来源图片数量必须为 1 至 10 张");
+    if (new Set(ids).size !== ids.length) throw importError("来源图片不能重复");
+    const relative = this.importRelative(input.importId);
+    const verified: { attachment: Attachment; image: VerifiedImage }[] = [];
+    for (const id of ids) {
+      const attachment = this.getAttachment(id);
+      verified.push({
+        attachment,
+        image: await verifyImageAttachment(attachment),
       });
-      const total = verified.reduce(
-        (sum, item) => sum + item.attachment.sizeBytes,
-        0,
-      );
-      if (total > SAMPLE_IMPORT_MAX_TOTAL_BYTES)
-        throw importError("来源图片合计不能超过 30 MiB");
+    }
+    const total = verified.reduce((sum, item) => sum + item.image.sizeBytes, 0);
+    if (total > SAMPLE_IMPORT_MAX_TOTAL_BYTES)
+      throw importError("来源图片合计不能超过 30 MiB");
+    return this.persistPreparedImport(input.importId, verified);
+  }
+  private persistPreparedImport(
+    importId: string,
+    verified: { attachment: Attachment; image: VerifiedImage }[],
+  ): SampleImportConfirm {
+    return this.commit(() => {
+      const relative = this.importRelative(importId);
       const sources = verified.map((item, index) => ({
         attachmentId: item.attachment.id,
         page: index + 1,
         name: item.attachment.originalName,
-        sha256: item.attachment.sha256,
+        sha256: item.image.sha256,
         componentId: "",
       }));
       const fingerprint = sampleImportSourceFingerprint(sources);
       if (this.files.has(relative)) {
-        const existing = this.readImport(input.importId);
+        const existing = this.readImport(importId);
         if (existing.sourceFingerprint !== fingerprint)
-          throw Object.assign(
-            new Error("同一 importId 的来源图片已经不同，请重新开始导入"),
-            { code: "CONFLICT" },
-          );
-        return this.importView(existing);
+          throw conflictError("同一 importId 的来源图片已经不同，请重新开始导入");
+        return this.importConfirm(existing);
+      }
+      // The bytes verified outside the transaction must still be the bytes
+      // registered for each attachment identity.
+      for (const item of verified) {
+        const current = this.getAttachment(item.attachment.id);
+        assertVerifiedImageUnchanged(current, item.image);
       }
       const createdAt = now();
       const components = sources.map((source, index) => ({
@@ -2845,7 +2911,7 @@ export class WorkbenchStore {
         source.componentId = components[index].id;
       });
       const data = this.createData({
-        name: sourceDataName(input.importId),
+        name: sourceDataName(importId),
         description: "实验记录来源",
         body: sourceDataBody(sources),
         aboutSampleIds: [],
@@ -2854,7 +2920,7 @@ export class WorkbenchStore {
       const record: SampleImportRecord = {
         schema: "swb.import/2",
         schemaVersion: 1,
-        importId: input.importId,
+        importId,
         status: "prepared",
         sourceDataId: data.id,
         sourceFingerprint: fingerprint,
@@ -2866,7 +2932,7 @@ export class WorkbenchStore {
         updatedAt: createdAt,
       };
       this.writeImport(record);
-      return this.importView(record);
+      return this.importConfirm(record);
     }, "prepareSampleImport");
   }
   getSampleImport(importId: string) {
@@ -2930,10 +2996,16 @@ export class WorkbenchStore {
       };
     }, "saveSampleImportDraft");
   }
-  private validateImportDraftSemantics(
+  /**
+   * Whole-batch pre-check. It runs before any object or sample is created, so a
+   * rejected batch leaves zero partial entities. It resolves each candidate's
+   * dedicated `[数据]` source block with the real parser and refuses content the
+   * import contract has no explicit materialisation rule for.
+   */
+  private planImportBatch(
     record: SampleImportRecord,
     sourceData: DataRecord & { body: string },
-  ) {
+  ): Map<string, ResolvedSourceBlock> {
     const draft = record.draft!;
     const critical = draft.ambiguities.filter(
       (item) => item.level === "critical" && !item.resolved,
@@ -2942,13 +3014,31 @@ export class WorkbenchStore {
       throw importError(
         `存在未解决的关键歧义，不能提交：${critical[0].message}`,
       );
+    const weaklyResolved = draft.ambiguities.filter(
+      (item) =>
+        item.level === "critical" &&
+        item.resolved &&
+        !(item.resolution ?? "").trim(),
+    );
+    if (weaklyResolved.length)
+      throw importError(
+        `关键歧义必须给出非空澄清说明，不能只标记已解决：${weaklyResolved[0].message}`,
+      );
     const sampleKeys = new Set(draft.samples.map((sample) => sample.key));
     const sourceByAttachment = new Map(
       record.source.map((item) => [item.attachmentId, item]),
     );
     const objects = this.searchObjects();
     const objectById = new Map(objects.map((object) => [object.id, object]));
+    const dataName = sourceData.name;
+    const resolved = new Map<string, ResolvedSourceBlock>();
     for (const sample of draft.samples) {
+      const block = resolveSourceDataBlock(
+        sample.body,
+        sample.sourceBlockId,
+        dataName,
+        sample.key,
+      );
       for (const mapping of sample.sourceMappings) {
         const source = sourceByAttachment.get(mapping.attachmentId);
         if (!source)
@@ -2957,6 +3047,10 @@ export class WorkbenchStore {
           );
         if (mapping.page !== source.page)
           throw importError(`样品 ${sample.key} 的来源页序与导入不一致`);
+        if (mapping.componentId && mapping.componentId !== source.componentId)
+          throw importError(
+            `样品 ${sample.key} 的来源组件与导入不一致：${mapping.componentId}`,
+          );
       }
       for (const reference of sample.references) {
         const target = reference.target;
@@ -2981,12 +3075,26 @@ export class WorkbenchStore {
             );
         }
       }
+      // Locally unresolved content must stay prose. It can never become a
+      // confirmed structured property value, and it is never silently replaced
+      // by 0, an empty value or a default unit.
+      const parsed = parseBody("draft", block.body);
+      for (const property of parsed.records.flatMap(
+        (entry) => entry.properties,
+      )) {
+        const marker = uncertainPropertyMarker(property.valueText);
+        if (marker)
+          throw importError(
+            `样品 ${sample.key} 的属性「${property.propertyName}」值「${property.valueText}」仍未确认（${marker}）；请把它改写成普通观察文本，或确认具体数值后再提交`,
+          );
+      }
       if (sample.code) {
         if (typeof sample.code !== "string" || !sample.code.trim())
           throw importError(`样品 ${sample.key} 的编号无效`);
         if (this.db.prepare("SELECT 1 FROM samples WHERE code=?").get(sample.code))
           throw importError(`样品编号已存在：${sample.code}`, "CONFLICT");
       }
+      resolved.set(sample.key, block);
     }
     for (const intent of draft.objectIntents) {
       const name = intent.canonicalName.trim();
@@ -2998,6 +3106,7 @@ export class WorkbenchStore {
     // The source Data must still be the exact version the draft was checked against.
     if (!sourceData.components.length)
       throw importError("来源 Data 缺少原始图片组件");
+    return resolved;
   }
   commitSampleImport(
     importId: string,
@@ -3025,17 +3134,24 @@ export class WorkbenchStore {
       );
       const record = this.readImport(importId);
       if (record.status === "committed") {
+        if (!record.receipt) throw conflictError("已提交的导入缺少 receipt");
+        // Only the exact same submission may replay the original receipt. An
+        // older record cannot produce this proof, so it is reported instead of
+        // accepting an arbitrary request or keeping a full draft around.
         if (
-          !record.receipt ||
-          record.commitFingerprint !== input.commitFingerprint
+          record.replayProofVersion !== SAMPLE_IMPORT_REPLAY_PROOF_VERSION ||
+          !record.submissionHash
         )
-          throw Object.assign(new Error("已提交的导入 fingerprint 不一致"), {
-            code: "CONFLICT",
-          });
+          throw conflictError(
+            "该导入记录来自旧版本，缺少可验证的提交证明；请使用 GET /sample-imports/:id 对账原 receipt",
+          );
+        if (record.submissionHash !== this.computeSubmissionHash(importId, input))
+          throw conflictError(
+            "提交请求与已提交记录不一致：attempt、版本或草稿 hash 已变化",
+          );
         return { status: "committed" as const, receipt: record.receipt };
       }
-      if (record.status === "cancelled")
-        throw Object.assign(new Error("导入已取消"), { code: "CONFLICT" });
+      if (record.status === "cancelled") throw conflictError("导入已取消");
       this.requireActiveImportAttempt(record, input.attemptId);
       if (Number(input.expectedVersion) !== record.recordVersion)
         throw Object.assign(new Error("导入记录版本冲突"), {
@@ -3062,11 +3178,11 @@ export class WorkbenchStore {
         computed !== input.commitFingerprint ||
         record.commitFingerprint !== input.commitFingerprint
       )
-        throw Object.assign(new Error("提交 fingerprint 不一致"), {
-          code: "CONFLICT",
-        });
-      this.validateImportDraftSemantics(record, sourceData);
-      const receipt = this.materializeSampleImport(record, sourceData);
+        throw conflictError("提交 fingerprint 不一致");
+      // Whole-batch pre-check happens before anything is created.
+      const plan = this.planImportBatch(record, sourceData);
+      const submissionHash = this.computeSubmissionHash(importId, input);
+      const receipt = this.materializeSampleImport(record, sourceData, plan);
       const committedAt = now();
       const committed: SampleImportRecord = {
         schema: "swb.import/2",
@@ -3079,6 +3195,8 @@ export class WorkbenchStore {
         recordVersion: record.recordVersion + 1,
         draftVersion: record.draftVersion,
         commitFingerprint: input.commitFingerprint,
+        replayProofVersion: SAMPLE_IMPORT_REPLAY_PROOF_VERSION,
+        submissionHash,
         attempt: {
           ...record.attempt,
           status: "revoked",
@@ -3092,9 +3210,34 @@ export class WorkbenchStore {
       return { status: "committed" as const, receipt };
     }, "commitSampleImport");
   }
+  /** Identity of one concrete commit request; transport headers are excluded. */
+  private computeSubmissionHash(
+    importId: string,
+    input: {
+      attemptId: string;
+      expectedVersion: number;
+      draftVersion: number;
+      draftHash: string;
+      sourceDataVersion: number;
+      commitFingerprint: string;
+    },
+  ) {
+    return sampleImportSubmissionHash({
+      importId,
+      attemptId: input.attemptId,
+      expectedVersion: Number(input.expectedVersion),
+      draftVersion: Number(input.draftVersion),
+      draftHash: input.draftHash,
+      sourceDataVersion: Number(input.sourceDataVersion),
+      commitFingerprint: input.commitFingerprint,
+      contractVersion: SAMPLE_IMPORT_CONTRACT_VERSION,
+      proofVersion: SAMPLE_IMPORT_REPLAY_PROOF_VERSION,
+    });
+  }
   private materializeSampleImport(
     record: SampleImportRecord,
     sourceData: DataRecord & { body: string },
+    plan: Map<string, ResolvedSourceBlock>,
   ) {
     const draft = record.draft!;
     const createdObjectIds: string[] = [];
@@ -3113,33 +3256,43 @@ export class WorkbenchStore {
     const createdSamples: {
       id: string;
       candidate: (typeof draft.samples)[number];
-      version: number;
+      block: ResolvedSourceBlock;
     }[] = [];
     for (const candidate of draft.samples) {
+      const block = plan.get(candidate.key);
+      if (!block) throw importError(`样品 ${candidate.key} 缺少来源区块解析结果`);
       const created = this.createSample({
         code: candidate.code,
         title: candidate.title,
         body: candidate.body,
       });
       sampleIdByKey.set(candidate.key, created.id);
-      createdSamples.push({
-        id: created.id,
-        candidate,
-        version: created.document.head.contentVersion,
-      });
+      createdSamples.push({ id: created.id, candidate, block });
     }
+    const sampleIds = createdSamples.map((sample) => sample.id);
+    // Every formal source relation is built from resolved Sample IDs, so two
+    // samples on the same page are never guessed from array order.
+    const { extraComponents } = this.buildImportSourceComponents(
+      record,
+      sampleIdByKey,
+    );
+    const updatedData = this.updateData(sourceData.id, {
+      expectedVersion: sourceData.version,
+      aboutSampleIds: [...new Set([...sourceData.aboutSampleIds, ...sampleIds])],
+      components: [...sourceData.components, ...extraComponents],
+    });
+    derivedComponentIds.push(...extraComponents.map((component) => component.id));
     const objectById = new Map(
       this.searchObjects().map((object) => [object.id, object]),
     );
-    const dataName = sourceData.name;
-    const sampleIds = createdSamples.map((sample) => sample.id);
-    for (const { id, candidate, version } of createdSamples) {
-      const body = ensureBlockIds(
-        withSourceDataBlock(candidate.body, dataName),
-      );
-      const parsed = parseBody(id, body);
+    for (const { id, candidate, block } of createdSamples) {
+      const parsed = parseBody(id, block.body);
       const occurrences = parsed.records.flatMap((entry) => entry.references);
-      const matched = matchReferences(occurrences, candidate.references, candidate.key);
+      const matched = matchReferences(
+        occurrences,
+        candidate.references,
+        candidate.key,
+      );
       const bindings: ReferenceOccurrence[] = matched.map(
         ({ occurrence, candidate: mapping }) => {
           let objectId: string | undefined;
@@ -3166,58 +3319,35 @@ export class WorkbenchStore {
           };
         },
       );
-      this.saveDocument(id, body, version, bindings);
-      const dataItem = parsed.records.flatMap(
-        (entry) => entry.dataItems || [],
-      )[0];
-      if (!dataItem)
-        throw importError(`样品 ${candidate.key} 缺少来源数据区块`);
-      const current = this.readDocument(id);
+      const saved = this.saveDocument(id, block.body, undefined, bindings);
       this.bindDataBlock(
         id,
-        dataItem.blockId,
+        block.blockId,
         sourceData.id,
-        current.head.contentVersion,
-        sourceData.version,
+        saved.contentVersion,
+        // Mirrors bind to the final formal source version, never a stale one.
+        updatedData.version,
       );
       const result = this.finalizeDocument(id);
       if (result.status !== "ready")
         throw importError(`样品 ${candidate.key} 提取未完成，批次已回滚`);
+      const finalDoc = this.readDocument(id);
+      const binding = finalDoc.head.blocks?.[block.blockId];
+      if (!binding || binding.dataId !== sourceData.id)
+        throw importError(`样品 ${candidate.key} 的来源 Data 绑定不完整`);
+      if (binding.baseVersion !== updatedData.version)
+        throw importError(`样品 ${candidate.key} 的来源版本与正式 Data 不一致`);
+      if (
+        (finalDoc.head.references ?? []).some(
+          (reference) => reference.status !== "bound" || !reference.objectId,
+        )
+      )
+        throw importError(`样品 ${candidate.key} 的对象引用未全部绑定`);
+      if (
+        (finalDoc.head.references?.length ?? 0) !== candidate.references.length
+      )
+        throw importError(`样品 ${candidate.key} 的对象引用数量与草稿不一致`);
     }
-    // Derived transcriptions become external components on the shared source Data.
-    const extraComponents: DataComponent[] = [];
-    for (const sample of draft.samples)
-      for (const mapping of sample.sourceMappings) {
-        if (!mapping.transcription) continue;
-        const source = record.source.find(
-          (item) => item.attachmentId === mapping.attachmentId,
-        );
-        if (!source) throw importError("来源映射引用了未知附件");
-        const component: DataComponent = {
-          id: uuid(),
-          kind: "text",
-          name: `${mapping.page} 页转录`,
-          role: "transcription",
-          creator: "external",
-          provenance: json({
-            page: mapping.page,
-            sourceComponentId: source.componentId,
-            positions: mapping.positions ?? "",
-            model: "sample-import",
-            contractVersion: SAMPLE_IMPORT_CONTRACT_VERSION,
-          }),
-          createdAt: now(),
-          derivedFrom: [source.componentId],
-          content: mapping.transcription,
-        };
-        extraComponents.push(component);
-        derivedComponentIds.push(component.id);
-      }
-    this.updateData(sourceData.id, {
-      expectedVersion: sourceData.version,
-      aboutSampleIds: [...new Set([...sourceData.aboutSampleIds, ...sampleIds])],
-      components: [...sourceData.components, ...extraComponents],
-    });
     return {
       schemaVersion: 1 as const,
       importId: record.importId,
@@ -3226,10 +3356,76 @@ export class WorkbenchStore {
       createdObjectIds,
       derivedComponentIds,
       commitFingerprint: record.commitFingerprint!,
-      sourceDataVersion: sourceData.version,
+      // The version the formal source Data has after this commit.
+      sourceDataVersion: updatedData.version,
       contractVersion: SAMPLE_IMPORT_CONTRACT_VERSION,
       committedAt: now(),
     };
+  }
+  /**
+   * Builds the derived transcription and the single per-import provenance
+   * mapping component. Both are existing Data components with real IDs,
+   * positions and version tags only.
+   */
+  private buildImportSourceComponents(
+    record: SampleImportRecord,
+    sampleIdByKey: Map<string, string>,
+  ) {
+    const draft = record.draft!;
+    const createdAt = now();
+    const sourceByAttachment = new Map(
+      record.source.map((item) => [item.attachmentId, item]),
+    );
+    const provenanceEntries: ImportProvenanceEntry[] = [];
+    const extraComponents: DataComponent[] = [];
+    for (const sample of draft.samples) {
+      const sampleId = sampleIdByKey.get(sample.key)!;
+      for (const mapping of sample.sourceMappings) {
+        const source = sourceByAttachment.get(mapping.attachmentId);
+        if (!source) throw importError("来源映射引用了未知附件");
+        provenanceEntries.push({
+          sampleId,
+          sampleKey: sample.key,
+          attachmentId: mapping.attachmentId,
+          sourceComponentId: source.componentId,
+          page: mapping.page,
+          ...(mapping.positions ? { positions: mapping.positions } : {}),
+        });
+        if (!mapping.transcription) continue;
+        extraComponents.push({
+          id: uuid(),
+          kind: "text",
+          name: `${mapping.page} 页转录`,
+          role: "transcription",
+          creator: "external",
+          // B1 is a deterministic, model-free import: no unknown model identity
+          // is invented here. B2 would add real model/knowledge audit fields.
+          provenance: json({
+            schema: "swb.import-transcription/1",
+            importId: record.importId,
+            sampleId,
+            page: mapping.page,
+            sourceComponentId: source.componentId,
+            positions: mapping.positions ?? "",
+            contractVersion: SAMPLE_IMPORT_CONTRACT_VERSION,
+          }),
+          createdAt,
+          derivedFrom: [source.componentId],
+          content: mapping.transcription,
+        });
+      }
+    }
+    if (provenanceEntries.length)
+      extraComponents.unshift(
+        importProvenanceComponent(
+          uuid(),
+          record.importId,
+          provenanceEntries,
+          provenanceEntries.map((entry) => entry.sourceComponentId),
+          createdAt,
+        ) as DataComponent,
+      );
+    return { extraComponents, provenanceEntries };
   }
   cancelSampleImport(
     importId: string,

@@ -7,10 +7,9 @@ import archiver from "archiver";
 import { pipeline } from "node:stream/promises";
 import { WorkbenchStore } from "./store";
 import { createCompleteBackup, restoreCompleteBackup } from "./backup";
-const IMPORT_PNG = Buffer.from(
-  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
-  "base64",
-);
+import { realImageFixtures } from "./test-images";
+
+const IMPORT_PNG = realImageFixtures().PNG;
 const roots: string[] = [];
 const stores: WorkbenchStore[] = [];
 const setup = () => {
@@ -109,7 +108,7 @@ describe("complete file backups", () => {
     const { root, store } = setup();
     const png = store.saveAttachment(IMPORT_PNG, "record.png", "image/png");
     const importId = randomUUID();
-    const prepared = store.prepareSampleImport({
+    const prepared = await store.prepareSampleImport({
       importId,
       attachmentIds: [png.id],
     });
