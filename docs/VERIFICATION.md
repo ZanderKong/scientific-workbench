@@ -235,3 +235,20 @@
 - 本轮证据：`pnpm agent:knowledge:check` PASS（6 项，bundleHash `2a7a0701…8b0d0e`，与上轮一致）；`pnpm typecheck` 4 包 PASS；`pnpm build` PASS；`pnpm test` = core16 / web14 / mcp3 / server169（真实 S3 2 项按设计跳过）；`pnpm exec playwright test` 46 passed；`git diff --check` PASS。局部 7 文件（sample-import ×3、vision-spike ×2、opencode、agent-runs）共 108 项通过。
 - 未变：`apps/web`、`index.html`、冻结原型、科研实体文件 schema、`operations.ts`/OpenAPI、MCP 操作、依赖与 lockfile 均无变化；未新增产品 API/MCP 操作，未新增权限平台或日志平台。未访问 `~/ScientificWorkbench`，未改用户 OpenCode 全局配置，未使用 4317；测试只用 mkdtemp 与随机空闲端口。
 - 仍未验证：真实 Vision V1/V2（NOT VERIFIED，缺隔离端点/凭据/工具调用轨迹/产物）、真实 restricted profile 全范围、Phase B2（BLOCKED）。完整首版仍未完成。
+
+### 2026-09-21 AI 导入交付计划 S1：Spike 判定剩余问题
+
+- 计划：`docs/plans/AI_RECORD_IMPORT_DELIVERY_PLAN.md` 第 6 节（S1）。基线 HEAD `69ad417`，Node v22.22.3 / pnpm 10.14.0。
+- R0（先复现，再修）：把基线模块（`69ad417:apps/server/src/vision-spike.ts`）复制为临时 probe，用注入式 deps（无真实 HTTP、无真实模型）跑四个用例，基线全部给出错误结论：
+  - (a) 图片答案正确但 assistant 消息**没有任何请求关联字段** → `correlatedImageAnswer=PASS`（按提交顺序猜测的降级路径）。
+  - (b) 七个 deny 范围全部由**普通工具错误**（`status:"error"`、`ENOENT: no such file or directory`）作答 → `restrictedDeny=PASS`。
+  - (c) allow 调用**没有成功状态字段**、只有 output → `restrictedAllow=PASS`。
+  - (d) 产物扫描返回**与本次 run 无关的非空文件数组** → `noSensitiveWorkbenchLeakage=PASS`。
+  - 临时 probe 已删除，四个反例固化进正式测试。
+- S1.1 请求关联：删除 `correlatedReply` 的 positional 降级路径；只接受本次 session 中 `parentId === 提交的 prompt messageId` 且 `completed` 已置位的最终 assistant 回复；runtime 未提供该字段时如实返回 NOT VERIFIED（错误信息明确区分「未提供关联字段」与「只看到其他请求的回复」），不再按顺序或时间猜测。旧消息、其他请求、延迟回复、用户回显、未完成片段不能借用；同一消息流式更新后每轮重新检查。
+- S1.2 权限证据：`isRefusal` 替换为三级分类 `refusalClass`——只有 `denied/rejected` 状态或明确的策略拒绝文本（permission denied / not allowed / forbidden / blocked by policy / 拒绝执行 / 无权限…）算 policy；`not found`、未知工具、连接失败、超时等归为 incidental，不再算拒绝。`DenyProbe.expects` 允许声明该能力对应的工具名与目标，仲裁只接受**指向本能力目标**的拒绝，避免同一回复里无关调用的拒绝冒充全部范围。allow 缺少显式成功状态时不再默认为成功（NOT VERIFIED）。禁止动作实际发生时 FAIL 优先于同一回复内的拒绝。`NormalizedMessage.tools` 增加有界的 `input` 文本，仅用于目标匹配、不进入报告。
+- S1.3 产物与时序：产物证据改为 `ArtifactEvidence`（`source/runId/collectedAt/scope/items`）；harness 生成 `runId` 并写入报告，要求产物证据 `runId` 一致、`collectedAt` 属于本次 run、`scope` 覆盖 `job/log/notice`、items 非空且无截断项，否则 NOT VERIFIED。CLI 从产物**文件名前缀**推导覆盖范围（`<scope>__<name>`），超过采集上限时显式标记截断而不是静默只扫前 50 个。
+- 测试替身去时序：`vision-spike.test.ts` 的 fake runtime 不再用 `setTimeout` 决定回复与 busy 状态，改为受控同步点（回复入队后等 harness 读过 `/session/status` 才释放），`drive()` 负责推进流程；只有图片提交会被 `/session/status` 跟随，因此该同步点仅对图片探针生效。新增用例覆盖「无关联字段的正确答案」「普通工具错误/未知工具/无关拒绝」「allow 缺少成功状态」「同一回复内泄漏优先于拒绝」「产物 runId/时间/范围/截断」「干净产物 → PASS」。
+- 本轮证据：局部 7 文件 114 passed；`pnpm agent:knowledge:check` PASS（bundleHash `2a7a0701…8b0d0e` 未变）；`pnpm typecheck` 4 包 PASS；`pnpm build` PASS；`pnpm test` = core16 / web14 / mcp3 / server175（真实 S3 2 项按设计跳过）；`pnpm exec playwright test` 46 passed；`git diff --check` PASS。
+- 未变：`apps/web`、冻结原型、科研文件 schema、`operations.ts`/OpenAPI、MCP 操作、依赖与 lockfile。
+- 仍未验证：S2 真实 transport/profile（本轮**没有**取得真实端点与凭据，未发出任何真实调用）；Phase B2 未开始（依赖 S2 PASS）。

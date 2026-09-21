@@ -74,6 +74,7 @@ ZIP64 全量备份固定业务文件/清单集合，保护不可变附件；远�
 
 - Phase A（Agent Knowledge Layer）：PASS，提交 `c9842cd`。见 `docs/agent/`、`packages/core/src/document-contract.ts`、`packages/core/src/agent-knowledge.ts`、`scripts/build-agent-knowledge.ts`、`apps/server/src/knowledge.ts`、`docs/API_MCP.md`。
 - Phase B1（Deterministic Sample Import Backend）：**上一轮 PASS 结论已被修订**。原始实现提交 `099b40f`，但 2026-09-21 审核复现出 8 个问题（F02 覆写科研正文、F03 prepare 长期缓存完整 draft、F04 待确认值成为正式属性、F05 位置映射丢失、F06 假图片通过魔数校验、F07 已提交记录接受不同请求、F08 receipt/镜像版本落后）。修复见 `docs/plans/AGENT_KNOWLEDGE_SAMPLE_IMPORT_REVIEW_FIX_PLAN.md` 与 `docs/VERIFICATION.md` 2026-09-21 审核问题修复段：`sourceBlockId` 显式来源身份、prepare 最小确认 + 限定范围缓存清理、不确定属性值阻断、`import-provenance` 组件与提交顺序统一版本、`sharp` 真实像素解码、`submissionHash` 精确 replay。B1 修复后的 gate 证据为 core16 / web14 / mcp3 / server152 + playwright 46。
+- AI 导入交付计划（S1，2026-09-21）：Spike 判定最后三项收紧——删除请求关联的顺序/时间猜测降级；拒绝证据要求策略级拒绝并绑定被测能力目标（普通工具错误不算）；产物证据要求 runId/采集时间/覆盖范围一致。S2 起需要隔离真实端点、视觉模型凭据与用户显式 opt-in，当前不具备，B2 仍 BLOCKED，整体任务未完成。
 - Vision Spike（第二轮收紧）：图片校验增加解码期间与提交前的**内容级**复核；CLI 不再自行解析 server-only 的 `sharp`；图片答案要求请求关联 + 完成状态 + 严格单整数；allow/deny 需要真实调用与拒绝证据（含七个必需范围与副作用检查），隔离失败即停止；泄漏检查区分 report 与 Workbench 产物。七项合取现为「每项证据充分」而非「非噪音」。真实 V1/V2 仍为 NOT VERIFIED，缺项逐条列出。
 - Vision Spike：harness 已重写为七项证据合取（`apps/server/src/vision-spike.ts`、`vision-spike.test.ts` 18 项负向矩阵），真实 V1/V2 状态仍为 NOT VERIFIED，缺项已逐条列出，不得因为“设置 URL 即可”而记为支持。
 - Phase B2（AI / Runtime / UI）：BLOCKED。前置 Vision Spike V1/V2 均为 NOT VERIFIED，未启用任何 AI 导入入口/readiness，A/B1 不回滚。证据见 `docs/VERIFICATION.md`、`docs/OPENCODE_INTEGRATION.md` 与 `scripts/spike-opencode-vision.mts`。

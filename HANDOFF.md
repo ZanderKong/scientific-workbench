@@ -308,3 +308,40 @@ Phase B2：BLOCKED（前置真实 Spike 未 PASS，产品内无 AI 导入入口�
 - Tracked temporary databases/reports/private directories were not found; common credential patterns did not match current tracked files. This was not a full Git-history or screenshot privacy audit. Historical documents still contain local paths.
 - Validation: changed-document links and bash examples pass; git diff --check clean. npm pack was dry-run only, with scripts disabled, and nothing was published. No production code/build configuration changed; no full business regression rerun.
 - Manual review instance at 127.0.0.1:14321 remains healthy and running. Next: if a distributable package is needed, isolate build/test output and specify package contents without deleting normal tests or historical evidence. Remaining Spike findings are unchanged.
+
+## 2026-09-21 Next end-to-end AI import delivery plan
+
+- User requested a coding plan for DeepSeek V4.1 Flash that ends with the expected usable product flow. Added docs/plans/AI_RECORD_IMPORT_DELIVERY_PLAN.md, based on local HEAD 69ad417 and the approved B2 scope.
+- Plan explicitly requires early authorized real-runtime/model setup, closure of remaining Spike evidence issues, one genuinely verified target configuration, complete restricted runtime/MCP lifecycle, Samples import UI, manual refresh action, and real browser-to-persisted-entity acceptance. Partial backend or mock completion is not overall delivery.
+- Documentation-only planning turn: no implementation, model calls, service changes, commits or push. Existing manual review instance and user data left untouched. Next action is execution of the plan; missing real credentials/endpoint must be surfaced early, not after claiming completion.
+
+## 2026-09-21 AI 记录导入交付计划：S1 完成，S2 起被真实环境阻塞
+
+- 执行 `docs/plans/AI_RECORD_IMPORT_DELIVERY_PLAN.md`。基线 HEAD `69ad417`（与计划一致），Node v22.22.3 / pnpm 10.14.0，工作树仅新增计划文件与其规划记录。
+- **D0 环境核对（如实记录缺项）**：本机 `opencode` 1.18.31 已安装，但**没有任何 OpenCode server 在监听**（`lsof` 只有 Workbench 的 14321/4317 与 5173 vite）；没有可用的隔离 endpoint、没有已授权的视觉模型/凭据、也没有用户对真实调用的显式 opt-in。因此 **S2 无法开工，B2 不能启用**（B2 依赖目标组合 Spike PASS）。未读取或搜索任何用户凭据，未改动用户 OpenCode 全局配置，未触碰 14321 人工实例。
+- S1 反例复现（基线模块 + 注入式 deps）：无关联字段的正确答案 → `correlatedImageAnswer=PASS`；七个 deny 范围由普通工具错误作答 → `restrictedDeny=PASS`；allow 无成功状态 → `restrictedAllow=PASS`；无关非空产物数组 → `noSensitiveWorkbenchLeakage=PASS`。四项均已固化为正式测试。
+- S1 修复：删除按顺序/时间猜测的 positional 关联降级；拒绝证据改为 policy / incidental / none 三级分类（普通工具错误、找不到文件、未知工具、连接失败不算策略拒绝）并要求拒绝指向该能力的目标；allow 缺成功状态不再默认成功；禁止动作实际发生优先于同回复内的拒绝；产物证据要求 runId 一致、采集时间属于本次 run、覆盖 job/log/notice、无截断；fake runtime 改为受控同步点（去掉 `setTimeout`）。
+- 本轮证据：局部 7 文件 114 passed；`pnpm test` = core16 / web14 / mcp3 / server175（S3 2 项跳过）；`pnpm exec playwright test` 46 passed；typecheck/build/agent:knowledge:check（bundleHash 未变）/`git diff --check` 全部 PASS。
+- 未变：`apps/web`、`index.html`、冻结原型、科研文件 schema、`operations.ts`/OpenAPI、MCP 操作、依赖与 lockfile。未访问 `~/ScientificWorkbench`。
+- 状态：**整体任务未完成**。S1 完成；S2 因缺少隔离真实端点/视觉模型凭据/opt-in 而未开始；S2 之后还有 B2.1–B2.6、UI、G2 真实端到端与 D1 交付实例。下一步唯一可行动项见下方交接。
+
+### 交接字段（AI 导入交付计划 · 当前轮）
+
+```text
+基线 / 最终 HEAD：69ad417 → 本轮 S1 提交
+修改文件与范围：apps/server/src/vision-spike.ts（S1.1/S1.2/S1.3 判定）、apps/server/src/opencode.ts（工具调用有界 input 证据）、scripts/spike-opencode-vision.mts（产物范围/截断）、apps/server/src/vision-spike.test.ts（受控同步点与 33 项矩阵）、docs/VERIFICATION.md、HANDOFF.md、IMPLEMENTATION_PLAN.md
+实际运行命令与结果：局部 114 passed；pnpm test = core16/web14/mcp3/server175（S3 2 skipped）；pnpm test:e2e 46 passed；pnpm typecheck / pnpm build / pnpm agent:knowledge:check / git diff --check 全部 PASS
+跳过项及原因：真实 S3 2 项（需容器，按设计跳过）
+未运行项：S2 真实 transport/profile、B2 全部子阶段、UI、G2 真实端到端、D1 交付实例
+
+Spike harness 自动化：PASS（33 项，含新收紧项）
+真实 Vision V1：NOT VERIFIED（无隔离端点/凭据/opt-in；未发出任何真实调用）
+真实 Vision V2：NOT VERIFIED（同上）
+Phase B2：BLOCKED（前置 S2 未完成）
+
+前端 / 原型 / 数据格式是否改变：均未改变
+用户目录及配置保护情况：未访问 ~/ScientificWorkbench，未改用户 OpenCode 全局配置，未读取/搜索用户凭据，未操作 14321 人工实例
+剩余服务 / 端口 / PID：无本轮创建的服务；14321/4317/5173 为用户既有进程，未触碰
+临时资源清理情况：R0 临时 probe 模块与脚本已删除；测试全部使用 mkdtemp 临时目录；fake runtime 不再依赖定时器
+下一项最小可执行步骤（需要用户提供，见下）：在隔离运行目录/端口用合法凭据启动一个真实 OpenCode 实例，并给出 endpoint、目标 flavor（V1 或 V2）、具备图片能力的 provider/model 标识，以及「同意进行有限真实调用」的显式 opt-in；随后按 S2 七项依次取证。
+```

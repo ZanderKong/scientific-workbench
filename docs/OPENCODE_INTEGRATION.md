@@ -274,3 +274,10 @@ OpenCode server cwd = /tmp/swb-opencode-final-smoke/server-cwd
 - R4：allow 需要「请求关联的调用证据 + 调用声明内的允许工具 + 调用成功 + 返回内容与受控读取一致」，并拒绝 probe 期间执行声明外工具；调用方未声明允许工具名单时保持 NOT VERIFIED。deny 需要 `shell`、`file-read`、`file-write`、`subagent`、`unrelated-mcp`、`network`、`generic-scientific-write` **每个必需范围**各自的策略拒绝证据（或可观察副作用检查）；静默、模型自述拒绝、待处理权限都不构成 PASS。隔离检查失败后立即停止后续图片/allow/deny 提交。
 - R5：泄漏检查分为「report 自身脱敏」与「Workbench 产物」两段；未提供 `SWB_SPIKE_ARTIFACT_DIR`（或产物为空、采集失败）时保持 NOT VERIFIED，并列出未检查范围；发现泄漏只输出类别与产物标签。
 - 结论不变：真实 V1/V2 仍 **NOT VERIFIED**（无隔离端点/凭据/工具调用轨迹/产物），Phase B2 仍 **BLOCKED**。本轮只提升 harness 判定的可信度，不宣称真实兼容，也不自动进入 B2。
+
+## 2026-09-21 交付计划 S1：Spike 判定最后三项收紧
+
+- S1.1 请求关联：删除按提交顺序匹配的降级路径，只接受 `parentId === 本次提交 messageId` 且 `completed` 已置位的最终回复；runtime 不提供该字段时明确 NOT VERIFIED（报告区分「未提供关联字段」与「只看到其他请求的回复」）。旧消息、其他请求、延迟回复、用户回显、未完成片段都不能借用；同一消息流式更新后每轮重新检查；每张图各自关联。
+- S1.2 权限证据：拒绝证据按 `policy / incidental / none` 分类，普通工具错误、找不到文件、未知工具、连接失败一律不算策略拒绝；`DenyProbe.expects` 要求拒绝指向该能力的目标，避免无关调用的拒绝冒充全部范围；allow 缺少显式成功状态不再默认为成功；禁止动作实际发生时 FAIL 优先于同一回复内的拒绝；隔离失败后停止后续提交。
+- S1.3 产物与时序：产物证据需带 `runId`、采集时间与覆盖范围（`job/log/notice`），均由本次 run 校验；超过采集上限时显式标记截断。fake runtime 改为受控同步点，不再用定时器赌调度。
+- 结论不变：真实 V1/V2 仍 **NOT VERIFIED**（本机无隔离端点/视觉模型凭据/opt-in），Phase B2 仍 **BLOCKED**。
