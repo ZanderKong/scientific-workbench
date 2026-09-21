@@ -281,3 +281,10 @@ OpenCode server cwd = /tmp/swb-opencode-final-smoke/server-cwd
 - S1.2 权限证据：拒绝证据按 `policy / incidental / none` 分类，普通工具错误、找不到文件、未知工具、连接失败一律不算策略拒绝；`DenyProbe.expects` 要求拒绝指向该能力的目标，避免无关调用的拒绝冒充全部范围；allow 缺少显式成功状态不再默认为成功；禁止动作实际发生时 FAIL 优先于同一回复内的拒绝；隔离失败后停止后续提交。
 - S1.3 产物与时序：产物证据需带 `runId`、采集时间与覆盖范围（`job/log/notice`），均由本次 run 校验；超过采集上限时显式标记截断。fake runtime 改为受控同步点，不再用定时器赌调度。
 - 结论不变：真实 V1/V2 仍 **NOT VERIFIED**（本机无隔离端点/视觉模型凭据/opt-in），Phase B2 仍 **BLOCKED**。
+
+## 2026-09-21 真实 V1 图片 transport 取证（S2 阶段 1）
+
+- 环境：隔离 `http://127.0.0.1:4199`，V1 legacy `1.18.31`，模型 `deepseek/deepseek-v4-flash-vision-exp`（attachment=true）；凭据从该隔离服务的 `server.env` 私密读取，未出现在命令行或报告里。该服务未连接任何 MCP（`/mcp` 为空）。
+- 实测通过：session 实际 `directory` 等于专属 Agent 目录；`POST /session/{id}/prompt_async` 返回 204、2–3ms，返回时无最终回复；两张数量不同（4/7）的随机夹具经 `parentID` 关联到各自请求的已完成回复并读出正确数量。未使用同步 `/message`，未验证 `/api/*`。
+- 判定修正：`asyncSubmission` 改为「返回时是否已存在本次请求的最终回复」这一直接判据；`/session/status` 的 busy 只作附带证据，因为它在真实 runtime 上会滞后数毫秒。
+- 未取得证据（保持 NOT VERIFIED，不得开放 B2）：受限 profile 的 allow/deny 七范围、以及 Workbench Job/日志产物泄漏检查。这些需要 B2.2 的专属 managed runtime 与 workbench MCP 接线。

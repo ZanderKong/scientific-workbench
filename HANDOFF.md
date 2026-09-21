@@ -345,3 +345,13 @@ Phase B2：BLOCKED（前置 S2 未完成）
 临时资源清理情况：R0 临时 probe 模块与脚本已删除；测试全部使用 mkdtemp 临时目录；fake runtime 不再依赖定时器
 下一项最小可执行步骤（需要用户提供，见下）：在隔离运行目录/端口用合法凭据启动一个真实 OpenCode 实例，并给出 endpoint、目标 flavor（V1 或 V2）、具备图片能力的 provider/model 标识，以及「同意进行有限真实调用」的显式 opt-in；随后按 S2 七项依次取证。
 ```
+
+## 2026-09-21 S2 阶段 1：真实 V1 图片 transport 已取证（用户已提供隔离环境）
+
+- 用户提供隔离服务：`http://127.0.0.1:4199`、V1 legacy、`opencode 1.18.31`、模型 `deepseek/deepseek-v4-flash-vision-exp`；Basic Auth 从 `/Users/kong/.opencode-acceptance/server.env` 私密读取（新增 `SWB_SPIKE_ENV_FILE`，不进 argv、不打印、不写报告）。授权预算 S2 ≤15 / G2 ≤10 次真实模型请求；本轮 S2 已用 8 次。
+- 许可边界：不重启、不修改该隔离服务的全局配置；未触碰 14321 人工实例；未访问 `~/ScientificWorkbench`。
+- **已取得真实证据（S2 第 1–4 项）**：session 实际 `directory` 等于专属 Agent 目录；runtime/model 身份明确；`prompt_async` 3ms 返回 204 且返回时无最终回复；两张数量不同（4/7）的随机夹具经 `parentID` 关联读出正确数量。未使用同步 `/message`，未验证 `/api/*`（按要求不扩大范围）。
+- 修正：`asyncSubmission` 改用直接判据（返回时是否已存在最终回复），不再依赖滞后的 `/session/status` busy 映射——真实运行时曾因此被误判 FAIL。
+- **仍未取证（NOT VERIFIED，B2 不得开放）**：`restrictedAllow`、`restrictedDeny`（七范围）、Workbench 产物泄漏检查。该隔离服务未连接任何 MCP（`/mcp` 为空）且没有受限 permission profile，因此 allow/deny 无法在这台服务上取证；需要按 B2.2 自建专属 managed runtime（独立目录/端口 + workbench MCP + 受限 profile）后再取证。
+- 预算状态：S2 剩余约 7 次；一次完整的 allow(1)+deny(7)+图片(1) 取证约需 9 次，超出剩余额度。已向用户申请追加（见下）。
+- 下一步：先实现 B2.2 的窄接线（`sample-import-agent.ts`：import scope、MCP 工具过滤、受限 profile、readiness），自建专属 managed 实例，再用追加额度完成 allow/deny/产物取证；之后进入 B2.3–B2.6 与 UI。

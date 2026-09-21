@@ -252,3 +252,16 @@
 - 本轮证据：局部 7 文件 114 passed；`pnpm agent:knowledge:check` PASS（bundleHash `2a7a0701…8b0d0e` 未变）；`pnpm typecheck` 4 包 PASS；`pnpm build` PASS；`pnpm test` = core16 / web14 / mcp3 / server175（真实 S3 2 项按设计跳过）；`pnpm exec playwright test` 46 passed；`git diff --check` PASS。
 - 未变：`apps/web`、冻结原型、科研文件 schema、`operations.ts`/OpenAPI、MCP 操作、依赖与 lockfile。
 - 仍未验证：S2 真实 transport/profile（本轮**没有**取得真实端点与凭据，未发出任何真实调用）；Phase B2 未开始（依赖 S2 PASS）。
+
+### 2026-09-21 AI 导入交付计划 S2（阶段 1）：真实 V1 图片 transport 取证
+
+- 环境（D0 由用户提供，凭据仅从 `server.env` 私密读取，未进入 argv/输出）：隔离服务 `http://127.0.0.1:4199`，flavor **V1 legacy**，`opencode 1.18.31`，目标模型 `deepseek/deepseek-v4-flash-vision-exp`（`capabilities.attachment=true`）；`/mcp` 返回 `{}`（未连接任何 MCP），`/permission` 返回 `[]`。未重启、未修改该服务的全局配置；只做只读探测与模型调用。
+- 授权预算：S2 ≤15 次真实模型请求、G2 ≤10 次；本轮 S2 已使用 8 次（含一次被外层超时中断的运行）。
+- 证据（`runId a78caa9a-…`、`0f4c0b07-…`、`c43cb01b-…`）：
+  - `isolation` **PASS** — 创建 session 后读取 `GET /session/{id}`，实际 `directory` 等于本轮专属 Agent 目录（不是服务 cwd）。
+  - `runtimeIdentityAndModel` **PASS** — `flavor=v1 version=1.18.31 model=deepseek/deepseek-v4-flash-vision-exp`，15 个模型可选。
+  - `asyncSubmission` **PASS** — `POST /session/{id}/prompt_async` 返回 `204`、耗时 2–3ms，且返回瞬间该请求尚无最终 assistant 回复；未使用同步 `/message`。
+  - `correlatedImageAnswer` **PASS** — 两张**数量不同**（4 与 7）的随机红色方块夹具，各自通过 `parentID === 本次 messageID` 关联到已完成的最终回复并读出正确数量；答案只存在于像素中（文件名与提示均不含数字）。
+- 本轮真实运行暴露并修正了一个 harness 缺陷：`asyncSubmission` 原先只看 `/session/status` 的 busy，而该映射在真实 runtime 上滞后数毫秒，导致真正异步的运行时被误判 FAIL。现改为**直接判据**「提交返回时是否已存在本次请求的最终回复」，`/session/status` 仅作为附带证据记录（`transport.busyAtReturn`）。
+- 仍 **NOT VERIFIED**（未取得证据，不得据此开放 B2）：`restrictedAllow`（该隔离服务未连接 workbench MCP，无 `knowledge_read` 可用）、`restrictedDeny`（未对七个范围做策略拒绝取证）、`noSensitiveWorkbenchLeakage`（本轮没有 Workbench Job/日志产物可采集）。这三项需要 B2.2 的专属 managed runtime（自建实例 + workbench MCP + 受限 permission profile）才能取证。
+- 局部证据：`vision-spike.test.ts` 33 项 + `vision-spike-cli.test.ts` 5 项全部通过；CLI 集成测试的假端点改为受控异步（提交先返回、第 2 次列表读取才出现回复），不含定时器。
