@@ -250,3 +250,11 @@ OpenCode server cwd = /tmp/swb-opencode-final-smoke/server-cwd
 - 缺少的实测项（明确列出，不能因为“只要设置 URL 就支持”）：真实 version/flavor、实际 model identifier 与 `supportsImage` 声明、真实 image transport 的接受与否与返回结构、真实异步时序、`restrictedAllow` 正向（knowledge 读取、import get/save/commit、Question）与 `restrictedDeny` 反向（shell、任意文件读写、local-path upload、subagent、无关 MCP、网络工具、generic 科学写入）逐项实测、auto-allow 下的 deny 优先级、日志/Job/notice 泄漏检查。
 - 结论：受影响 flavor 的 AI 导入 readiness 继续 **关闭（BLOCKED）**：产品内没有任何 AI 导入入口（Phase B2 未实现），不回滚 Phase A/B1。
 - 下一项最小调查：在隔离 temp 中启动一个使用合法凭据的真实 OpenCode 服务（独立运行目录/端口、精确 PID 追踪），用 `SWB_SPIKE_OPENCODE_URL` 指向它重跑 harness，先确认 `detectOpenCodeFlavor`、`listModels().supportsImage` 与 session directory 证据，再确认图片 transport；之后才评估 B2。禁止升级用户 runtime、同步 prompt 或放宽权限来制造 PASS。
+
+## 2026-09-21 第二轮修补：Spike 证据判定收紧（真实状态仍 NOT VERIFIED）
+
+- R2：根目录 CLI 原先自行 `import("sharp")`，而 `sharp` 只声明在 server 包，配置端点后会在发出请求前失败。现在 CLI 调用 server 导出的 `countRegionsInPng`，`sharp` 仍只属于 server；依赖与 lockfile 未变。`apps/server/src/vision-spike-cli.test.ts` 5 项用子进程运行真实入口，显式清理全部 `SWB_SPIKE_*`（不继承用户端点/凭据），并断言假端点确实收到请求且输出无 `sharp` 解析错误。
+- R3：图片答案只接受**本次提交请求关联**（runtime 提供的 `parentId`，无则按提交顺序）且 `completed` 已置位的最终 assistant 回复，文本必须严格为单个整数（允许一个结尾句点）。无关新消息、其他请求回复、其他 session、prompt 回显、旧历史、未完成片段一律不采信；同一消息在流式更新后重新检查；多张图片各自关联，已用于回答的消息不会被第二张借用。`NormalizedMessage` 增加可选 `parentId`/`tools`，缺席时判定降级为 NOT VERIFIED。
+- R4：allow 需要「请求关联的调用证据 + 调用声明内的允许工具 + 调用成功 + 返回内容与受控读取一致」，并拒绝 probe 期间执行声明外工具；调用方未声明允许工具名单时保持 NOT VERIFIED。deny 需要 `shell`、`file-read`、`file-write`、`subagent`、`unrelated-mcp`、`network`、`generic-scientific-write` **每个必需范围**各自的策略拒绝证据（或可观察副作用检查）；静默、模型自述拒绝、待处理权限都不构成 PASS。隔离检查失败后立即停止后续图片/allow/deny 提交。
+- R5：泄漏检查分为「report 自身脱敏」与「Workbench 产物」两段；未提供 `SWB_SPIKE_ARTIFACT_DIR`（或产物为空、采集失败）时保持 NOT VERIFIED，并列出未检查范围；发现泄漏只输出类别与产物标签。
+- 结论不变：真实 V1/V2 仍 **NOT VERIFIED**（无隔离端点/凭据/工具调用轨迹/产物），Phase B2 仍 **BLOCKED**。本轮只提升 harness 判定的可信度，不宣称真实兼容，也不自动进入 B2。

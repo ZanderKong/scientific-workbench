@@ -241,3 +241,46 @@ typecheck/build/unit/MCP/web/E2E：命令与通过数如上；skip：真实 S3 2
 - Spike 真实状态：V1 **NOT VERIFIED**、V2 **NOT VERIFIED**（无合法隔离端点/凭据，未发出任何真实调用）；Phase B2 仍 **BLOCKED**，产品内无 AI 导入入口。
 - 未改：冻结原型 `prototype/reference.html`（哈希仍 `fe2c41e…f1bb`）、`packages/core/src/operations.ts` 的既有操作语义、用户 OpenCode 全局配置；未访问 `~/ScientificWorkbench`；未使用 4317。测试只用 mkdtemp 与随机空闲端口。
 - 下一项最小可执行步骤：在隔离 temp 中启动使用合法凭据的真实 OpenCode 服务（独立目录/端口/PID 追踪），设 `SWB_SPIKE_OPENCODE_URL` 重跑 `scripts/spike-opencode-vision.mts`，先取得 session directory 证据与 `supportsImage` 模型，再确认图片 transport，之后才评估 B2。其余待验收项（真实 IME、真实 S3 之外的核对、旧目录转换核对、页面人工视觉）继续有效，完整首版未完成。
+
+## 2026-09-21 第二轮审核问题最小修补 R1–R5（优先于上文）
+
+- 执行第二轮审核问题最小修补计划（R1 图片异步竞态、R2 CLI 依赖边界、R3 消息关联与最终答案、R4 权限证据、R5 泄漏检查范围）。基线 HEAD `1e3d5dc`，Node v22.22.3 / pnpm 10.14.0；开工时工作树干净。**修订上一条记录**：上一轮「无关消息不能导致 PASS」的说法已被反例否定，且上一轮图片替换测试只覆盖验证后替换、未覆盖解码期间替换；历史记录保留，结论以本轮为准。
+- R0 复现（确定性，无 sleep）：解码期间同长度覆盖 → 旧实现仍返回 `prepared` 并创建 source Data；验证后同长度覆盖 → `assertVerifiedImageUnchanged` 不抛错；无关新消息 `Unrelated metadata: 3 4 5 6 7 8` → 旧 `correlatedImageAnswer: PASS`；marker 只在旧消息 → 旧 `restrictedAllow: PASS`；deny 探针静默 → 旧 `restrictedDeny: PASS`；report 干净且无产物 → 旧 `noSensitiveWorkbenchLeakage: PASS`；CLI 配到假端点 → `Cannot find package 'sharp'` 且零请求。临时探针已删除，反例固化进正式测试。
+- R1：字节/sha256/文件身份改为同一 fd 一次读出；解码后与提交前各**重新读取并重新哈希当前文件内容**；保留解码、MIME、登记哈希、大小、像素预算与符号链接拒绝；异步解码仍在同步事务外。测试注入仅为最窄暂停点（`StoreOptions.imageVerificationPhase`）。
+- R2：CLI 改用 server 导出的 `countRegionsInPng`，不再自行解析 `sharp`；依赖与 lockfile 未变。
+- R3：`NormalizedMessage` 增加可选 `parentId`/`tools`（既有 runtime 字段）；只接受本次请求关联、`completed` 已置位、严格单个整数的最终回复；旧消息、其他请求、其他 session、回显、未完成片段一律不采信；同一消息流式更新后重新检查；多图各自关联、不互相借用。
+- R4：allow 需「关联调用 + 声明内工具 + 成功 + 返回与受控读取一致」且拒绝声明外调用，证据不足保持 NOT VERIFIED；deny 需七个必需范围各自的拒绝证据或副作用检查，静默/自述/待处理权限都不 PASS；隔离失败立即停止后续提交（断言 `asyncPromptCalls === 0`）。
+- R5：泄漏检查拆为 report 脱敏与产物两段，无产物采集即 NOT VERIFIED；采集失败或为空同样 NOT VERIFIED；泄漏只输出类别与产物标签；CLI 支持 `SWB_SPIKE_ARTIFACT_DIR`。
+- 本轮证据：`pnpm agent:knowledge:check` PASS（bundleHash `2a7a0701…8b0d0e` 未变）；`pnpm typecheck` / `pnpm build` PASS；`pnpm test` = core16 / web14 / mcp3 / server169（真实 S3 2 项跳过）；`pnpm exec playwright test` 46 passed；`git diff --check` PASS。
+- 未变：`apps/web`、`index.html`、冻结原型（`fe2c41e…f1bb`）、科研文件 schema、`operations.ts`/OpenAPI、MCP 操作、依赖与 lockfile。未访问 `~/ScientificWorkbench`，未改用户 OpenCode 全局配置，未使用 4317；测试只用 mkdtemp 与随机空闲端口。
+
+### 交接字段（第二轮）
+
+```text
+基线 / 最终 HEAD：1e3d5dc → 本轮提交（见下）
+修改文件与范围：apps/server/src/sample-import.ts（R1）、apps/server/src/store.ts（R1 校验接线）、apps/server/src/vision-spike.ts（R3/R4/R5）、apps/server/src/opencode.ts（R3/R4 可选证据字段）、scripts/spike-opencode-vision.mts（R2/R3/R4/R5 接线）、apps/server/src/sample-import-regression.test.ts、vision-spike.test.ts、vision-spike-cli.test.ts（新增）
+本地提交：见本文件末尾「本轮提交」
+
+R1：修复内容——单 fd 读取 + 解码后重读重哈希 + 提交前重读重哈希；旧实现反例——解码期间同长度覆盖仍 prepared / 验证后覆盖不抛错；修复后结果——两例均拒绝，零新增 import/Data，多图整批拒绝，正常 PNG/JPEG/WebP 成功且源字节不变
+R2：修复内容——CLI 调用 server 的 countRegionsInPng，不自行解析 sharp；CLI 实际执行结果——假端点收到 /global/health、/config/providers，asyncPromptCalls>0，输出无 sharp 解析错误
+R3：消息关联与最终答案证据——图片只接受本次 messageId 关联（parentId 或提交顺序）、completed 已置位、严格单整数；无关新消息/其他请求/其他 session/回显/历史/未完成片段均不采信
+R4：已验证范围——allow 关联调用+声明内工具+成功+返回一致；deny 七范围拒绝证据与 file-write 副作用检查；NOT VERIFIED 项——真实 runtime 的工具调用证据与全部七范围（未取得真实端点）
+R5：已检查范围——harness report 自身（脱敏）与 SWB_SPIKE_ARTIFACT_DIR 指定的产物；未检查范围——真实运行的 Workbench Job/日志（本轮为假服务，未产生）
+
+实际运行命令与结果：局部 7 文件 108 passed；pnpm test = core16/web14/mcp3/server169（S3 2 skipped）；pnpm exec playwright test 46 passed；typecheck/build/agent:knowledge:check/git diff --check 全部 PASS
+跳过项及原因：真实 S3 2 项（需容器，按设计跳过）
+未运行项：真实 Vision V1/V2、真实 restricted profile 全范围、真实 IME、旧目录实际转换核对
+
+Phase A：PASS（本轮未改，bundleHash 未变）
+Phase B1：PASS（上一轮修复结论保持；本轮 R1 进一步关闭图片竞态）
+Spike harness 自动化：PASS（27 项负向矩阵 + 5 项真实 CLI 子进程集成）
+真实 Vision V1：NOT VERIFIED（无隔离端点/凭据；未发出任何真实调用）
+真实 Vision V2：NOT VERIFIED（同上）
+Phase B2：BLOCKED（前置真实 Spike 未 PASS，产品内无 AI 导入入口）
+
+前端 / 原型 / 数据格式是否改变：均未改变（apps/web、index.html、prototype/reference.html、科研文件 schema、OpenAPI 无 diff）
+用户目录及配置保护情况：未访问 ~/ScientificWorkbench，未改用户 OpenCode 全局配置
+剩余服务 / 端口 / PID：无本轮创建的服务；未操作 4317 或用户既有进程
+临时资源清理情况：CLI 集成测试的 success/failure 路径均清理；所有测试用 mkdtemp 临时目录，测试结束删除
+下一项最小可执行步骤：在隔离 temp 中用合法凭据启动真实 OpenCode（独立目录/端口/PID 追踪），设 SWB_SPIKE_OPENCODE_URL 与 SWB_SPIKE_ALLOW_TOOLS，并用 SWB_SPIKE_ARTIFACT_DIR 导出本次 Job/日志后重跑 CLI；先取得 session directory 证据、supportsImage 模型与工具调用轨迹，再逐项评估七项合取
+```

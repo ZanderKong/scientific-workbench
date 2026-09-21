@@ -210,3 +210,28 @@
 - F01 Spike：见 `docs/OPENCODE_INTEGRATION.md` 的 2026-09-21 段。harness 重写为七项合取，`vision-spike.test.ts` 18 项负向矩阵通过；真实 V1/V2 仍 NOT VERIFIED（无隔离真实端点/凭据，未发出任何真实调用），B2 仍未实现。
 - 安全/隔离：未访问 `~/ScientificWorkbench`；未改用户 OpenCode 全局配置；未使用 4317；未修改冻结原型 `prototype/reference.html`；测试只用 mkdtemp 临时目录与随机空闲端口，e2e 用 14317 且 `reuseExistingServer:false`。
 - 未完成/未验证：真实 Vision 与 restricted profile（NOT VERIFIED）、Phase B2（BLOCKED）、真实 macOS 中文输入法、实际旧工作区 DOC-002 转换核对、其余页面人工视觉复核。完整首版仍未完成。
+
+### 2026-09-21 第二轮审核问题最小修补（R1–R5）
+
+- 计划：`/Users/kong/ZanderProject/工作台` 第二轮审核问题最小修补（R1–R5）。基线 HEAD `1e3d5dc`，Node v22.22.3 / pnpm 10.14.0；开工时工作树干净。
+- **修订上一轮证据**：
+  - 上一轮的图片替换测试只覆盖「验证完成后替换」，没有覆盖**解码期间**替换；实现把文件身份读在 `await decode` 之后，因此同长度覆盖会被接受。
+  - 上一轮七项合取只保证「不是完全噪音」，各项证据并不充分：`correlatedImageAnswer` 只要**任意新的** assistant 消息文本里出现该数字就 PASS；`restrictedAllow` 只看**全部 assistant 文本拼接**是否含 marker；`restrictedDeny` 只要没看到哨兵就 PASS；`noSensitiveWorkbenchLeakage` 只扫描 report 自身。原先「无关消息不能导致 PASS」的说法已被本轮反例否定。
+- R0（先复现，再修，全部确定性、不依赖 sleep）：
+  - R1-a：调用 `prepareSampleImport` 后**在同一个同步回合内**用同长度无效内容覆盖源文件（此时解码尚未完成）→ 旧实现返回 `status: "prepared"` 并创建 source Data。
+  - R1-b：`verifyImageAttachment` 后用同长度不同内容覆盖再调用 `assertVerifiedImageUnchanged` → 旧实现不抛错（只比较登记 hash/size/mtime，mtime 毫秒粒度内相同即放过）。
+  - R3：提交后出现一条**不相关**的 assistant 消息 `Unrelated metadata: 3 4 5 6 7 8` → 旧实现 `correlatedImageAnswer: PASS`。
+  - R4-allow：marker 只存在于 session 创建时预置的旧消息 → 旧实现 `restrictedAllow: PASS`。
+  - R4-deny：deny 探针无新回复、无工具调用、无待处理权限 → 旧实现 `restrictedDeny: PASS`。
+  - R5：report 自身干净、未采集任何 Job/日志产物 → 旧实现 `noSensitiveWorkbenchLeakage: PASS`。
+  - R2：`SWB_VISION_SPIKE=1 SWB_SPIKE_OPENCODE_URL=<本地假端点>` 运行 CLI → `Cannot find package 'sharp' imported from scripts/spike-opencode-vision.mts`，**零请求**到达假端点。
+  - 临时探针 `r0-prefix-probe` / `r0-spike-probe` 已在修复后删除，反例全部固化进正式测试。
+- R1 修复（`apps/server/src/sample-import.ts`、`store.ts`）：字节、sha256 与文件身份改为**同一个 file descriptor** 一次读出（`readImageFile`）；解码结束后按路径**重新读取并重新哈希**，与已验证摘要不一致即拒绝；提交时 `assertVerifiedImageUnchanged` 同样**重新读取并重新哈希当前文件内容**（不再依赖登记 hash/size/mtime），并保留完整解码、MIME、登记哈希、大小限制、像素预算与符号链接拒绝。异步解码仍在同步 Store 事务之外，事务内无 `await`。测试注入只在 `verifyImageAttachment` 的最窄边界（`StoreOptions.imageVerificationPhase`，仅暂停、不能跳过）。
+- R2 修复：CLI 不再自行 `import("sharp")`，改用 server 模块导出的 `countRegionsInPng`；`sharp` 仍只属于 server，未改依赖版本，未在根目录重复安装。
+- R3 修复（`apps/server/src/vision-spike.ts`、`opencode.ts`）：`NormalizedMessage` 增加可选 `parentId`/`tools`（来自 runtime 原始响应的既有字段，V1 `info.parentID` 与 `part.type === "tool"`）；图片判定只接受**本次提交请求关联**、`completed` 已置位、且文本严格为**单个整数**的最终回复；旧的、其他请求的、其他 session 的消息、prompt 回显、未完成片段一律不采信，同一消息在流式更新后重新检查。多张图片各用自己的 messageId，已用于回答的消息不会被第二张借用。
+- R4 修复：allow 必须同时具备「请求关联的调用证据 + 调用声明内允许工具 + 调用成功 + 返回内容与受控读取一致」，并拒绝 probe 期间执行声明外工具；未声明允许工具名单、无工具证据或无可核对返回内容时保持 NOT VERIFIED。deny 必须对 `shell/file-read/file-write/subagent/unrelated-mcp/network/generic-scientific-write` **每个必需范围**拿到策略拒绝证据或可观察副作用检查，缺任一范围、只有模型自述、或出现待处理权限都不 PASS；哨兵出现或禁止副作用发生则 FAIL。隔离检查失败后**立即停止**后续图片/allow/deny 提交（测试断言 `asyncPromptCalls === 0`）。
+- R5 修复：泄漏检查拆成「report 自身脱敏」与「Workbench 产物」两段；未提供产物采集时结论为 NOT VERIFIED 并列出未检查范围；采集失败或为空同样 NOT VERIFIED；发现泄漏只输出类别与产物标签，不回显敏感原文。CLI 支持 `SWB_SPIKE_ARTIFACT_DIR` 读取本次导出的 Job/日志产物。
+- CLI 集成测试：`apps/server/src/vision-spike-cli.test.ts` 5 项，用子进程运行真实入口并显式清理/覆盖全部 `SWB_SPIKE_*`（不继承用户端点与凭据）：无 opt-in 零请求；有 opt-in 无 URL 时 NOT VERIFIED 且零请求；本地假端点确实收到 `/global/health`、`/config/providers` 与 `asyncPromptCalls > 0` 且输出无 `sharp` 解析错误；端点不可达时结论不是 PASS 且原因明确；成功与失败路径都清理临时目录；仅 import 模块时不执行探针、零请求。
+- 本轮证据：`pnpm agent:knowledge:check` PASS（6 项，bundleHash `2a7a0701…8b0d0e`，与上轮一致）；`pnpm typecheck` 4 包 PASS；`pnpm build` PASS；`pnpm test` = core16 / web14 / mcp3 / server169（真实 S3 2 项按设计跳过）；`pnpm exec playwright test` 46 passed；`git diff --check` PASS。局部 7 文件（sample-import ×3、vision-spike ×2、opencode、agent-runs）共 108 项通过。
+- 未变：`apps/web`、`index.html`、冻结原型、科研实体文件 schema、`operations.ts`/OpenAPI、MCP 操作、依赖与 lockfile 均无变化；未新增产品 API/MCP 操作，未新增权限平台或日志平台。未访问 `~/ScientificWorkbench`，未改用户 OpenCode 全局配置，未使用 4317；测试只用 mkdtemp 与随机空闲端口。
+- 仍未验证：真实 Vision V1/V2（NOT VERIFIED，缺隔离端点/凭据/工具调用轨迹/产物）、真实 restricted profile 全范围、Phase B2（BLOCKED）。完整首版仍未完成。
