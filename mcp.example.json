@@ -4,7 +4,7 @@
       "command": "pnpm",
       "args": [
         "--dir",
-        "/Users/kong/ZanderProject/工作台",
+        "/absolute/path/to/scientific-workbench",
         "--filter",
         "@workbench/mcp",
         "start"

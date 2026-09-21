@@ -2,6 +2,21 @@
 
 本文件说明 Scientific Workbench 与已运行的 OpenCode Server 之间的边界、配置和限制。
 
+[返回项目首页](../README.md) · [当前状态](STATUS.md) · [MCP 配置](API_MCP.md)
+
+> **当前状态（2026-09-21，优先于下方历史记录）：** 普通 runtime 连接与任务基础能力已实现，但业务页面没有 AI 任务入口。真实 Vision V1/V2 和 restricted import profile 未完成验证，AI 图片导入仍关闭。最新审核发现 Spike 的顺序匹配降级、工具错误误认权限拒绝、产物证据不足及正向测试时序不稳定；不能仅凭该脚本输出 PASS 开放 B2。后文按日期保留的“修复完成”声明不覆盖这些后续发现。
+
+## 用户配置入口
+
+1. 在独立目录中准备已运行的本机 OpenCode Server，模型和 Provider 凭据由 OpenCode 管理。
+2. 打开 Workbench 设置中的 OpenCode 连接，填写实际服务地址及需要的认证信息，执行连接检查。
+3. 选择可用模型，并确认 Agent 执行目录与科研数据目录分离。
+4. 如需科研上下文，按 [MCP 指南](API_MCP.md)在 OpenCode 中手动配置 `scientific-workbench`；Workbench 不会替你改写 OpenCode 配置。
+
+OpenCode 的安装和启动命令随其版本而异，请使用对应已安装版本的说明。下方版本号与端点描述记录本仓库 adapter 的实现及历史测试，不构成对所有 OpenCode 版本的兼容承诺。
+
+无需配置 OpenCode 即可使用普通科研记录功能。Vision Spike 是开发验证脚本，不是图片导入向导；目前不建议普通使用者把它作为功能验收入口。
+
 ## 范围
 
 Workbench 负责：
@@ -26,7 +41,7 @@ OpenCode 负责：
 按当前安装的 OpenCode 自动选择传输，差异只存在于 `apps/server/src/opencode.ts`：
 
 - 优先 V2：`GET /api/info` 返回 JSON `version` 时使用固定版本的 `@opencode/client`；
-- 否则 V1（当前安装的 `opencode 1.18.31`）：使用 `/global/health`、`/config/providers`、
+- 否则 V1（历史验收使用过 `opencode 1.18.31`）：使用 `/global/health`、`/config/providers`、
   `/session/*`、`/permission`、`/question`、`/event` 的原生 HTTP 传输；
 - 两者都不通时报告 `OPENCODE_UNREACHABLE`。
 
@@ -36,8 +51,7 @@ OpenCode 负责：
 `http`/`https`、根路径，且拒绝 URL 内嵌用户名密码、query、hash、公网或 LAN 地址。
 尾随斜杠会被移除。
 
-V2 推荐运行 `opencode pair` 获取 URL/用户名/密码；固定端口用户运行 `opencode serve`
-后填写对应地址。端口不要假定为固定 `4096` 或 `49374`。
+填写已运行服务实际提供的 URL 和认证信息。端口不要假定为固定 `4096` 或 `49374`；启动方法以对应 OpenCode 版本为准。
 
 ## 认证
 
@@ -179,13 +193,13 @@ Workbench 不自动修改 OpenCode 配置，也不执行 `opencode mcp add`。Se
 4. OpenCode 不能直接操作 Workbench 科研数据目录；
 5. 科研上下文只通过 MCP；
 6. Workbench 只连接已有 OpenCode Server，不自动启动/升级/重启服务；
-7. V2 推荐用 `opencode pair` 获取 URL/credentials；
+7. OpenCode 的启动与认证方法需按实际版本核对；
 8. 当前业务页面尚未加入 AI 任务入口，任务通过 `POST /api/v1/agent-runs` 创建；
 9. 目前只有 OpenCode Runtime，没有 Codex Runtime。
 
 ## 测试
 
-自动测试使用 Fake OpenCode（模拟 V2 HTTP 契约）与临时工作区/独立端口，禁止调用真实
+自动测试使用 Fake OpenCode（模拟 V1/V2 HTTP 契约）与临时工作区/独立端口，禁止调用真实
 模型或 Provider。真实 OpenCode 集成只能通过显式 opt-in（如
 `SWB_OPENCODE_TEST_URL`）运行，默认跳过；跳过不被视为真实集成通过。
 

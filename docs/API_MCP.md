@@ -1,5 +1,7 @@
 # REST 与 MCP
 
+[返回项目首页](../README.md) · [当前状态](STATUS.md)
+
 本机服务默认地址为 `http://127.0.0.1:4317/api/v1`。服务须先运行，MCP stdio 进程只桥接 API，不直接写工作区。开发、演示与测试必须显式指定独立数据目录。
 
 当前操作定义位于 [operations.ts](../packages/core/src/operations.ts)，REST OpenAPI 与 MCP 工具由它共同生成。[openapi.json](../openapi.json) 是生成结果，使用 `pnpm api:spec` 更新。该目录描述已接入操作，不代表完整首版所有接口已经验收；缺口以 [交接](../HANDOFF.md) 为准。
@@ -7,6 +9,34 @@
 实体修改要求 `expectedVersion`；版本或磁盘文件冲突返回 `409`。创建重试使用相同 `Idempotency-Key`（MCP 参数 `idempotencyKey`）及相同输入；同键不同输入拒绝。正文保存和结构提取分开，读取最新结构先完成已保存文档的提取；不会包含浏览器未提交的草稿。
 
 `document_save` 的 `bindings` 是正式声明的对象引用绑定数组，与实现语义一致：元素含稳定定位 `blockId`/`start`/`end`/`rawText`、状态 `status`、可选 `objectId`/`intentId`/`role`。越界位置拒绝；指向已不存在区块、缺失对象或伪造创建意图的绑定不会被采纳；它不能用于修改文件头、版本、提取结果或 Data 镜像基线。省略 `bindings` 保留原 references，传空数组清空。HTTP、OpenAPI 与 MCP 使用同一 schema。
+
+## MCP 快速接入
+
+1. 按[使用指南](GETTING_STARTED.md)启动 Workbench 服务。
+2. 在设置的连接管理中创建 token，选择客户端所需权限。
+3. 将根目录 [mcp.example.json](../mcp.example.json) 的配置复制到 MCP 客户端的本机私有配置中。
+4. 把 `/absolute/path/to/scientific-workbench` 替换成仓库的绝对路径；如果服务不是 4317，修改 `WORKBENCH_API`，保留 `/api/v1` 后缀。
+5. 填入 token，并确保客户端启动环境能够找到 `pnpm`。重新连接后检查 tools/resources 列表。
+
+MCP 进程与 Workbench 服务是两个进程，启动 MCP 不会自动启动 API。客户端无需直接持有工作区数据路径。
+
+`attachment_upload` 会读取 MCP 进程所在机器的本地文件；需要限制上传范围时，在 MCP 私有配置中设置 `WORKBENCH_UPLOAD_ROOT` 为允许目录。不要把本机 token 填回已跟踪的示例文件。
+
+## REST 连接检查
+
+```bash
+curl --fail http://127.0.0.1:4317/api/v1/health
+```
+
+健康接口不需要 token。其他操作按服务端授权规则执行，例如在本机环境中已经设置 token 后读取知识索引：
+
+```bash
+curl --fail \
+  -H "Authorization: Bearer $WORKBENCH_API_TOKEN" \
+  http://127.0.0.1:4317/api/v1/knowledge
+```
+
+请求参数以 OpenAPI 和 MCP 返回的 schema 为准，不从历史计划复制请求体。`401/403` 时检查 token 与权限；`409` 时重新读取版本并处理冲突，不盲目换幂等键重试。
 
 ## 连接与权限
 
@@ -39,7 +69,7 @@
 - `sample_import_commit` → `POST /sample-imports/:id/commit`：携带身份/hash/version/fingerprint，服务端重算比对后整批创建；全批预检查先于任何实体创建，含显式来源区块解析与「待确认/无法辨认/无法识别/未确认」属性值拒绝。只有与已提交记录 `submissionHash`（由请求身份算出，排除 Idempotency-Key 头）完全一致的请求才返回原 receipt，其余身份/版本/hash 变化返回 409；缺少 proof 的旧记录 POST 返回 409 并提示改用 GET 对账。
 - `sample_import_cancel` / `sample_import_retry`：确定性撤销/重签 attempt，不启动模型。
 
-这些确定性 API 服务普通授权调用者；模型侧的 restricted profile 只暴露 `sample_import_get/save_draft/commit` 与必要读取（见 B2 阶段）。长任务恢复期间，科学实体读取/导出/备份返回 `503 RECOVERY_REQUIRED`，`/health` 报 `degraded`。
+这些确定性 API 服务普通授权调用者，不自行调用 OCR 或模型。模型侧 restricted import profile 属于尚未完成的 B2 阶段，当前不能据此假设模型访问已经受限，也没有用户可用的 AI 图片导入入口。长任务恢复期间，科学实体读取/导出/备份返回 `503 RECOVERY_REQUIRED`，`/health` 报 `degraded`。
 
 大附件通过 `/attachments/stream` multipart 流式上传；下载入口仍需认证，不在 URL 中携带 token。MCP 提供受控上传、文本分段和图片资源，不把任意大二进制塞入工具 JSON。长任务返回 job ID，再用 `job_get` 查询；`job_cancel` 可取消仍在运行的备份，取消不会发布部分归档，已经结束的任务返回冲突。失败的附件上传任务可用 `job_retry` 重试。
 
