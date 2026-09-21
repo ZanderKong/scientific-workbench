@@ -451,12 +451,27 @@ function normalizeToolParts(parts: unknown): NormalizedToolCall[] | undefined {
     if (value?.type !== "tool") continue;
     const name = String(value.tool ?? value.name ?? "").trim();
     if (!name) continue;
-    const status = value.state?.status ?? value.status;
-    const output = value.state?.output;
-    const error = value.state?.error;
+    const state = (value.state ?? {}) as {
+      status?: unknown;
+      input?: unknown;
+      output?: unknown;
+      error?: unknown;
+    };
+    const status = state.status ?? value.status;
+    const output = state.output;
+    const error = state.error;
+    // Bounded argument text, used only to match a refusal to the operation it
+    // was supposed to perform. It is never copied into a report.
+    const input =
+      typeof state.input === "string"
+        ? state.input.slice(0, 300)
+        : state.input === undefined
+          ? undefined
+          : JSON.stringify(state.input).slice(0, 300);
     calls.push({
       name,
       ...(typeof status === "string" ? { status } : {}),
+      ...(input !== undefined ? { input } : {}),
       ...(typeof output === "string" ? { output } : {}),
       ...(typeof error === "string" ? { error } : {}),
     });

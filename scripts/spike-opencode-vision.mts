@@ -87,17 +87,43 @@ async function buildEvidence() {
   return { optIn, root, dataDir, executionDir, probeDir, marker };
 }
 
+/**
+ * The operator exports this run's Workbench artifacts into
+ * SWB_SPIKE_ARTIFACT_DIR. The covered classes are derived from the file names
+ * (`<scope>__<rest>`, for example `job__agent-run-1.json`), so the claimed
+ * scope is evidence from the artifacts themselves rather than a declaration.
+ */
 function readArtifactScan(): VisionSpikeOptions["artifactScan"] {
   const dir = process.env.SWB_SPIKE_ARTIFACT_DIR;
   if (!dir) return undefined;
-  return async () => {
-    const names = fs.readdirSync(dir).slice(0, ARTIFACT_SCAN_LIMIT);
-    return names
-      .filter((name) => fs.statSync(path.join(dir, name)).isFile())
-      .map((name) => ({
-        label: `artifact-${name.replace(/[^\w.\-]/g, "_").slice(0, 40)}`,
-        text: fs.readFileSync(path.join(dir, name), "utf8"),
-      }));
+  return async ({ runId }) => {
+    const names = fs
+      .readdirSync(dir)
+      .filter((name) => fs.statSync(path.join(dir, name)).isFile());
+    const scanned = names.slice(0, ARTIFACT_SCAN_LIMIT).map((name) => {
+      const [, scope = "unknown"] = name.includes("__")
+        ? name.split("__")
+        : ["", "unknown"];
+      return { name, scope };
+    });
+    const items = scanned.map(({ name }) => ({
+      label: `artifact-${name.replace(/[^\w.\-]/g, "_").slice(0, 40)}`,
+      text: fs.readFileSync(path.join(dir, name), "utf8"),
+    }));
+    // Never claim a full check after silently stopping at the limit.
+    if (names.length > scanned.length)
+      items.push({
+        label: `listing-truncated:${names.length - scanned.length}`,
+        text: "",
+        truncated: true,
+      });
+    return {
+      source: "SWB_SPIKE_ARTIFACT_DIR",
+      runId,
+      collectedAt: new Date().toISOString(),
+      scope: [...new Set(scanned.map((entry) => entry.scope))],
+      items,
+    };
   };
 }
 

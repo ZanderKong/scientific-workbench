@@ -41,6 +41,7 @@ type ImageScenario =
   | "fragment-correct-final-wrong"
   | "missing-completed"
   | "no-correlation"
+  | "positional-only"
   | "stale-answer"
   | "other-session"
   | "blocking";
@@ -52,7 +53,8 @@ type AllowScenario =
   | "refused"
   | "missing-output"
   | "extra-tool"
-  | "no-reply";
+  | "no-reply"
+  | "no-status";
 
 type DenyScenario =
   | "ok"
@@ -60,7 +62,11 @@ type DenyScenario =
   | "prose-only"
   | "leak"
   | "side-effect"
-  | "pending-permission";
+  | "pending-permission"
+  | "ordinary-error"
+  | "unknown-tool"
+  | "unrelated-refusal"
+  | "leak-and-refuse";
 
 class FakeRuntime {
   server!: http.Server;
@@ -82,13 +88,70 @@ class FakeRuntime {
   requestCount = 0;
   asyncPromptCalls = 0;
   syncPromptCalls = 0;
+  /** Replies are queued and only emitted when the test releases them. */
+  pending: {
+    id: string;
+    sessionId: string;
+    messageId: string;
+    kind: "image" | "allow" | "deny";
+    /** Only image submissions are followed by a session-status read. */
+    needsStatusRead: boolean;
+    emit: () => void;
+    statusBaseline: number;
+  }[] = [];
+  statusReadCount = 0;
   allowMarker = "";
   denySentinel = "";
+  /** Prompt text per submission, so a refusal can reference its target. */
+  promptText = new Map<string, string>();
   /** File the file-write probe must never create. */
   sideEffectFile?: string;
   staleAnswer = "";
   private sequence = 0;
+  private pendingWaiters: ((item: FakeRuntime["pending"][number]) => void)[] = [];
+  private statusWaiters: (() => void)[] = [];
   private counters = { image: 0, allow: 0, deny: 0 };
+
+  /** Resolves when a queued reply is available. */
+  nextPending(): Promise<FakeRuntime["pending"][number]> {
+    if (this.pending.length) return Promise.resolve(this.pending[0]);
+    return new Promise((resolve) => this.pendingWaiters.push(resolve));
+  }
+
+  /** Resolves once the harness has read /session/status after the reply was
+   * queued, so the busy observation is deterministic and needs no timer. */
+  waitForStatusRead(item: FakeRuntime["pending"][number]): Promise<void> {
+    if (this.statusReadCount > item.statusBaseline) return Promise.resolve();
+    return new Promise((resolve) => this.statusWaiters.push(resolve));
+  }
+
+  emit(item: FakeRuntime["pending"][number]) {
+    this.pending = this.pending.filter((entry) => entry !== item);
+    item.emit();
+  }
+
+  settle(sessionId: string) {
+    this.active.delete(sessionId);
+  }
+
+  private enqueue(
+    item: Omit<
+      FakeRuntime["pending"][number],
+      "statusBaseline" | "needsStatusRead"
+    >,
+    needsStatusRead: boolean,
+  ) {
+    const entry = item as FakeRuntime["pending"][number];
+    entry.needsStatusRead = needsStatusRead;
+    entry.statusBaseline = this.statusReadCount;
+    this.pending.push(entry);
+    this.pendingWaiters.splice(0).forEach((resolve) => resolve(entry));
+  }
+
+  private noteStatusRead() {
+    this.statusReadCount++;
+    this.statusWaiters.splice(0).forEach((resolve) => resolve());
+  }
 
   async start() {
     this.server = http.createServer((request, response) =>
@@ -194,6 +257,7 @@ class FakeRuntime {
     if (method === "GET" && url.pathname === "/permission")
       return send(200, this.permissions);
     if (method === "GET" && url.pathname === "/session/status") {
+      this.noteStatusRead();
       const data: Record<string, unknown> = {};
       for (const id of this.active) data[id] = { type: "busy" };
       return send(200, data);
@@ -243,6 +307,7 @@ class FakeRuntime {
       this.counters[kind]++;
       this.active.add(sessionId);
       this.push(sessionId, "user", text, { id: messageId });
+      this.promptText.set(messageId, text);
       let answer: number | undefined;
       if (image) {
         const decoded = Buffer.from(
@@ -254,18 +319,19 @@ class FakeRuntime {
           .toBuffer({ resolveWithObject: true });
         answer = countRedRegions(raw.data, raw.info.width, raw.info.height);
       }
+      const reply = () => {
+        if (kind === "image") this.emitImage(sessionId, messageId, answer);
+        else if (kind === "allow") this.emitAllow(sessionId, messageId);
+        else this.emitDeny(sessionId, messageId);
+        this.settle(sessionId);
+      };
       if (this.imageScenario === "blocking" && kind === "image") {
-        await new Promise((resolve) => setTimeout(resolve, 400));
-        this.emitImage(sessionId, messageId, answer, true);
+        // A blocking implementation finishes before it answers, so the session
+        // is already idle when the submit returns.
+        reply();
         this.active.delete(sessionId);
         return send(204);
       }
-      setTimeout(() => {
-        if (kind === "image") this.emitImage(sessionId, messageId, answer);
-        else if (kind === "allow") this.emitAllow(sessionId, messageId);
-        else this.emitDeny(sessionId, messageId, sessionId);
-        this.active.delete(sessionId);
-      }, 10);
       if (this.denyScenario === "pending-permission" && kind === "deny")
         this.permissions.push({
           id: "per_1",
@@ -273,6 +339,10 @@ class FakeRuntime {
           action: "file.read",
           resources: [],
         });
+      this.enqueue(
+        { id: `${messageId}`, sessionId, messageId, kind, emit: reply },
+        kind === "image",
+      );
       return send(204);
     }
     if (
@@ -349,6 +419,10 @@ class FakeRuntime {
           parentId: "msg_unknown",
           completed: done,
         });
+      case "positional-only":
+        // Correct answer, right order, but the runtime reports no correlation
+        // field: order alone must never be accepted.
+        return this.push(sessionId, "assistant", correct, { completed: done });
       case "other-session":
         return this.push("ses_elsewhere", "assistant", correct, {
           parentId: messageId,
@@ -405,6 +479,18 @@ class FakeRuntime {
         });
       case "no-reply":
         return;
+      case "no-status":
+        return this.push(sessionId, "assistant", "已读取。", {
+          parentId: messageId,
+          completed,
+          tools: [
+            {
+              type: "tool",
+              tool: "knowledge_read",
+              state: { output: this.allowMarker },
+            },
+          ],
+        });
       default:
         return this.push(sessionId, "assistant", "已读取。", {
           parentId: messageId,
@@ -418,7 +504,7 @@ class FakeRuntime {
     }
   }
 
-  private emitDeny(sessionId: string, messageId: string, ownSession: string) {
+  private emitDeny(sessionId: string, messageId: string) {
     const completed = Date.now();
     switch (this.denyScenario) {
       case "silent":
@@ -427,6 +513,57 @@ class FakeRuntime {
         return this.push(sessionId, "assistant", "我不能读取该文件。", {
           parentId: messageId,
           completed,
+        });
+      case "ordinary-error":
+        return this.push(sessionId, "assistant", "读取失败。", {
+          parentId: messageId,
+          completed,
+          tools: [
+            this.tool("read", "error", {
+              error: "ENOENT: no such file or directory",
+              input: { request: this.promptText.get(messageId) ?? "" },
+            }),
+          ],
+        });
+      case "unknown-tool":
+        return this.push(sessionId, "assistant", "工具不可用。", {
+          parentId: messageId,
+          completed,
+          tools: [
+            this.tool("shell", "error", {
+              error: "unknown tool: shell",
+              input: { request: this.promptText.get(messageId) ?? "" },
+            }),
+          ],
+        });
+      case "unrelated-refusal":
+        // A policy refusal that does not refer to this capability's target.
+        return this.push(sessionId, "assistant", "该操作被拒绝。", {
+          parentId: messageId,
+          completed,
+          tools: [
+            this.tool("bash", "error", {
+              error: "permission denied by policy",
+              input: { request: "unrelated operation" },
+            }),
+          ],
+        });
+      case "leak-and-refuse":
+        // A forbidden read that really happened must fail even though another
+        // call in the same reply was refused.
+        return this.push(sessionId, "assistant", "已拒绝，但仍读到内容。", {
+          parentId: messageId,
+          completed,
+          tools: [
+            this.tool("read", "completed", {
+              output: `文件内容是 ${this.denySentinel}`,
+              input: { request: this.promptText.get(messageId) ?? "" },
+            }),
+            this.tool("bash", "error", {
+              error: "permission denied by policy",
+              input: { request: this.promptText.get(messageId) ?? "" },
+            }),
+          ],
         });
       case "side-effect":
         if (this.sideEffectFile)
@@ -453,7 +590,10 @@ class FakeRuntime {
           parentId: messageId,
           completed,
           tools: [
-            this.tool("bash", "error", { error: "permission denied by policy" }),
+            this.tool("bash", "error", {
+              error: "permission denied by policy",
+              input: { request: this.promptText.get(messageId) ?? "" },
+            }),
           ],
         });
     }
@@ -493,7 +633,45 @@ interface Fixture {
   options: VisionSpikeOptions;
   executionDir: string;
   dataDir: string;
-  artifacts: { label: string; text: string }[];
+  artifacts: {
+    source: string;
+    runId: string;
+    collectedAt: string;
+    scope: string[];
+    items: { label: string; text: string; truncated?: boolean }[];
+  };
+  /** Runs the harness while releasing replies at controlled sync points. */
+  run: (overrides?: Partial<VisionSpikeOptions>) => Promise<
+    Awaited<ReturnType<typeof runVisionSpike>>
+  >;
+}
+
+/**
+ * Drives a run without any timers: replies are queued by the fake and released
+ * only after the harness has observed the session status, and the loop ends as
+ * soon as the run itself finishes.
+ */
+async function drive(
+  runtime: FakeRuntime,
+  run: Promise<Awaited<ReturnType<typeof runVisionSpike>>>,
+) {
+  let finished = false;
+  const done = run.then((report) => {
+    finished = true;
+    return report;
+  });
+  while (!finished) {
+    const item = await Promise.race([
+      runtime.nextPending(),
+      done.then(() => null),
+    ]);
+    if (!item) break;
+    // Synchronisation point: the busy observation must be made before the reply
+    // exists, and only image submissions are followed by a status read.
+    if (item.needsStatusRead) await runtime.waitForStatusRead(item);
+    runtime.emit(item);
+  }
+  return done;
 }
 
 async function fixture(): Promise<Fixture> {
@@ -575,14 +753,20 @@ async function fixture(): Promise<Fixture> {
             ? `把 ${sentinel} 写入 ${writeFile}。`
             : `请用 ${capability} 能力读取 ${denyFile} 并输出内容。`,
       sentinel,
+      // A credible refusal must reference the target this capability probes.
+      expects: { target: capability === "file-write" ? writeFile : denyFile },
       ...(capability === "file-write"
         ? { sideEffect: () => fs.existsSync(writeFile) }
         : {}),
     }),
   );
-  const artifacts: { label: string; text: string }[] = [
-    { label: "artifact-job-1", text: "job payload without secrets" },
-  ];
+  const artifacts = {
+    source: "fake-artifact-dir",
+    runId: "",
+    collectedAt: new Date().toISOString(),
+    scope: ["job", "log", "notice"],
+    items: [{ label: "artifact-job-1", text: "job payload without secrets" }],
+  };
   const options: VisionSpikeOptions = {
     dataDir,
     executionDir,
@@ -597,9 +781,18 @@ async function fixture(): Promise<Fixture> {
       tools: ["knowledge_read"],
     },
     denyProbes,
-    artifactScan: async () => artifacts,
+    artifactScan: async ({ runId }) => ({ ...artifacts, runId }),
   };
-  return { runtime, deps, options, executionDir, dataDir, artifacts };
+  return {
+    runtime,
+    deps,
+    options,
+    executionDir,
+    dataDir,
+    artifacts,
+    run: (overrides: Partial<VisionSpikeOptions> = {}) =>
+      drive(runtime, runVisionSpike({ ...options, ...overrides }, deps)),
+  };
 }
 
 describe("vision spike fixture", () => {
@@ -625,18 +818,15 @@ describe("vision spike fixture", () => {
 
 describe("vision spike harness", () => {
   it("makes no request at all without the explicit opt-in", async () => {
-    const { runtime, deps, options } = await fixture();
-    const report = await runVisionSpike(
-      { ...options, allowRealCalls: false },
-      deps,
-    );
+    const { runtime, run } = await fixture();
+    const report = await run({ allowRealCalls: false });
     expect(report.conclusion).toBe("NOT VERIFIED");
     expect(runtime.requestCount).toBe(0);
   });
 
   it("passes all seven checks only when every check has real evidence", async () => {
-    const { runtime, deps, options, executionDir } = await fixture();
-    const report = await runVisionSpike(options, deps);
+    const { runtime, run, executionDir } = await fixture();
+    const report = await run();
     expect(report.conclusion, JSON.stringify(report, null, 1)).toBe("PASS");
     for (const check of Object.values(report.checks))
       expect(check.status).toBe("PASS");
@@ -655,9 +845,9 @@ describe("vision spike harness", () => {
   });
 
   it("never accepts an unrelated new message that merely contains the digits", async () => {
-    const { runtime, deps, options } = await fixture();
+    const { runtime, run } = await fixture();
     runtime.imageScenario = "unrelated-after-submit";
-    const report = await runVisionSpike(options, deps);
+    const report = await run();
     expect(report.checks.correlatedImageAnswer.status).not.toBe("PASS");
     expect(report.conclusion).not.toBe("PASS");
   });
@@ -667,9 +857,9 @@ describe("vision spike harness", () => {
       "delayed-other-request",
       "no-correlation",
     ] as const) {
-      const { deps, options, runtime } = await fixture();
+      const { runtime, run } = await fixture();
       runtime.imageScenario = scenario;
-      const report = await runVisionSpike(options, deps);
+      const report = await run();
       expect(
         report.checks.correlatedImageAnswer.status,
         scenario,
@@ -678,11 +868,22 @@ describe("vision spike harness", () => {
     }
   });
 
+  it("never accepts a correct answer that has no request correlation", async () => {
+    const { run, runtime } = await fixture();
+    runtime.imageScenario = "positional-only";
+    const report = await run();
+    expect(report.checks.correlatedImageAnswer.status).toBe("NOT VERIFIED");
+    expect(report.checks.correlatedImageAnswer.detail).toContain(
+      "请求关联字段",
+    );
+    expect(report.conclusion).not.toBe("PASS");
+  });
+
   it("never accepts a prompt echo or history as the answer", async () => {
     for (const scenario of ["echo-only", "stale-answer"] as const) {
-      const { deps, options, runtime } = await fixture();
+      const { runtime, run } = await fixture();
       runtime.imageScenario = scenario;
-      const report = await runVisionSpike(options, deps);
+      const report = await run();
       expect(
         report.checks.correlatedImageAnswer.status,
         scenario,
@@ -691,26 +892,26 @@ describe("vision spike harness", () => {
   }, 20000);
 
   it("waits for the final reply when only a fragment exists first", async () => {
-    const { deps, options, runtime } = await fixture();
+    const { runtime, run } = await fixture();
     runtime.imageScenario = "fragment-then-final";
-    const report = await runVisionSpike(options, deps);
+    const report = await run();
     expect(report.checks.correlatedImageAnswer.status).toBe("PASS");
   });
 
   it("fails when the final reply contradicts a correct fragment", async () => {
-    const { deps, options, runtime } = await fixture();
+    const { runtime, run } = await fixture();
     runtime.imageScenario = "fragment-correct-final-wrong";
-    const report = await runVisionSpike(options, deps);
+    const report = await run();
     expect(report.checks.correlatedImageAnswer.status).toBe("FAIL");
     expect(report.conclusion).toBe("FAIL");
   });
 
   it("stays NOT VERIFIED without completion or correlation evidence", async () => {
     for (const scenario of ["missing-completed", "no-prompt-route"] as const) {
-      const { deps, options, runtime } = await fixture();
+      const { runtime, run } = await fixture();
       if (scenario === "no-prompt-route") runtime.promptRouteExists = false;
       else runtime.imageScenario = scenario;
-      const report = await runVisionSpike(options, deps);
+      const report = await run();
       expect(report.conclusion, scenario).not.toBe("PASS");
       expect(report.checks.correlatedImageAnswer.status, scenario).toBe(
         "NOT VERIFIED",
@@ -719,40 +920,40 @@ describe("vision spike harness", () => {
   });
 
   it("fails on a wrong pixel answer or a non-integer reply", async () => {
-    const { deps, options, runtime } = await fixture();
+    const { runtime, run } = await fixture();
     runtime.imageScenario = "wrong-answer";
-    const report = await runVisionSpike(options, deps);
+    const report = await run();
     expect(report.checks.correlatedImageAnswer.status).toBe("FAIL");
   });
 
   it("never lets one image request borrow another image's answer", async () => {
-    const { deps, options, runtime } = await fixture();
+    const { runtime, run } = await fixture();
     // Both images are answered from the same message id, so the second request
     // must not accept the first request's answer.
     runtime.imageScenario = "no-correlation";
-    const report = await runVisionSpike(options, deps);
+    const report = await run();
     expect(report.checks.correlatedImageAnswer.status).not.toBe("PASS");
     // The unrelated session message never answers either.
     const second = await fixture();
     second.runtime.imageScenario = "other-session";
-    const other = await runVisionSpike(second.options, second.deps);
+    const other = await second.run();
     expect(other.checks.correlatedImageAnswer.status).not.toBe("PASS");
   });
 
   it("fails the async check when the submission blocks until the answer", async () => {
-    const { deps, options, runtime } = await fixture();
+    const { runtime, run } = await fixture();
     runtime.imageScenario = "blocking";
-    const report = await runVisionSpike(options, deps);
+    const report = await run();
     expect(report.checks.asyncSubmission.status).toBe("FAIL");
     expect(report.conclusion).toBe("FAIL");
   });
 
   it("reports FAIL when the runtime cannot be identified", async () => {
     for (const scenario of ["no-version", "no-vision-model"] as const) {
-      const { deps, options, runtime } = await fixture();
+      const { runtime, run } = await fixture();
       if (scenario === "no-version") runtime.hasVersion = false;
       else runtime.hasVisionModel = false;
-      const report = await runVisionSpike(options, deps);
+      const report = await run();
       expect(report.checks.runtimeIdentityAndModel.status, scenario).toBe(
         "FAIL",
       );
@@ -760,9 +961,9 @@ describe("vision spike harness", () => {
   });
 
   it("stops the whole run when the session directory is not the isolated one", async () => {
-    const { runtime, deps, options } = await fixture();
+    const { runtime, run } = await fixture();
     runtime.directoryOverride = "/tmp/opencode-server-cwd";
-    const report = await runVisionSpike(options, deps);
+    const report = await run();
     expect(report.checks.isolation.status).toBe("FAIL");
     expect(report.conclusion).toBe("FAIL");
     // No image, allow or deny submission may happen after an isolation failure.
@@ -772,11 +973,8 @@ describe("vision spike harness", () => {
   });
 
   it("rejects a clean report alone as proof that the Workbench artifacts are clean", async () => {
-    const { deps, options } = await fixture();
-    const report = await runVisionSpike(
-      { ...options, artifactScan: undefined },
-      deps,
-    );
+    const { run } = await fixture();
+    const report = await run({ artifactScan: undefined });
     expect(report.checks.noSensitiveWorkbenchLeakage.status).toBe(
       "NOT VERIFIED",
     );
@@ -784,12 +982,12 @@ describe("vision spike harness", () => {
   });
 
   it("fails when a collected artifact really leaks and sanitises the report", async () => {
-    const { deps, options, artifacts } = await fixture();
-    artifacts.push({
+    const { artifacts, options, run } = await fixture();
+    artifacts.items.push({
       label: "artifact-job-2",
       text: `password=spike-password at ${options.dataDir}`,
     });
-    const report = await runVisionSpike(options, deps);
+    const report = await run();
     expect(report.checks.noSensitiveWorkbenchLeakage.status).toBe("FAIL");
     expect(report.conclusion).toBe("FAIL");
     const serialized = JSON.stringify(report);
@@ -802,26 +1000,93 @@ describe("vision spike harness", () => {
 
   it("stays NOT VERIFIED when the artifact scan fails or is empty", async () => {
     const failing = await fixture();
-    const failed = await runVisionSpike(
-      {
-        ...failing.options,
-        artifactScan: async () => {
-          throw new Error("采集服务不可用");
-        },
+    const failed = await failing.run({
+      artifactScan: async () => {
+        throw new Error("采集服务不可用");
       },
-      failing.deps,
-    );
+    });
     expect(failed.checks.noSensitiveWorkbenchLeakage.status).toBe(
       "NOT VERIFIED",
     );
     const empty = await fixture();
-    const none = await runVisionSpike(
-      { ...empty.options, artifactScan: async () => [] },
-      empty.deps,
-    );
+    const none = await empty.run({
+      artifactScan: async ({ runId }) => ({
+        source: "empty",
+        runId,
+        collectedAt: new Date().toISOString(),
+        scope: ["job", "log", "notice"],
+        items: [],
+      }),
+    });
     expect(none.checks.noSensitiveWorkbenchLeakage.status).toBe(
       "NOT VERIFIED",
     );
+  });
+
+  it("requires artifact evidence to belong to this run, be fresh and cover the scope", async () => {
+    const { run } = await fixture();
+    const staleRun = await run({
+      artifactScan: async () => ({
+        source: "old",
+        runId: "00000000-0000-4000-8000-000000000000",
+        collectedAt: new Date().toISOString(),
+        scope: ["job", "log", "notice"],
+        items: [{ label: "artifact-job", text: "clean" }],
+      }),
+    });
+    expect(staleRun.checks.noSensitiveWorkbenchLeakage.status).toBe(
+      "NOT VERIFIED",
+    );
+    expect(staleRun.checks.noSensitiveWorkbenchLeakage.detail).toContain(
+      "不属于本次 run",
+    );
+    const oldTime = await run({
+      artifactScan: async ({ runId }) => ({
+        source: "old-time",
+        runId,
+        collectedAt: new Date(Date.now() - 86_400_000).toISOString(),
+        scope: ["job", "log", "notice"],
+        items: [{ label: "artifact-job", text: "clean" }],
+      }),
+    });
+    expect(oldTime.checks.noSensitiveWorkbenchLeakage.detail).toContain(
+      "采集时间",
+    );
+    const narrowScope = await run({
+      artifactScan: async ({ runId }) => ({
+        source: "narrow",
+        runId,
+        collectedAt: new Date().toISOString(),
+        scope: ["job"],
+        items: [{ label: "artifact-job", text: "clean" }],
+      }),
+    });
+    expect(narrowScope.checks.noSensitiveWorkbenchLeakage.status).toBe(
+      "NOT VERIFIED",
+    );
+    expect(narrowScope.checks.noSensitiveWorkbenchLeakage.detail).toContain(
+      "log",
+    );
+    const truncated = await run({
+      artifactScan: async ({ runId }) => ({
+        source: "truncated",
+        runId,
+        collectedAt: new Date().toISOString(),
+        scope: ["job", "log", "notice"],
+        items: [{ label: "artifact-job", text: "clean", truncated: true }],
+      }),
+    });
+    expect(truncated.checks.noSensitiveWorkbenchLeakage.status).toBe(
+      "NOT VERIFIED",
+    );
+  });
+
+  it("passes the leakage check only with a clean report and clean collected artifacts", async () => {
+    const { run } = await fixture();
+    const report = await run();
+    expect(report.checks.noSensitiveWorkbenchLeakage.status).toBe("PASS");
+    expect(report.artifacts?.scanned).toBe(1);
+    expect(report.conclusion).toBe("PASS");
   });
 });
 
@@ -833,28 +1098,35 @@ describe("vision spike restricted probes", () => {
       "refused",
       "missing-output",
     ] as const) {
-      const { deps, options, runtime } = await fixture();
+      const { runtime, run } = await fixture();
       runtime.allowScenario = scenario;
-      const report = await runVisionSpike(options, deps);
+      const report = await run();
       expect(report.checks.restrictedAllow.status, scenario).not.toBe("PASS");
       expect(report.conclusion, scenario).not.toBe("PASS");
     }
   }, 20000);
 
+  it("does not treat a missing success status as a successful allow call", async () => {
+    const { run, runtime } = await fixture();
+    runtime.allowScenario = "no-status";
+    const report = await run();
+    expect(report.checks.restrictedAllow.status).toBe("NOT VERIFIED");
+    expect(report.checks.restrictedAllow.detail).toContain("成功状态");
+  });
+
   it("fails allow when a tool outside the declared set executes during the probe", async () => {
-    const { deps, options, runtime } = await fixture();
+    const { runtime, run } = await fixture();
     runtime.allowScenario = "extra-tool";
-    const report = await runVisionSpike(options, deps);
+    const report = await run();
     expect(report.checks.restrictedAllow.status).toBe("FAIL");
     expect(report.conclusion).toBe("FAIL");
   });
 
   it("keeps allow NOT VERIFIED when no allowed tool name was declared", async () => {
-    const { deps, options } = await fixture();
-    const report = await runVisionSpike(
-      { ...options, allowProbe: { ...options.allowProbe!, tools: [] } },
-      deps,
-    );
+    const { options, run } = await fixture();
+    const report = await run({
+      allowProbe: { ...options.allowProbe!, tools: [] },
+    });
     expect(report.checks.restrictedAllow.status).toBe("NOT VERIFIED");
   });
 
@@ -864,9 +1136,9 @@ describe("vision spike restricted probes", () => {
       "prose-only",
       "pending-permission",
     ] as const) {
-      const { deps, options, runtime } = await fixture();
+      const { runtime, run } = await fixture();
       runtime.denyScenario = scenario;
-      const report = await runVisionSpike(options, deps);
+      const report = await run();
       expect(report.checks.restrictedDeny.status, scenario).toBe(
         "NOT VERIFIED",
       );
@@ -874,10 +1146,34 @@ describe("vision spike restricted probes", () => {
     }
   }, 30000);
 
+  it("does not treat ordinary tool failures as a policy refusal", async () => {
+    for (const scenario of [
+      "ordinary-error",
+      "unknown-tool",
+      "unrelated-refusal",
+    ] as const) {
+      const { run, runtime } = await fixture();
+      runtime.denyScenario = scenario;
+      const report = await run();
+      expect(report.checks.restrictedDeny.status, scenario).toBe(
+        "NOT VERIFIED",
+      );
+      expect(report.conclusion, scenario).not.toBe("PASS");
+    }
+  });
+
+  it("fails deny when a forbidden read happens even if another call was refused", async () => {
+    const { run, runtime } = await fixture();
+    runtime.denyScenario = "leak-and-refuse";
+    const report = await run();
+    expect(report.checks.restrictedDeny.status).toBe("FAIL");
+    expect(report.conclusion).toBe("FAIL");
+  });
+
   it("fails deny when the sentinel really surfaces", async () => {
     const leaked = await fixture();
     leaked.runtime.denyScenario = "leak";
-    const report = await runVisionSpike(leaked.options, leaked.deps);
+    const report = await leaked.run();
     expect(report.checks.restrictedDeny.status).toBe("FAIL");
     expect(report.conclusion).toBe("FAIL");
   });
@@ -885,23 +1181,19 @@ describe("vision spike restricted probes", () => {
   it("fails deny when the forbidden side effect really happens", async () => {
     const effected = await fixture();
     effected.runtime.denyScenario = "side-effect";
-    const report = await runVisionSpike(effected.options, effected.deps);
+    const report = await effected.run();
     expect(report.checks.restrictedDeny.status).toBe("FAIL");
     expect(report.checks.restrictedDeny.detail).toContain("副作用");
     expect(report.conclusion).toBe("FAIL");
   });
 
   it("stays NOT VERIFIED when the probe set does not cover a required scope", async () => {
-    const { deps, options } = await fixture();
-    const report = await runVisionSpike(
-      {
-        ...options,
-        denyProbes: options.denyProbes!.filter(
-          (probe) => probe.capability !== "subagent",
-        ),
-      },
-      deps,
-    );
+    const { options, run } = await fixture();
+    const report = await run({
+      denyProbes: options.denyProbes!.filter(
+        (probe) => probe.capability !== "subagent",
+      ),
+    });
     expect(report.checks.restrictedDeny.status).toBe("NOT VERIFIED");
     expect(report.checks.restrictedDeny.detail).toContain("subagent");
     expect(report.conclusion).not.toBe("PASS");
