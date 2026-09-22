@@ -18,6 +18,8 @@
     "benchmark": "tsx scripts/benchmark.ts",
     "typecheck": "tsx scripts/build-agent-knowledge.ts && pnpm -r typecheck",
     "api:spec": "tsx scripts/generate-api-spec.ts",
+    "import:instance": "tsx scripts/g2-instance.mts",
+    "import:acceptance": "SWB_G2_OPT_IN=1 tsx scripts/g2-import-acceptance.mts",
     "migrate:legacy": "tsx scripts/migrate-legacy.ts"
   },
   "devDependencies": {

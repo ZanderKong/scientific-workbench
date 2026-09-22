@@ -1,0 +1,858 @@
+{
+  "schema": "swb.import-g2/1",
+  "verifiedAt": "2026-09-22T17:14:45.832Z",
+  "mode": "verify-existing-run",
+  "content": {
+    "receipts": {
+      "scenario1": {
+        "importId": "2b741e82-4dce-4e95-a6f4-e194f5a29644",
+        "status": "committed",
+        "sourceDataId": "f093668d-2be7-4932-8677-e327b3a6bf35",
+        "sourceFingerprint": "95450eb9da8482ee9bde052d8cf8c0433e79f73055318f813111973a964720bd",
+        "recordVersion": 5,
+        "source": [
+          {
+            "attachmentId": "68d01393-94eb-4c49-b4ef-0c2274d232dc",
+            "page": 1,
+            "name": "scenario1-page1.png",
+            "sha256": "826966fe9e7dd30f10b1406ff44df953b63ca3f1e5e030ba5d49ac2109caa879",
+            "componentId": "34b4d030-014d-41f2-b4ee-a33d9b24ff75"
+          }
+        ],
+        "attempt": {
+          "id": "41662aa5-abdf-45c2-bea1-6a52d0f092f9",
+          "status": "revoked"
+        },
+        "receipt": {
+          "schemaVersion": 1,
+          "importId": "2b741e82-4dce-4e95-a6f4-e194f5a29644",
+          "sourceDataId": "f093668d-2be7-4932-8677-e327b3a6bf35",
+          "createdSampleIds": [
+            "203ccbe5-9257-4759-80f9-67225f73bee8",
+            "c0c08ba9-b72f-48a1-9e9d-9a311d7be374",
+            "1d3dc10d-9c5d-48f4-8859-d377afca69f2"
+          ],
+          "createdObjectIds": [
+            "73eecc36-c995-4afd-a8fb-dbd4a0f2cdc9",
+            "71b486da-b54f-41cd-a18d-7678cab66e73",
+            "04c29b5c-6c65-421d-b6a2-4f3196acb702",
+            "3c7f3f15-a99f-484b-9d00-93316d21b157"
+          ],
+          "derivedComponentIds": [
+            "eb20e0f4-435c-458b-b515-b24e2bf5f2be",
+            "d6690a6d-bb02-462d-89d4-b1e943e115cb",
+            "f9f4e33f-4b6f-42b5-b269-48797aab16f2",
+            "dc2a76e0-a678-492b-9799-234237e0f380"
+          ],
+          "commitFingerprint": "e0546b4ee4d03899ad5d403285cdd6caf979467da17d082c84b318b3d32812dd",
+          "sourceDataVersion": 2,
+          "contractVersion": 1,
+          "committedAt": "2026-09-22T17:08:45.226Z"
+        }
+      },
+      "scenario2": {
+        "importId": "96a70f1b-613f-4042-b02a-99a7f28df73d",
+        "status": "committed",
+        "sourceDataId": "b1015307-7f11-478b-a54c-cb6199ceb5dc",
+        "sourceFingerprint": "3dcfcc0de7fb950e78f1c60d707f205851b8fe7bfd47f6f2aa02be5d2f8d57ee",
+        "recordVersion": 4,
+        "source": [
+          {
+            "attachmentId": "aaefc80e-ca9e-4078-bc35-cd34ba78c07e",
+            "page": 1,
+            "name": "scenario2-page1.png",
+            "sha256": "dfd99bfeccc18f27c5b7793d891a4f0cdc24b6998b841ef96ce984decd2714ca",
+            "componentId": "4208cbe9-2709-41fb-8eb7-d8cd758cb5bc"
+          },
+          {
+            "attachmentId": "d63f6e80-a4ce-4e04-ba76-021c18252dad",
+            "page": 2,
+            "name": "scenario2-page2.png",
+            "sha256": "459ba1f1d47955c556372ad9a903b4230de1469d4da0cf31c1423f56e676f9a8",
+            "componentId": "1cc7d024-f5f4-48f3-bf56-f8b86a31d556"
+          }
+        ],
+        "attempt": {
+          "id": "dbb81b9a-ebc4-4895-987b-db65dcca9024",
+          "status": "revoked"
+        },
+        "receipt": {
+          "schemaVersion": 1,
+          "importId": "96a70f1b-613f-4042-b02a-99a7f28df73d",
+          "sourceDataId": "b1015307-7f11-478b-a54c-cb6199ceb5dc",
+          "createdSampleIds": [
+            "d2b365b4-ff7a-45c4-b69f-dc20eaf9c37c"
+          ],
+          "createdObjectIds": [
+            "096b573c-cdea-4bbb-aa9a-1074a6ec5de7",
+            "71d6fb8f-53de-479c-bf5a-c259472a1a3b",
+            "6db4000a-23a6-4917-882f-c1aeaf27b67d",
+            "f966a14f-8e80-4668-819f-46e7c0d458c1",
+            "3b1e9386-de87-4a07-80eb-59c05517dbff"
+          ],
+          "derivedComponentIds": [
+            "a247a054-7b32-4f57-a409-13e90872b1e9",
+            "4cd1a56b-0c62-4444-82d9-8655ef5dc224",
+            "cd3e7f2f-2bb4-49b6-8f1a-971aeaca3b72"
+          ],
+          "commitFingerprint": "43619d1a1d5bc2889139aebdf2c0bdee1c67d7f4ff9425dba3b2f09b844e32cc",
+          "sourceDataVersion": 2,
+          "contractVersion": 1,
+          "committedAt": "2026-09-22T17:10:50.026Z"
+        }
+      },
+      "scenario3": {
+        "importId": "bd18dd69-5018-4612-b0ec-4e653b14a2ad",
+        "status": "committed",
+        "sourceDataId": "0f16e1f1-7019-4a3a-a2dd-47e3447b317b",
+        "sourceFingerprint": "c874bd8a98eacef708930dbfcd0e3541317327d9ce23a0d3c52101c4f9cdd8dd",
+        "recordVersion": 6,
+        "source": [
+          {
+            "attachmentId": "06ab689f-ac7f-4a01-b013-ddc8718340db",
+            "page": 1,
+            "name": "scenario3-page1.png",
+            "sha256": "5b0340d0bba054c8aa2026edaa86af74441b638ce3190b784b16f83e738e97a9",
+            "componentId": "f4e6393e-5c23-45a9-b25e-6db09e1f14e1"
+          }
+        ],
+        "attempt": {
+          "id": "8b0b6228-5ee3-46be-bd2e-f0f6023bad62",
+          "status": "revoked"
+        },
+        "receipt": {
+          "schemaVersion": 1,
+          "importId": "bd18dd69-5018-4612-b0ec-4e653b14a2ad",
+          "sourceDataId": "0f16e1f1-7019-4a3a-a2dd-47e3447b317b",
+          "createdSampleIds": [
+            "4523cd2b-074f-47f7-85d7-6452ca4d177f"
+          ],
+          "createdObjectIds": [
+            "a2ce3df1-26fa-4c1c-a583-ad80698860ad"
+          ],
+          "derivedComponentIds": [
+            "17f59d51-3eae-43bf-a3d0-320f953c3661",
+            "a6fb3b63-7f30-45a8-bb93-a9767d202016"
+          ],
+          "commitFingerprint": "aae86df4f99f119f7bb707db3dd04068b0d74e8a0fa28a9807804423efd160b6",
+          "sourceDataVersion": 2,
+          "contractVersion": 1,
+          "committedAt": "2026-09-22T17:12:39.329Z"
+        }
+      }
+    },
+    "jobs": {
+      "scenario1": {
+        "id": "304817e2-7a6b-471b-8a7e-b330d02d51a2",
+        "type": "sample-import",
+        "status": "succeeded",
+        "payload": {
+          "name": "实验记录导入",
+          "runtime": "opencode",
+          "mode": "vision",
+          "importId": "2b741e82-4dce-4e95-a6f4-e194f5a29644",
+          "attemptId": "41662aa5-abdf-45c2-bea1-6a52d0f092f9",
+          "requestHash": "01a3a6c899f7c40f0edb622992630f1c02bb33e34e626ad81c40f8901833cd2b",
+          "endpoint": "http://127.0.0.1:4199",
+          "phase": "completed",
+          "startedAt": "2026-09-22T17:07:42.425Z",
+          "sessionId": "ses_f35e99302ffe6dymtKmy1KQ4IH",
+          "promptMessageId": "msg_0d27a61c07a542eeb4468fbe4976d9c6",
+          "completedAt": "2026-09-22T17:08:46.215Z",
+          "dismissed": true
+        },
+        "error": null,
+        "created_at": "2026-09-22T17:07:42.425Z",
+        "updated_at": "2026-09-22T17:08:54.398Z"
+      },
+      "scenario2": {
+        "id": "cb64c2e0-6317-427f-a223-008046a97e00",
+        "type": "sample-import",
+        "status": "succeeded",
+        "payload": {
+          "name": "实验记录导入",
+          "runtime": "opencode",
+          "mode": "vision",
+          "importId": "96a70f1b-613f-4042-b02a-99a7f28df73d",
+          "attemptId": "dbb81b9a-ebc4-4895-987b-db65dcca9024",
+          "requestHash": "7ab6d8532b584209a22dba7f172092a2f3b076b69925874a0843b30b8b120a42",
+          "endpoint": "http://127.0.0.1:4199",
+          "phase": "completed",
+          "startedAt": "2026-09-22T17:08:50.490Z",
+          "sessionId": "ses_f35e88923ffeUOioGifuJIQZ7p",
+          "promptMessageId": "msg_574c6e4899da4ad79cd113923d935186",
+          "completedAt": "2026-09-22T17:10:50.847Z",
+          "dismissed": true
+        },
+        "error": null,
+        "created_at": "2026-09-22T17:08:50.490Z",
+        "updated_at": "2026-09-22T17:10:56.639Z"
+      },
+      "scenario3": {
+        "id": "e30257ce-18db-40c4-8a0c-14d631394805",
+        "type": "sample-import",
+        "status": "succeeded",
+        "payload": {
+          "name": "实验记录导入",
+          "runtime": "opencode",
+          "mode": "vision",
+          "importId": "bd18dd69-5018-4612-b0ec-4e653b14a2ad",
+          "attemptId": "8b0b6228-5ee3-46be-bd2e-f0f6023bad62",
+          "requestHash": "24db9f4c63440eb6c9387763edfa23cdc7a29a208757fc3073dc0911a85bb3cf",
+          "endpoint": "http://127.0.0.1:4199",
+          "phase": "completed",
+          "startedAt": "2026-09-22T17:10:52.885Z",
+          "sessionId": "ses_f35e6ab07ffeqlkTNKu6AoNXHw",
+          "promptMessageId": "msg_4f0358c1605847f090d17adf4801ab54",
+          "completedAt": "2026-09-22T17:12:40.465Z"
+        },
+        "error": null,
+        "created_at": "2026-09-22T17:10:52.885Z",
+        "updated_at": "2026-09-22T17:12:40.465Z"
+      }
+    },
+    "samples": {
+      "scenario1": [
+        {
+          "id": "203ccbe5-9257-4759-80f9-67225f73bee8",
+          "code": "R1",
+          "body": "<!-- swb:block id=\"af2b0aa3-5c0c-464b-b667-ccccbdc550eb\" -->\n- 在 [坩埚] 中称取 [原料]\n<!-- swb:block id=\"5090e24c-448e-431a-bc13-77aaf073ab73\" -->\n  - [原料]｜称取量：2.5 g\n<!-- swb:block id=\"c9d3336e-7836-4689-b2c7-856d5db4c727\" -->\n- 向 [坩埚] 中加入 [去离子水]\n<!-- swb:block id=\"4a22f1b5-296a-440d-8247-548bb7ec7416\" -->\n  - [去离子水]｜添加量：10 mL\n<!-- swb:block id=\"ef0273b6-1d3d-49be-9556-78d5b4318816\" -->\n- 在 [坩埚] 中于 80 ℃ 进行 [搅拌]\n<!-- swb:block id=\"9c646320-a3a0-4d15-898a-0328b5f31cb9\" -->\n  - [搅拌]｜温度：80 ℃｜时间：30 min\n<!-- swb:block id=\"691de947-8d22-440d-8b09-c8e6a0ce12d2\" -->\n- 液面有少量白色颗粒悬浮\n<!-- swb:block id=\"a9ec5834-68e0-403a-b423-827523404457\" -->\n- [数据] 实验记录 2b741e82\n  1. scenario1-page1.png",
+          "properties": [
+            {
+              "object": "原料",
+              "name": "称取量",
+              "value": "2.5 g"
+            },
+            {
+              "object": "去离子水",
+              "name": "添加量",
+              "value": "10 mL"
+            },
+            {
+              "object": "搅拌",
+              "name": "温度",
+              "value": "80 ℃"
+            },
+            {
+              "object": "搅拌",
+              "name": "时间",
+              "value": "30 min"
+            }
+          ],
+          "dataBindings": [
+            "f093668d-2be7-4932-8677-e327b3a6bf35"
+          ]
+        },
+        {
+          "id": "c0c08ba9-b72f-48a1-9e9d-9a311d7be374",
+          "code": "R2",
+          "body": "<!-- swb:block id=\"4f3b08ff-fd06-41b4-af9d-54ff92e18c11\" -->\n- 在 [坩埚] 中称取 [原料]\n<!-- swb:block id=\"37629fca-0185-42bf-a86c-b4204aaa8af9\" -->\n  - [原料]｜称取量：5.0 g\n<!-- swb:block id=\"008c382b-0c78-4e99-9869-50a5be397b21\" -->\n- 向 [坩埚] 中加入 [去离子水]\n<!-- swb:block id=\"89fe5c70-5ac9-403f-b986-87ddf302a218\" -->\n  - [去离子水]｜添加量：20 mL\n<!-- swb:block id=\"cd7a78f4-41f0-43a4-b747-142b12f926d0\" -->\n- 在 [坩埚] 中于 80 ℃ 进行 [搅拌]\n<!-- swb:block id=\"36c8fcda-2c9b-4c22-9ade-cc9042c2a7d1\" -->\n  - [搅拌]｜温度：80 ℃｜时间：45 min\n<!-- swb:block id=\"acb48511-1b03-4d35-90c3-0db912a628ca\" -->\n- 液面有少量白色颗粒悬浮\n<!-- swb:block id=\"3439a56f-d403-4073-b643-7af069f5ea88\" -->\n- [数据] 实验记录 2b741e82\n  1. scenario1-page1.png",
+          "properties": [
+            {
+              "object": "原料",
+              "name": "称取量",
+              "value": "5.0 g"
+            },
+            {
+              "object": "去离子水",
+              "name": "添加量",
+              "value": "20 mL"
+            },
+            {
+              "object": "搅拌",
+              "name": "温度",
+              "value": "80 ℃"
+            },
+            {
+              "object": "搅拌",
+              "name": "时间",
+              "value": "45 min"
+            }
+          ],
+          "dataBindings": [
+            "f093668d-2be7-4932-8677-e327b3a6bf35"
+          ]
+        },
+        {
+          "id": "1d3dc10d-9c5d-48f4-8859-d377afca69f2",
+          "code": "R3",
+          "body": "<!-- swb:block id=\"5bf93e00-ddf8-4255-9af2-d8d2aea38915\" -->\n- 在 [坩埚] 中称取 [原料]\n<!-- swb:block id=\"579dd6dd-1ed4-42c7-b206-cb79c35629b9\" -->\n  - [原料]｜称取量：7.5 g\n<!-- swb:block id=\"499388e5-803d-4977-af3b-fc56f9529ffa\" -->\n- 向 [坩埚] 中加入 [去离子水]\n<!-- swb:block id=\"3d99863a-550b-4365-b4b6-680ab08c73fe\" -->\n  - [去离子水]｜添加量：30 mL\n<!-- swb:block id=\"eabf1575-2d68-4bec-a513-0479d7dbaed7\" -->\n- 在 [坩埚] 中于 80 ℃ 进行 [搅拌]\n<!-- swb:block id=\"caab7fe1-2363-4ed6-80ca-a760eac54f77\" -->\n  - [搅拌]｜温度：80 ℃｜时间：60 min\n<!-- swb:block id=\"390fea8d-d7dc-437a-b11e-234c48adfa91\" -->\n- 液面有少量白色颗粒悬浮\n<!-- swb:block id=\"40ddf13d-2b32-4b95-879f-f1cb630fd7d4\" -->\n- [数据] 实验记录 2b741e82\n  1. scenario1-page1.png",
+          "properties": [
+            {
+              "object": "原料",
+              "name": "称取量",
+              "value": "7.5 g"
+            },
+            {
+              "object": "去离子水",
+              "name": "添加量",
+              "value": "30 mL"
+            },
+            {
+              "object": "搅拌",
+              "name": "温度",
+              "value": "80 ℃"
+            },
+            {
+              "object": "搅拌",
+              "name": "时间",
+              "value": "60 min"
+            }
+          ],
+          "dataBindings": [
+            "f093668d-2be7-4932-8677-e327b3a6bf35"
+          ]
+        }
+      ],
+      "scenario2": [
+        {
+          "id": "d2b365b4-ff7a-45c4-b69f-dc20eaf9c37c",
+          "code": "T7",
+          "body": "<!-- swb:block id=\"6d5e88b9-1915-4979-b110-7efa17d75f9b\" -->\n- 称取 [原料] 放入 [烧瓶]\n<!-- swb:block id=\"ca3e24e6-0f32-4da4-b651-ebd42261bdd6\" -->\n  - [原料]｜称取量：3.0 g\n<!-- swb:block id=\"d72cfa68-dd53-487c-8231-c59a494155d8\" -->\n- 加入 [乙醇]，进行 [回流]\n<!-- swb:block id=\"8b182f95-e0a4-4b78-9da1-5f7b77e3884c\" -->\n  - [乙醇]｜添加量：15 mL\n<!-- swb:block id=\"a257c335-500d-4d27-a822-db406ed8c826\" -->\n  - [回流]｜温度：60 °C｜时间：2 h\n<!-- swb:block id=\"26f534ab-b816-4791-aa38-5701b26265c1\" -->\n- 冷却至室温后 [过滤]\n<!-- swb:block id=\"498a381d-d58d-47b2-bc8d-60c37e72c7a4\" -->\n- [静置] 12 h，得到 1.8 g 白色晶体\n<!-- swb:block id=\"959a060d-c561-46af-9964-a9b125df55a6\" -->\n  - [静置]｜时间：12 h\n<!-- swb:block id=\"4713250a-ec9a-4d0e-8429-5f0e3ff6a6d1\" -->\n- [数据] 实验记录 96a70f1b\n  1. scenario2-page1.png\n  2. scenario2-page2.png",
+          "properties": [
+            {
+              "object": "原料",
+              "name": "称取量",
+              "value": "3.0 g"
+            },
+            {
+              "object": "乙醇",
+              "name": "添加量",
+              "value": "15 mL"
+            },
+            {
+              "object": "回流",
+              "name": "温度",
+              "value": "60 °C"
+            },
+            {
+              "object": "回流",
+              "name": "时间",
+              "value": "2 h"
+            },
+            {
+              "object": "静置",
+              "name": "时间",
+              "value": "12 h"
+            }
+          ],
+          "dataBindings": [
+            "b1015307-7f11-478b-a54c-cb6199ceb5dc"
+          ]
+        }
+      ],
+      "scenario3": [
+        {
+          "id": "4523cd2b-074f-47f7-85d7-6452ca4d177f",
+          "code": "Q1",
+          "body": "<!-- swb:block id=\"q1-data\" -->\n[数据] 2026-09-20 实验记录图片\n<!-- swb:block id=\"q1-op1\" -->\n- 加入 [原料]\n  <!-- swb:block id=\"q1-op1a\" -->\n  - [原料]｜添加量：8 g\n<!-- swb:block id=\"q1-op2\" -->\n- 加入 12 mL [甲醇]，进行 [搅拌]\n  <!-- swb:block id=\"q1-op2a\" -->\n  - [甲醇]｜添加量：12 mL\n  <!-- swb:block id=\"q1-op2b\" -->\n  - [搅拌]｜温度：室温\n<!-- swb:block id=\"q1-note\" -->\n- 备注：本页为验收用合成记录，非真实实验数据。\n<!-- swb:block id=\"9f81f9f2-655e-46c7-9b0c-7d391d5e9146\" -->\n- [数据] 实验记录 bd18dd69\n  1. scenario3-page1.png",
+          "properties": [
+            {
+              "object": "原料",
+              "name": "添加量",
+              "value": "8 g"
+            },
+            {
+              "object": "甲醇",
+              "name": "添加量",
+              "value": "12 mL"
+            },
+            {
+              "object": "搅拌",
+              "name": "温度",
+              "value": "室温"
+            }
+          ],
+          "dataBindings": [
+            "0f16e1f1-7019-4a3a-a2dd-47e3447b317b"
+          ]
+        }
+      ]
+    },
+    "bindings": {},
+    "provenance": {
+      "scenario1": {
+        "sourceDataVersion": 2,
+        "aboutSampleIds": [
+          "203ccbe5-9257-4759-80f9-67225f73bee8",
+          "c0c08ba9-b72f-48a1-9e9d-9a311d7be374",
+          "1d3dc10d-9c5d-48f4-8859-d377afca69f2"
+        ],
+        "components": [
+          {
+            "schema": "swb.import-provenance/1",
+            "importId": "2b741e82-4dce-4e95-a6f4-e194f5a29644",
+            "entries": [
+              {
+                "sampleId": "203ccbe5-9257-4759-80f9-67225f73bee8",
+                "sampleKey": "R1",
+                "attachmentId": "68d01393-94eb-4c49-b4ef-0c2274d232dc",
+                "sourceComponentId": "34b4d030-014d-41f2-b4ee-a33d9b24ff75",
+                "page": 1,
+                "positions": "table row 1"
+              },
+              {
+                "sampleId": "c0c08ba9-b72f-48a1-9e9d-9a311d7be374",
+                "sampleKey": "R2",
+                "attachmentId": "68d01393-94eb-4c49-b4ef-0c2274d232dc",
+                "sourceComponentId": "34b4d030-014d-41f2-b4ee-a33d9b24ff75",
+                "page": 1,
+                "positions": "table row 2"
+              },
+              {
+                "sampleId": "1d3dc10d-9c5d-48f4-8859-d377afca69f2",
+                "sampleKey": "R3",
+                "attachmentId": "68d01393-94eb-4c49-b4ef-0c2274d232dc",
+                "sourceComponentId": "34b4d030-014d-41f2-b4ee-a33d9b24ff75",
+                "page": 1,
+                "positions": "table row 3"
+              }
+            ]
+          }
+        ]
+      },
+      "scenario2": {
+        "sourceDataVersion": 2,
+        "aboutSampleIds": [
+          "d2b365b4-ff7a-45c4-b69f-dc20eaf9c37c"
+        ],
+        "components": [
+          {
+            "schema": "swb.import-provenance/1",
+            "importId": "96a70f1b-613f-4042-b02a-99a7f28df73d",
+            "entries": [
+              {
+                "sampleId": "d2b365b4-ff7a-45c4-b69f-dc20eaf9c37c",
+                "sampleKey": "T7",
+                "attachmentId": "aaefc80e-ca9e-4078-bc35-cd34ba78c07e",
+                "sourceComponentId": "4208cbe9-2709-41fb-8eb7-d8cd758cb5bc",
+                "page": 1
+              },
+              {
+                "sampleId": "d2b365b4-ff7a-45c4-b69f-dc20eaf9c37c",
+                "sampleKey": "T7",
+                "attachmentId": "d63f6e80-a4ce-4e04-ba76-021c18252dad",
+                "sourceComponentId": "1cc7d024-f5f4-48f3-bf56-f8b86a31d556",
+                "page": 2
+              }
+            ]
+          }
+        ]
+      },
+      "scenario3": {
+        "sourceDataVersion": 2,
+        "aboutSampleIds": [
+          "4523cd2b-074f-47f7-85d7-6452ca4d177f"
+        ],
+        "components": [
+          {
+            "schema": "swb.import-provenance/1",
+            "importId": "bd18dd69-5018-4612-b0ec-4e653b14a2ad",
+            "entries": [
+              {
+                "sampleId": "4523cd2b-074f-47f7-85d7-6452ca4d177f",
+                "sampleKey": "q1",
+                "attachmentId": "06ab689f-ac7f-4a01-b013-ddc8718340db",
+                "sourceComponentId": "f4e6393e-5c23-45a9-b25e-6db09e1f14e1",
+                "page": 1,
+                "positions": "page 1; title line; raw-material line; methanol/stirring line; footer note"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "clarifications": {
+    "scenario1": [
+      {
+        "askedAt": 1790096868757,
+        "input": {
+          "questions": [
+            {
+              "question": "记录中三份样品都只写“原料”（备注：三份使用同一批原料），没有具体名称。应如何登记这个对象？",
+              "header": "原料身份",
+              "options": [
+                {
+                  "label": "新建 material，标准名用“原料”",
+                  "description": "按记录原文建立标准名为“原料”的原料对象，三份样品共用同一对象引用（来源明确、角色为 material）"
+                },
+                {
+                  "label": "先不建对象，保留普通文本",
+                  "description": "把“原料”作为待确认普通文本，不生成对象意图，等补充具体名称后再建"
+                },
+                {
+                  "label": "我提供具体原料名称",
+                  "description": "由你给出该原料的真实名称/牌号，我按该名称建立 material 对象"
+                }
+              ]
+            }
+          ]
+        },
+        "answer": "User has answered your questions: \"记录中三份样品都只写“原料”（备注：三份使用同一批原料），没有具体名称。应如何登记这个对象？\"=\"新建 material，标准名用“原料”\". You can now continue with the user's answers in mind."
+      }
+    ],
+    "scenario2": [
+      {
+        "askedAt": 1790096947238,
+        "input": {
+          "questions": [
+            {
+              "header": "产物归属",
+              "question": "第2页记录「滤液静置 12 h，得到 1.8 g 白色晶体」。这里的 1.8 g 白色晶体应如何归属？",
+              "options": [
+                {
+                  "label": "作为样品 T7 的产物结果",
+                  "description": "1.8 g 记为 T7 的产量/结果，不另建对象"
+                },
+                {
+                  "label": "另建物料「白色晶体」",
+                  "description": "白色晶体是独立 material，新建对象并记录 1.8 g"
+                },
+                {
+                  "label": "另建新样品",
+                  "description": "白色晶体是另一个样品，需单独建样品"
+                }
+              ]
+            },
+            {
+              "header": "原料身份",
+              "question": "记录中的「原料」应如何引用？工作区已存在同名 material「原料」。",
+              "options": [
+                {
+                  "label": "复用已有物料「原料」",
+                  "description": "按精确同名复用现有 material 对象"
+                },
+                {
+                  "label": "保留为普通文本，不绑定",
+                  "description": "原料身份未指明，暂不建立对象引用"
+                },
+                {
+                  "label": "按具体原料名称新建",
+                  "description": "请说明具体原料名称，再新建 material"
+                }
+              ]
+            },
+            {
+              "header": "过程对象与条件",
+              "question": "「60 °C 回流 2 h」「静置 12 h」等条件应如何结构化？",
+              "options": [
+                {
+                  "label": "新建过程对象承载条件",
+                  "description": "为 回流/过滤/静置 新建 process 对象，温度/时间作为其属性"
+                },
+                {
+                  "label": "仅作为普通操作文本",
+                  "description": "不建 process 对象，条件保留在正文中"
+                },
+                {
+                  "label": "条件挂到相邻物料",
+                  "description": "温度/时间作为乙醇等物料的属性"
+                }
+              ]
+            }
+          ]
+        },
+        "answer": "User has answered your questions: \"第2页记录「滤液静置 12 h，得到 1.8 g 白色晶体」。这里的 1.8 g 白色晶体应如何归属？\"=\"作为样品 T7 的产物结果\", \"记录中的「原料」应如何引用？工作区已存在同名 material「原料」。\"=\"复用已有物料「原料」\", \"「60 °C 回流 2 h」「静置 12 h」等条件应如何结构化？\"=\"新建过程对象承载条件\". You can now continue with the user's answers in mind."
+      }
+    ],
+    "scenario3": [
+      {
+        "askedAt": 1790097068053,
+        "input": {
+          "questions": [
+            {
+              "header": "Q1 原料用量冲突",
+              "question": "样品 Q1 记录中「加入原料」的用量在两页不一致：前一页写 5 g，本页写 8 g。以哪个为准写入 draft？（该值为关键用量，未确认前不会作为已确认属性提交）",
+              "options": [
+                {
+                  "label": "以本页 8 g 为准",
+                  "description": "采用当前页记录的 8 g 作为原料用量"
+                },
+                {
+                  "label": "以前一页 5 g 为准",
+                  "description": "采用上一页记录的 5 g 作为原料用量"
+                },
+                {
+                  "label": "两者都保留为待确认文本",
+                  "description": "不写入已确认属性，仅在正文保留「5 g/8 g 待确认」普通文本"
+                }
+              ]
+            },
+            {
+              "header": "跨页归属",
+              "question": "本次导入来源只包含本页（页码 1）。记录提到「前一页」但该页不在本次来源中。本次 draft 的样品归属应如何处理？",
+              "options": [
+                {
+                  "label": "仅按本页归属为 Q1",
+                  "description": "只依据本页建立样品 Q1 的记录，不臆造前一页内容"
+                },
+                {
+                  "label": "Q1 为跨页同一份样品",
+                  "description": "把 Q1 视为连续多页的同一份样品，但仍只用本页可见内容"
+                }
+              ]
+            }
+          ]
+        },
+        "answer": "User has answered your questions: \"样品 Q1 记录中「加入原料」的用量在两页不一致：前一页写 5 g，本页写 8 g。以哪个为准写入 draft？（该值为关键用量，未确认前不会作为已确认属性提交）\"=\"以本页 8 g 为准\", \"本次导入来源只包含本页（页码 1）。记录提到「前一页」但该页不在本次来源中。本次 draft 的样品归属应如何处理？\"=\"仅按本页归属为 Q1\". You can now continue with the user's answers in mind."
+      }
+    ]
+  },
+  "afterRestart": {
+    "bodies": [
+      {
+        "id": "203ccbe5-9257-4759-80f9-67225f73bee8",
+        "body": "<!-- swb:block id=\"af2b0aa3-5c0c-464b-b667-ccccbdc550eb\" -->\n- 在 [坩埚] 中称取 [原料]\n<!-- swb:block id=\"5090e24c-448e-431a-bc13-77aaf073ab73\" -->\n  - [原料]｜称取量：2.5 g\n<!-- swb:block id=\"c9d3336e-7836-4689-b2c7-856d5db4c727\" -->\n- 向 [坩埚] 中加入 [去离子水]\n<!-- swb:block id=\"4a22f1b5-296a-440d-8247-548bb7ec7416\" -->\n  - [去离子水]｜添加量：10 mL\n<!-- swb:block id=\"ef0273b6-1d3d-49be-9556-78d5b4318816\" -->\n- 在 [坩埚] 中于 80 ℃ 进行 [搅拌]\n<!-- swb:block id=\"9c646320-a3a0-4d15-898a-0328b5f31cb9\" -->\n  - [搅拌]｜温度：80 ℃｜时间：30 min\n<!-- swb:block id=\"691de947-8d22-440d-8b09-c8e6a0ce12d2\" -->\n- 液面有少量白色颗粒悬浮\n<!-- swb:block id=\"a9ec5834-68e0-403a-b423-827523404457\" -->\n- [数据] 实验记录 2b741e82\n  1. scenario1-page1.png"
+      },
+      {
+        "id": "c0c08ba9-b72f-48a1-9e9d-9a311d7be374",
+        "body": "<!-- swb:block id=\"4f3b08ff-fd06-41b4-af9d-54ff92e18c11\" -->\n- 在 [坩埚] 中称取 [原料]\n<!-- swb:block id=\"37629fca-0185-42bf-a86c-b4204aaa8af9\" -->\n  - [原料]｜称取量：5.0 g\n<!-- swb:block id=\"008c382b-0c78-4e99-9869-50a5be397b21\" -->\n- 向 [坩埚] 中加入 [去离子水]\n<!-- swb:block id=\"89fe5c70-5ac9-403f-b986-87ddf302a218\" -->\n  - [去离子水]｜添加量：20 mL\n<!-- swb:block id=\"cd7a78f4-41f0-43a4-b747-142b12f926d0\" -->\n- 在 [坩埚] 中于 80 ℃ 进行 [搅拌]\n<!-- swb:block id=\"36c8fcda-2c9b-4c22-9ade-cc9042c2a7d1\" -->\n  - [搅拌]｜温度：80 ℃｜时间：45 min\n<!-- swb:block id=\"acb48511-1b03-4d35-90c3-0db912a628ca\" -->\n- 液面有少量白色颗粒悬浮\n<!-- swb:block id=\"3439a56f-d403-4073-b643-7af069f5ea88\" -->\n- [数据] 实验记录 2b741e82\n  1. scenario1-page1.png"
+      },
+      {
+        "id": "1d3dc10d-9c5d-48f4-8859-d377afca69f2",
+        "body": "<!-- swb:block id=\"5bf93e00-ddf8-4255-9af2-d8d2aea38915\" -->\n- 在 [坩埚] 中称取 [原料]\n<!-- swb:block id=\"579dd6dd-1ed4-42c7-b206-cb79c35629b9\" -->\n  - [原料]｜称取量：7.5 g\n<!-- swb:block id=\"499388e5-803d-4977-af3b-fc56f9529ffa\" -->\n- 向 [坩埚] 中加入 [去离子水]\n<!-- swb:block id=\"3d99863a-550b-4365-b4b6-680ab08c73fe\" -->\n  - [去离子水]｜添加量：30 mL\n<!-- swb:block id=\"eabf1575-2d68-4bec-a513-0479d7dbaed7\" -->\n- 在 [坩埚] 中于 80 ℃ 进行 [搅拌]\n<!-- swb:block id=\"caab7fe1-2363-4ed6-80ca-a760eac54f77\" -->\n  - [搅拌]｜温度：80 ℃｜时间：60 min\n<!-- swb:block id=\"390fea8d-d7dc-437a-b11e-234c48adfa91\" -->\n- 液面有少量白色颗粒悬浮\n<!-- swb:block id=\"40ddf13d-2b32-4b95-879f-f1cb630fd7d4\" -->\n- [数据] 实验记录 2b741e82\n  1. scenario1-page1.png"
+      },
+      {
+        "id": "d2b365b4-ff7a-45c4-b69f-dc20eaf9c37c",
+        "body": "<!-- swb:block id=\"6d5e88b9-1915-4979-b110-7efa17d75f9b\" -->\n- 称取 [原料] 放入 [烧瓶]\n<!-- swb:block id=\"ca3e24e6-0f32-4da4-b651-ebd42261bdd6\" -->\n  - [原料]｜称取量：3.0 g\n<!-- swb:block id=\"d72cfa68-dd53-487c-8231-c59a494155d8\" -->\n- 加入 [乙醇]，进行 [回流]\n<!-- swb:block id=\"8b182f95-e0a4-4b78-9da1-5f7b77e3884c\" -->\n  - [乙醇]｜添加量：15 mL\n<!-- swb:block id=\"a257c335-500d-4d27-a822-db406ed8c826\" -->\n  - [回流]｜温度：60 °C｜时间：2 h\n<!-- swb:block id=\"26f534ab-b816-4791-aa38-5701b26265c1\" -->\n- 冷却至室温后 [过滤]\n<!-- swb:block id=\"498a381d-d58d-47b2-bc8d-60c37e72c7a4\" -->\n- [静置] 12 h，得到 1.8 g 白色晶体\n<!-- swb:block id=\"959a060d-c561-46af-9964-a9b125df55a6\" -->\n  - [静置]｜时间：12 h\n<!-- swb:block id=\"4713250a-ec9a-4d0e-8429-5f0e3ff6a6d1\" -->\n- [数据] 实验记录 96a70f1b\n  1. scenario2-page1.png\n  2. scenario2-page2.png"
+      },
+      {
+        "id": "4523cd2b-074f-47f7-85d7-6452ca4d177f",
+        "body": "<!-- swb:block id=\"q1-data\" -->\n[数据] 2026-09-20 实验记录图片\n<!-- swb:block id=\"q1-op1\" -->\n- 加入 [原料]\n  <!-- swb:block id=\"q1-op1a\" -->\n  - [原料]｜添加量：8 g\n<!-- swb:block id=\"q1-op2\" -->\n- 加入 12 mL [甲醇]，进行 [搅拌]\n  <!-- swb:block id=\"q1-op2a\" -->\n  - [甲醇]｜添加量：12 mL\n  <!-- swb:block id=\"q1-op2b\" -->\n  - [搅拌]｜温度：室温\n<!-- swb:block id=\"q1-note\" -->\n- 备注：本页为验收用合成记录，非真实实验数据。\n<!-- swb:block id=\"9f81f9f2-655e-46c7-9b0c-7d391d5e9146\" -->\n- [数据] 实验记录 bd18dd69\n  1. scenario3-page1.png"
+      }
+    ],
+    "samples": 5,
+    "data": 3,
+    "attachments": 4,
+    "attachmentsReadable": true,
+    "receipts": [
+      {
+        "importId": "2b741e82-4dce-4e95-a6f4-e194f5a29644",
+        "status": "committed",
+        "sourceDataId": "f093668d-2be7-4932-8677-e327b3a6bf35",
+        "sourceFingerprint": "95450eb9da8482ee9bde052d8cf8c0433e79f73055318f813111973a964720bd",
+        "recordVersion": 5,
+        "source": [
+          {
+            "attachmentId": "68d01393-94eb-4c49-b4ef-0c2274d232dc",
+            "page": 1,
+            "name": "scenario1-page1.png",
+            "sha256": "826966fe9e7dd30f10b1406ff44df953b63ca3f1e5e030ba5d49ac2109caa879",
+            "componentId": "34b4d030-014d-41f2-b4ee-a33d9b24ff75"
+          }
+        ],
+        "attempt": {
+          "id": "41662aa5-abdf-45c2-bea1-6a52d0f092f9",
+          "status": "revoked"
+        },
+        "receipt": {
+          "schemaVersion": 1,
+          "importId": "2b741e82-4dce-4e95-a6f4-e194f5a29644",
+          "sourceDataId": "f093668d-2be7-4932-8677-e327b3a6bf35",
+          "createdSampleIds": [
+            "203ccbe5-9257-4759-80f9-67225f73bee8",
+            "c0c08ba9-b72f-48a1-9e9d-9a311d7be374",
+            "1d3dc10d-9c5d-48f4-8859-d377afca69f2"
+          ],
+          "createdObjectIds": [
+            "73eecc36-c995-4afd-a8fb-dbd4a0f2cdc9",
+            "71b486da-b54f-41cd-a18d-7678cab66e73",
+            "04c29b5c-6c65-421d-b6a2-4f3196acb702",
+            "3c7f3f15-a99f-484b-9d00-93316d21b157"
+          ],
+          "derivedComponentIds": [
+            "eb20e0f4-435c-458b-b515-b24e2bf5f2be",
+            "d6690a6d-bb02-462d-89d4-b1e943e115cb",
+            "f9f4e33f-4b6f-42b5-b269-48797aab16f2",
+            "dc2a76e0-a678-492b-9799-234237e0f380"
+          ],
+          "commitFingerprint": "e0546b4ee4d03899ad5d403285cdd6caf979467da17d082c84b318b3d32812dd",
+          "sourceDataVersion": 2,
+          "contractVersion": 1,
+          "committedAt": "2026-09-22T17:08:45.226Z"
+        }
+      },
+      {
+        "importId": "96a70f1b-613f-4042-b02a-99a7f28df73d",
+        "status": "committed",
+        "sourceDataId": "b1015307-7f11-478b-a54c-cb6199ceb5dc",
+        "sourceFingerprint": "3dcfcc0de7fb950e78f1c60d707f205851b8fe7bfd47f6f2aa02be5d2f8d57ee",
+        "recordVersion": 4,
+        "source": [
+          {
+            "attachmentId": "aaefc80e-ca9e-4078-bc35-cd34ba78c07e",
+            "page": 1,
+            "name": "scenario2-page1.png",
+            "sha256": "dfd99bfeccc18f27c5b7793d891a4f0cdc24b6998b841ef96ce984decd2714ca",
+            "componentId": "4208cbe9-2709-41fb-8eb7-d8cd758cb5bc"
+          },
+          {
+            "attachmentId": "d63f6e80-a4ce-4e04-ba76-021c18252dad",
+            "page": 2,
+            "name": "scenario2-page2.png",
+            "sha256": "459ba1f1d47955c556372ad9a903b4230de1469d4da0cf31c1423f56e676f9a8",
+            "componentId": "1cc7d024-f5f4-48f3-bf56-f8b86a31d556"
+          }
+        ],
+        "attempt": {
+          "id": "dbb81b9a-ebc4-4895-987b-db65dcca9024",
+          "status": "revoked"
+        },
+        "receipt": {
+          "schemaVersion": 1,
+          "importId": "96a70f1b-613f-4042-b02a-99a7f28df73d",
+          "sourceDataId": "b1015307-7f11-478b-a54c-cb6199ceb5dc",
+          "createdSampleIds": [
+            "d2b365b4-ff7a-45c4-b69f-dc20eaf9c37c"
+          ],
+          "createdObjectIds": [
+            "096b573c-cdea-4bbb-aa9a-1074a6ec5de7",
+            "71d6fb8f-53de-479c-bf5a-c259472a1a3b",
+            "6db4000a-23a6-4917-882f-c1aeaf27b67d",
+            "f966a14f-8e80-4668-819f-46e7c0d458c1",
+            "3b1e9386-de87-4a07-80eb-59c05517dbff"
+          ],
+          "derivedComponentIds": [
+            "a247a054-7b32-4f57-a409-13e90872b1e9",
+            "4cd1a56b-0c62-4444-82d9-8655ef5dc224",
+            "cd3e7f2f-2bb4-49b6-8f1a-971aeaca3b72"
+          ],
+          "commitFingerprint": "43619d1a1d5bc2889139aebdf2c0bdee1c67d7f4ff9425dba3b2f09b844e32cc",
+          "sourceDataVersion": 2,
+          "contractVersion": 1,
+          "committedAt": "2026-09-22T17:10:50.026Z"
+        }
+      },
+      {
+        "importId": "bd18dd69-5018-4612-b0ec-4e653b14a2ad",
+        "status": "committed",
+        "sourceDataId": "0f16e1f1-7019-4a3a-a2dd-47e3447b317b",
+        "sourceFingerprint": "c874bd8a98eacef708930dbfcd0e3541317327d9ce23a0d3c52101c4f9cdd8dd",
+        "recordVersion": 6,
+        "source": [
+          {
+            "attachmentId": "06ab689f-ac7f-4a01-b013-ddc8718340db",
+            "page": 1,
+            "name": "scenario3-page1.png",
+            "sha256": "5b0340d0bba054c8aa2026edaa86af74441b638ce3190b784b16f83e738e97a9",
+            "componentId": "f4e6393e-5c23-45a9-b25e-6db09e1f14e1"
+          }
+        ],
+        "attempt": {
+          "id": "8b0b6228-5ee3-46be-bd2e-f0f6023bad62",
+          "status": "revoked"
+        },
+        "receipt": {
+          "schemaVersion": 1,
+          "importId": "bd18dd69-5018-4612-b0ec-4e653b14a2ad",
+          "sourceDataId": "0f16e1f1-7019-4a3a-a2dd-47e3447b317b",
+          "createdSampleIds": [
+            "4523cd2b-074f-47f7-85d7-6452ca4d177f"
+          ],
+          "createdObjectIds": [
+            "a2ce3df1-26fa-4c1c-a583-ad80698860ad"
+          ],
+          "derivedComponentIds": [
+            "17f59d51-3eae-43bf-a3d0-320f953c3661",
+            "a6fb3b63-7f30-45a8-bb93-a9767d202016"
+          ],
+          "commitFingerprint": "aae86df4f99f119f7bb707db3dd04068b0d74e8a0fa28a9807804423efd160b6",
+          "sourceDataVersion": 2,
+          "contractVersion": 1,
+          "committedAt": "2026-09-22T17:12:39.329Z"
+        }
+      }
+    ],
+    "jobs": [
+      {
+        "id": "e30257ce-18db-40c4-8a0c-14d631394805",
+        "type": "sample-import",
+        "status": "succeeded",
+        "payload": {
+          "name": "实验记录导入",
+          "runtime": "opencode",
+          "mode": "vision",
+          "importId": "bd18dd69-5018-4612-b0ec-4e653b14a2ad",
+          "attemptId": "8b0b6228-5ee3-46be-bd2e-f0f6023bad62",
+          "requestHash": "24db9f4c63440eb6c9387763edfa23cdc7a29a208757fc3073dc0911a85bb3cf",
+          "endpoint": "http://127.0.0.1:4199",
+          "phase": "completed",
+          "startedAt": "2026-09-22T17:10:52.885Z",
+          "sessionId": "ses_f35e6ab07ffeqlkTNKu6AoNXHw",
+          "promptMessageId": "msg_4f0358c1605847f090d17adf4801ab54",
+          "completedAt": "2026-09-22T17:12:40.465Z"
+        },
+        "error": null,
+        "created_at": "2026-09-22T17:10:52.885Z",
+        "updated_at": "2026-09-22T17:12:40.465Z"
+      },
+      {
+        "id": "cb64c2e0-6317-427f-a223-008046a97e00",
+        "type": "sample-import",
+        "status": "succeeded",
+        "payload": {
+          "name": "实验记录导入",
+          "runtime": "opencode",
+          "mode": "vision",
+          "importId": "96a70f1b-613f-4042-b02a-99a7f28df73d",
+          "attemptId": "dbb81b9a-ebc4-4895-987b-db65dcca9024",
+          "requestHash": "7ab6d8532b584209a22dba7f172092a2f3b076b69925874a0843b30b8b120a42",
+          "endpoint": "http://127.0.0.1:4199",
+          "phase": "completed",
+          "startedAt": "2026-09-22T17:08:50.490Z",
+          "sessionId": "ses_f35e88923ffeUOioGifuJIQZ7p",
+          "promptMessageId": "msg_574c6e4899da4ad79cd113923d935186",
+          "completedAt": "2026-09-22T17:10:50.847Z",
+          "dismissed": true
+        },
+        "error": null,
+        "created_at": "2026-09-22T17:08:50.490Z",
+        "updated_at": "2026-09-22T17:10:56.639Z"
+      },
+      {
+        "id": "304817e2-7a6b-471b-8a7e-b330d02d51a2",
+        "type": "sample-import",
+        "status": "succeeded",
+        "payload": {
+          "name": "实验记录导入",
+          "runtime": "opencode",
+          "mode": "vision",
+          "importId": "2b741e82-4dce-4e95-a6f4-e194f5a29644",
+          "attemptId": "41662aa5-abdf-45c2-bea1-6a52d0f092f9",
+          "requestHash": "01a3a6c899f7c40f0edb622992630f1c02bb33e34e626ad81c40f8901833cd2b",
+          "endpoint": "http://127.0.0.1:4199",
+          "phase": "completed",
+          "startedAt": "2026-09-22T17:07:42.425Z",
+          "sessionId": "ses_f35e99302ffe6dymtKmy1KQ4IH",
+          "promptMessageId": "msg_0d27a61c07a542eeb4468fbe4976d9c6",
+          "completedAt": "2026-09-22T17:08:46.215Z",
+          "dismissed": true
+        },
+        "error": null,
+        "created_at": "2026-09-22T17:07:42.425Z",
+        "updated_at": "2026-09-22T17:08:54.398Z"
+      }
+    ]
+  },
+  "minimization": {
+    "scenario1": {
+      "status": "PASS",
+      "detail": "报告与本次 run 的 3 个产物（覆盖 job/log/notice）均未发现图片字节、凭据或工作区路径",
+      "noticeSource": "derived-from-durable-job",
+      "scanned": 3
+    },
+    "scenario2": {
+      "status": "PASS",
+      "detail": "报告与本次 run 的 3 个产物（覆盖 job/log/notice）均未发现图片字节、凭据或工作区路径",
+      "noticeSource": "derived-from-durable-job",
+      "scanned": 3
+    },
+    "scenario3": {
+      "status": "PASS",
+      "detail": "报告与本次 run 的 3 个产物（覆盖 job/log/notice）均未发现图片字节、凭据或工作区路径",
+      "noticeSource": "derived-from-durable-job",
+      "scanned": 3
+    }
+  }
+}

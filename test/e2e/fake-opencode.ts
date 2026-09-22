@@ -52,6 +52,14 @@ export class FakeOpenCode {
   };
   asyncPromptCalls = 0;
   syncPromptCalls = 0;
+  /** Scripts the "model" for one submission; the import acceptance uses it to
+   * perform the real draft/commit work through the Workbench HTTP API. */
+  onPrompt?: (input: {
+    sessionId: string;
+    messageId: string;
+    text: string;
+    imageParts: { mimeType: string; filename: string }[];
+  }) => Promise<void> | void;
   requestDirectories: { path: string; directory?: string }[] = [];
   serverCwd = "/tmp/opencode-server-cwd";
   private streams = new Set<http.ServerResponse>();
@@ -110,19 +118,28 @@ export class FakeOpenCode {
     return this.active.has(sessionId);
   }
 
-  addAssistant(sessionId: string, text: string) {
+  addAssistant(sessionId: string, text: string, parentID?: string) {
     const list = this.messages.get(sessionId) ?? [];
+    const id = `msg_assistant_${++this.sequence}`;
     list.push({
       info: {
-        id: `msg_assistant_${++this.sequence}`,
+        id,
         role: "assistant",
         sessionID: sessionId,
+        ...(parentID ? { parentID } : {}),
         time: { created: Date.now(), completed: Date.now() },
       },
       parts: [{ type: "text", text }],
     });
     this.messages.set(sessionId, list);
     this.active.delete(sessionId);
+    return id;
+  }
+
+  askQuestion(sessionId: string, summary: string) {
+    const id = `que_${++this.sequence}`;
+    this.questions.push({ id, sessionID: sessionId, summary });
+    return id;
   }
 
   emit(event: unknown) {
@@ -207,6 +224,21 @@ export class FakeOpenCode {
           properties: { sessionID: sessionId, status: { type: "busy" } },
         });
         send(204);
+        if (this.onPrompt) {
+          const text = (body.parts ?? [])
+            .filter((part: any) => part?.type === "text")
+            .map((part: any) => String(part.text ?? ""))
+            .join("\n");
+          const imageParts = (body.parts ?? [])
+            .filter((part: any) => part?.type === "file")
+            .map((part: any) => ({
+              mimeType: String(part.mime ?? ""),
+              filename: String(part.filename ?? ""),
+            }));
+          Promise.resolve(
+            this.onPrompt({ sessionId, messageId, text, imageParts }),
+          ).catch(() => undefined);
+        }
       });
       return;
     }
