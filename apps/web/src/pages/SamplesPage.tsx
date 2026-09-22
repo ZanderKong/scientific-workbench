@@ -1,5 +1,6 @@
 import { useMemo, useState, useCallback } from "react";
 import type { SampleRow, SampleProperty } from "../api";
+import { SampleImportModal } from "../components/SampleImportModal";
 import { Modal } from "../components/Modal";
 
 interface Column {
@@ -53,6 +54,8 @@ export function SamplesPage({
       localStorage.setItem("swb.samples.layout.v1", JSON.stringify(result));
       return result;
     });
+  const [importOpen, setImportOpen] = useState(false);
+  const [createMenu, setCreateMenu] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
   const [query, setQuery] = useState("");
   const [draftQuery, setDraftQuery] = useState("");
@@ -125,6 +128,7 @@ export function SamplesPage({
     new URLSearchParams(location.search).get("acceptance") === "1";
   return (
     <section className="page">
+      {importOpen && <SampleImportModal close={() => setImportOpen(false)} />}
       <div className="pageHeader">
         <div>
           <h1>样品</h1>
@@ -139,6 +143,42 @@ export function SamplesPage({
           <button className="primary" onClick={create}>
             ＋ 新建样品
           </button>
+          <div className="sampleCreateMenu">
+            <button
+              aria-label="更多新建方式"
+              aria-haspopup="menu"
+              aria-expanded={createMenu}
+              onClick={() => setCreateMenu((value) => !value)}
+            >
+              ▾
+            </button>
+            {createMenu && (
+              <>
+                <div
+                  className="sampleCreateBackdrop"
+                  aria-hidden="true"
+                  onClick={() => setCreateMenu(false)}
+                />
+                <div
+                  className="sampleCreateOptions"
+                  role="menu"
+                  onKeyDown={(event) => {
+                    if (event.key === "Escape") setCreateMenu(false);
+                  }}
+                >
+                  <button
+                    role="menuitem"
+                    onClick={() => {
+                      setCreateMenu(false);
+                      setImportOpen(true);
+                    }}
+                  >
+                    AI 从实验记录新建样品
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </div>
       <div className="toolbar">

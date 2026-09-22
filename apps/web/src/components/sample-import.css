@@ -1,0 +1,16 @@
+.sampleImport p { margin: 0 0 12px; line-height: 1.6; }
+.sampleImportModel { overflow-wrap: anywhere; color: var(--muted, #667085); }
+.sampleImportPages { list-style: none; padding: 0; max-height: 320px; overflow: auto; margin: 14px 0; }
+.sampleImportPages li { display: flex; gap: 12px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--line, #e5e7eb); }
+.sampleImportPages img { width: 72px; height: 72px; object-fit: contain; background: #f8f9fa; }
+.sampleImportPages li > div { min-width: 0; }
+.sampleImportPages span { display: block; overflow-wrap: anywhere; font-size: 12px; }
+.sampleImportPageActions { display: flex; flex-wrap: wrap; gap: 4px; margin-left: auto; }
+.sampleImport label { display: grid; gap: 6px; }
+.sampleImport textarea { min-height: 72px; resize: vertical; width: 100%; box-sizing: border-box; }
+.sampleImportError { color: #b42318; }
+.sampleImport small { display: block; margin-top: 12px; color: var(--muted, #667085); }
+.sampleCreateMenu { position: relative; }
+.sampleCreateBackdrop { position: fixed; inset: 0; z-index: 29; }
+.sampleCreateMenu > .sampleCreateOptions { position: absolute; right: 0; top: 100%; margin-top: 6px; padding: 6px; z-index: 30; width: max-content; background: white; border: 1px solid #e5e7eb; box-shadow: 0 6px 18px #0001; border-radius: 6px; }
+@media (max-width: 640px) { .sampleImportPages li { flex-wrap: wrap; } .sampleImportPageActions { width: 100%; margin-left: 84px; } }

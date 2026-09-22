@@ -321,7 +321,7 @@ export function App() {
           <button onClick={() => setNotice("")}>×</button>
         </div>
       )}
-      <TaskStack />
+      <TaskStack refreshSamples={refresh} />
       {dialog && (
         <Modal
           title={

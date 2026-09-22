@@ -437,6 +437,85 @@
   transform-origin: right center;
   animation: taskBannerIn 220ms ease-out 1;
 }
+/* The import completion banner carries a manual action instead of a link. */
+.taskCompletion.withAction {
+  max-width: 340px;
+  gap: 10px;
+  cursor: default;
+}
+.taskCompletion .taskRefresh {
+  flex: none;
+  height: 22px;
+  padding: 0 9px;
+  border: 1px solid #4a5049;
+  border-radius: 6px;
+  background: #2d322e;
+  color: #f6f7f4;
+  font-size: 11px;
+  cursor: pointer;
+}
+.taskCompletion .taskRefresh:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.taskRefreshError {
+  max-width: 340px;
+  padding: 6px 11px;
+  border-radius: 8px;
+  background: #fdecea;
+  color: #b42318;
+  font-size: 11px;
+}
+/* Import tasks expose explicit cancel/retry/clarify actions. */
+.taskPanel {
+  display: none;
+  position: absolute;
+  right: 40px;
+  bottom: 0;
+  width: max-content;
+  max-width: 300px;
+  padding: 9px 11px;
+  border-radius: 8px;
+  background: #2d322e;
+  color: #f4f5f2;
+  font-size: 11px;
+  line-height: 1.5;
+  text-align: left;
+  box-shadow: 0 6px 20px #0003;
+  z-index: 1;
+}
+.taskPanel > span {
+  display: block;
+}
+.taskBlockWrap.importTask:hover .taskPanel,
+.taskBlockWrap.importTask:focus-within .taskPanel,
+.taskPanel.pinned {
+  display: block;
+}
+.taskActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 8px;
+}
+.taskActions button {
+  padding: 4px 9px;
+  border: 1px solid #4a5049;
+  border-radius: 6px;
+  background: #191c19;
+  color: #f4f5f2;
+  font-size: 11px;
+  cursor: pointer;
+}
+.taskActions button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.taskActionError {
+  display: block;
+  margin-top: 6px;
+  color: #f3a08c;
+}
 @keyframes taskBannerIn {
   from {
     transform: scaleX(0.2);
