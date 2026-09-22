@@ -5,8 +5,9 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 const daily = ['read', 'write', 'export', 'backup'] as const;
 const dangerous = ['delete', 'merge', 'cleanup', 'restore'] as const;
 export type Scope = typeof daily[number] | typeof dangerous[number];
-interface Token { id: string; name: string; hash: string; scopes: Scope[]; createdAt: string; revokedAt?: string; }
-interface Principal { id: string; kind: 'ui' | 'token'; scopes: readonly string[]; }
+interface ImportBinding { importId: string; attemptId: string; }
+interface Token { importBinding?: ImportBinding; id: string; name: string; hash: string; scopes: Scope[]; createdAt: string; revokedAt?: string; }
+interface Principal { importBinding?: ImportBinding; id: string; kind: 'ui' | 'token'; scopes: readonly string[]; }
 const hash = (value: string) => crypto.createHash('sha256').update(value).digest('hex');
 const secret = () => crypto.randomBytes(32).toString('base64url');
 export class LocalAuthorization {
@@ -33,6 +34,12 @@ export class LocalAuthorization {
     const token = secret(), record: Token = { id: crypto.randomUUID(), name: name.trim(), scopes: [...new Set(scopes)], hash: hash(token), createdAt: new Date().toISOString() };
     this.tokens.push(record); this.persist(); return { id: record.id, token, scopes: record.scopes };
   }
+  createImport(importId: string, attemptId: string) {
+    const created = this.create('实验记录导入', ['read', 'write']);
+    this.tokens.find(token => token.id === created.id)!.importBinding = { importId, attemptId };
+    this.persist();
+    return created;
+  }
   revoke(id: string) { const token = this.tokens.find(token => token.id === id); if (!token) throw new Error('连接不存在'); token.revokedAt = new Date().toISOString(); this.persist(); }
   sessionCookie() { const value = secret(); this.sessions.set(hash(value), { id: crypto.randomUUID(), expires: Date.now() + 8 * 3600000 }); return `swb_session=${value}; HttpOnly; SameSite=Strict; Path=/; Max-Age=28800`; }
   identify(request: Pick<FastifyRequest, 'headers'>): Principal | undefined {
@@ -41,7 +48,7 @@ export class LocalAuthorization {
     if (session && session.expires > Date.now()) return { id: session.id, kind: 'ui', scopes: daily };
     const bearer = request.headers.authorization?.match(/^Bearer (.+)$/i)?.[1];
     const token = bearer && this.tokens.find(token => !token.revokedAt && token.hash === hash(bearer));
-    return token ? { id: token.id, kind: 'token', scopes: token.scopes } : undefined;
+    return token ? { id: token.id, kind: 'token', scopes: token.scopes, importBinding: token.importBinding } : undefined;
   }
   grant(principal: Principal, scope: Scope) {
     if (principal.kind !== 'ui' || !dangerous.includes(scope as typeof dangerous[number])) throw new Error('仅本机界面可单次授权此操作');
@@ -54,7 +61,7 @@ export class LocalAuthorization {
     this.grants.delete(hash(grant!)); return true;
   }
 }
-export function installAuthorization(app: FastifyInstance, auth: LocalAuthorization, port: number) {
+export function installAuthorization(app: FastifyInstance, auth: LocalAuthorization, port: number, importState?: (importId: string, attemptId: string) => "active" | "committed" | "revoked") {
   const origins = new Set([`http://127.0.0.1:${port}`, `http://localhost:${port}`, 'http://localhost:5173', 'http://127.0.0.1:5173']);
   const hosts = new Set([`127.0.0.1:${port}`, `localhost:${port}`]);
   app.addHook('onRequest', async (request, reply) => {
@@ -67,6 +74,16 @@ export function installAuthorization(app: FastifyInstance, auth: LocalAuthorizat
     if (pathname === '/api/v1/health') return;
     const principal = auth.identify(request);
     if (!principal) return reply.code(401).send({ code: 'UNAUTHENTICATED', error: '需要有效的本机会话或 API token' });
+    if (principal.importBinding) {
+      const { importId, attemptId } = principal.importBinding;
+      const state = importState?.(importId, attemptId) ?? "revoked";
+      const target = `/api/v1/sample-imports/${importId}`;
+      const receiptRead = request.method === "GET" && pathname === target;
+      const activeRead = request.method === "GET" && (pathname === "/api/v1/knowledge" || pathname.startsWith("/api/v1/knowledge/") || pathname === "/api/v1/objects" || pathname === "/api/v1/properties");
+      const activeWrite = (request.method === "PUT" && pathname === `${target}/draft`) || (request.method === "POST" && pathname === `${target}/commit`);
+      if (state === "revoked" || (state === "committed" ? !receiptRead : !(receiptRead || activeRead || activeWrite)))
+        return reply.code(403).send({ code: "IMPORT_SCOPE_DENIED", error: "导入执行资格已失效或请求超出作用域" });
+    }
     if (pathname.startsWith('/api/v1/auth/')) {
       if (principal.kind !== 'ui') return reply.code(403).send({ code: 'SCOPE_DENIED', error: '连接管理仅限本机界面' });
       return;

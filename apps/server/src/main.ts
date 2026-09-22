@@ -18,6 +18,7 @@ import {
   OpenCodeError,
   assertSeparateDirectories,
   createOpenCodeAdapter,
+  defaultOpenCodeConfig,
   deleteOpenCodeCredential,
   hasOpenCodeCredential,
   resolveOpenCodeConfig,
@@ -29,6 +30,8 @@ import {
   type ResolvedOpenCodeConfig,
 } from "./opencode";
 import { AgentRunService } from "./agent-runs";
+import { SampleImportRunService } from "./sample-import-runs";
+import { repositoryRoot, type VerifiedImportCapability } from "./sample-import-agent";
 import {
   getKnowledge,
   knowledgeBundleHash,
@@ -118,7 +121,64 @@ const authorization = new LocalAuthorization(
   store.dataDir,
   process.env.WORKBENCH_API_TOKEN,
 );
-installAuthorization(app, authorization, port);
+let importRuns: SampleImportRunService;
+installAuthorization(app, authorization, port, (id, attemptId) => importRuns?.scopeState(id, attemptId) ?? "revoked");
+importRuns = new SampleImportRunService({
+  store, notices: agentRuns,
+  apiBaseUrl: () => `http://127.0.0.1:${port}/api/v1`,
+  authorize: (id, attemptId) => authorization.createImport(id, attemptId),
+  revoke: id => authorization.revoke(id),
+  endpoint: () => {
+    const url = process.env.WORKBENCH_IMPORT_OPENCODE_URL;
+    if (!url) { const config = readOpenCodeConfig(); return config.baseUrl ? config : undefined; }
+    const file = process.env.WORKBENCH_IMPORT_ENV_FILE;
+    if (!file) return undefined;
+    const stat = fs.lstatSync(file);
+    if (!stat.isFile() || stat.isSymbolicLink() || (stat.mode & 0o077)) throw new Error("导入凭据必须是私密普通文件");
+    const values: Record<string, string> = {};
+    for (const line of fs.readFileSync(file, "utf8").split(/\r?\n/)) {
+      const match = line.match(/^\s*(?:export\s+)?(OPENCODE_SERVER_USERNAME|OPENCODE_SERVER_PASSWORD)\s*=\s*(.*)$/);
+      if (match) values[match[1]] = match[2].trim().replace(/^["']|["']$/g, "");
+    }
+    return { baseUrl: validateOpenCodeBaseUrl(url), username: values.OPENCODE_SERVER_USERNAME, password: values.OPENCODE_SERVER_PASSWORD };
+  },
+  // One source of truth for the session link: the transport's own URL shape.
+  sessionUrl: (baseUrl, sessionId) =>
+    createOpenCodeAdapter({ ...defaultOpenCodeConfig(store.dataDir), baseUrl }).buildSessionUrl(sessionId),
+  capability: () => {
+    const file = process.env.WORKBENCH_IMPORT_CAPABILITY_FILE ?? path.join(repositoryRoot(), "audit/2026-09-22/ai-import/capability.json");
+    if (!fs.existsSync(file)) return undefined;
+    try { return JSON.parse(fs.readFileSync(file, "utf8")) as VerifiedImportCapability; } catch { return undefined; }
+  },
+  // Playwright replaces the managed runtime, so the profile/capability proof is
+  // stubbed in that acceptance mode only. The real readiness check is the
+  // default everywhere else and there is no switch that can mark a runtime
+  // verified outside this build flag.
+  readiness: process.env.WORKBENCH_ACCEPTANCE === "1" && process.env.WORKBENCH_IMPORT_RUNTIME_STUB === "1"
+    ? async () => ({
+        ready: true,
+        reasonCode: "READY" as const,
+        detail: "验收模式：运行时由测试替身提供",
+        model: "deepseek/deepseek-v4-flash-vision-exp",
+      })
+    : undefined,
+});
+function taskState() {
+  const ordinary = agentRuns.snapshot(); const imports = importRuns.snapshot();
+  const notices = new Map(ordinary.notices.map(notice => [notice.id, notice]));
+  for (const notice of imports.notices) notices.set(notice.id, notice);
+  return { runs: [...ordinary.runs, ...imports.runs], notices: [...notices.values()], eventConnected: ordinary.eventConnected };
+}
+app.get<{ Params: { id: string } }>("/api/v1/sample-imports/:id/agent/readiness", async (req, reply) => {
+  if (authorization.identify(req)?.kind !== "ui") return reply.code(403).send({ error: "仅限本机界面管理导入" });
+  return importRuns.readiness(req.params.id);
+});
+app.post<{ Params: { id: string }; Body: import("./sample-import-runs").StartImportInput }>("/api/v1/sample-imports/:id/agent/start", {
+  schema: { body: { type: "object", additionalProperties: false, required: ["attemptId", "expectedVersion"], properties: { attemptId: { type: "string", format: "uuid" }, expectedVersion: { type: "integer", minimum: 1 }, note: { type: "string", maxLength: 4000 } } } },
+}, async (req, reply) => {
+  if (authorization.identify(req)?.kind !== "ui") return reply.code(403).send({ error: "仅限本机界面管理导入" });
+  return reply.code(202).send(await importRuns.start(req.params.id, req.body));
+});
 
 app.addHook("onRequest", async (request, reply) => {
   if (!store.recoveryRequired()) return;
@@ -618,9 +678,14 @@ app.get("/api/v1/attachments/:id/content", async (req: any, reply) => {
     );
   return reply.send(fs.createReadStream(lease.path));
 });
-app.post("/api/v1/jobs/:id/retry", async (req: any) =>
-  storage.retryJob(req.params.id),
-);
+app.post("/api/v1/jobs/:id/retry", async (req: any, reply) => {
+  const job = store.listJobs().find(item => item.id === req.params.id);
+  if (job?.type === "sample-import") {
+    if (authorization.identify(req)?.kind !== "ui") return reply.code(403).send({ error: "仅限本机界面管理导入" });
+    return reply.code(202).send(await importRuns.retry(job.id));
+  }
+  return storage.retryJob(req.params.id);
+});
 app.get("/api/v1/jobs", async () => store.listJobs());
 app.get("/api/v1/search", async (req: any) => {
   const q = `%${String(req.query?.q ?? "")}%`;
@@ -690,6 +755,10 @@ app.post("/api/v1/jobs/:id/cancel", async (req: any, reply) => {
   const job = store.listJobs().find((item) => item.id === req.params.id);
   if (!job)
     return reply.code(404).send({ code: "NOT_FOUND", error: "任务不存在" });
+  if (job.type === "sample-import") {
+    if (authorization.identify(req)?.kind !== "ui") return reply.code(403).send({ error: "仅限本机界面管理导入" });
+    return importRuns.cancel(job.id);
+  }
   if (job.type === "agent-run") {
     if (job.status !== "running" && job.status !== "queued")
       return reply
@@ -961,7 +1030,7 @@ app.post("/api/v1/agent-runs", async (req: any, reply) => {
       .send({ code: "INVALID_INPUT", error: String((error as any)?.message ?? error) });
   }
 });
-app.get("/api/v1/agent-runs/state", async () => agentRuns.snapshot());
+app.get("/api/v1/agent-runs/state", async () => taskState());
 app.get("/api/v1/agent-runs/events", async (req: any, reply) => {
   reply.hijack();
   reply.raw.writeHead(200, {
@@ -972,18 +1041,20 @@ app.get("/api/v1/agent-runs/events", async (req: any, reply) => {
   const send = (state: unknown) => {
     reply.raw.write(`event: snapshot\ndata: ${JSON.stringify(state)}\n\n`);
   };
-  send(agentRuns.snapshot());
-  const unsubscribe = agentRuns.subscribe(send);
+  send(taskState());
+  const unsubscribe = agentRuns.subscribe(() => send(taskState()));
+  const unsubscribeImports = importRuns.subscribe(() => send(taskState()));
   const heartbeat = setInterval(() => reply.raw.write(": ping\n\n"), 25_000);
   heartbeat.unref?.();
   req.raw.on("close", () => {
     clearInterval(heartbeat);
     unsubscribe();
+    unsubscribeImports();
   });
   return reply;
 });
 app.get("/api/v1/agent-runs/:id/link", async (req: any, reply) => {
-  const url = agentRuns.sessionUrl(req.params.id);
+  const url = importRuns.snapshot().runs.find(run => run.id === req.params.id)?.sessionUrl ?? agentRuns.sessionUrl(req.params.id);
   if (!url)
     return reply.code(404).send({
       code: "OPENCODE_SESSION_MISSING",
@@ -1018,7 +1089,7 @@ app.post(
   },
 );
 app.post("/api/v1/agent-runs/:id/dismiss", async (req: any) => ({
-  ok: agentRuns.dismiss(req.params.id),
+  ok: store.listJobs().some(job => job.id === req.params.id && job.type === "sample-import") ? importRuns.dismiss(req.params.id) : agentRuns.dismiss(req.params.id),
 }));
 
 app.setErrorHandler((error: any, _request, reply) => {
@@ -1048,6 +1119,7 @@ app.setErrorHandler((error: any, _request, reply) => {
 });
 
 app.addHook("onClose", async () => {
+  await importRuns.shutdown();
   await agentRuns.shutdown();
   await storage.stopScheduler();
   await Promise.all(longTasks);
@@ -1056,6 +1128,7 @@ app.addHook("onClose", async () => {
 storage.startScheduler();
 try {
   await agentRuns.recover();
+  await importRuns.recover();
 } catch (error) {
   app.log.error(error);
 }
@@ -1076,3 +1149,6 @@ try {
   app.log.error(error);
   process.exit(1);
 }
+
+// Internal acceptance runner uses the actual Store, HTTP routes and notices.
+export { app, store, agentRuns, importRuns };

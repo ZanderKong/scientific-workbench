@@ -171,6 +171,12 @@ export interface OpenCodeAdapter {
     messageId: string;
   }): Promise<{ promptMessageId: string }>;
   getSession(sessionId: string): Promise<NormalizedSession | null>;
+  /**
+   * All sessions the runtime reports for the routed instance directory. Used
+   * only to reconcile a lost session-creation response; it carries no model
+   * request and no configuration change.
+   */
+  listSessions(): Promise<NormalizedSession[]>;
   getSessionStatuses(): Promise<Map<string, NormalizedSessionStatus>>;
   getMessages(sessionId: string): Promise<NormalizedMessage[]>;
   getChildren(sessionId: string): Promise<NormalizedSession[]>;
@@ -857,6 +863,20 @@ export class OpenCodeHttpAdapter implements OpenCodeAdapter {
     }
   }
 
+  async listSessions(): Promise<NormalizedSession[]> {
+    try {
+      const response = await this.client.session.list({});
+      return response.data.map((session) => ({
+        id: session.id,
+        parentId: session.parentID,
+        title: session.title,
+        directory: (session as { directory?: string }).directory,
+      }));
+    } catch (error) {
+      throw normalizeError(error);
+    }
+  }
+
   async abortSession(sessionId: string): Promise<void> {
     try {
       await this.client.session.interrupt({ sessionID: sessionId });
@@ -1207,6 +1227,18 @@ export class LegacyOpenCodeAdapter implements OpenCodeAdapter {
       }));
   }
 
+  async listSessions(): Promise<NormalizedSession[]> {
+    const value = await this.request("GET", "/session");
+    return (Array.isArray(value) ? value : value?.data ?? []).map(
+      (session: any) => ({
+        id: String(session.id),
+        parentId: session.parentID,
+        title: session.title,
+        directory: sessionDirectory(session),
+      }),
+    );
+  }
+
   async abortSession(sessionId: string): Promise<void> {
     await this.request(
       "POST",
@@ -1468,6 +1500,9 @@ export class CompatOpenCodeAdapter implements OpenCodeAdapter {
   }
   async getChildren(sessionId: string): Promise<NormalizedSession[]> {
     return (await this.resolve()).getChildren(sessionId);
+  }
+  async listSessions(): Promise<NormalizedSession[]> {
+    return (await this.resolve()).listSessions();
   }
   async abortSession(sessionId: string): Promise<void> {
     return (await this.resolve()).abortSession(sessionId);

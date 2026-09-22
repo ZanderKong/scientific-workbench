@@ -101,6 +101,9 @@ class FakeAdapter implements OpenCodeAdapter {
   async getChildren(sessionId: string): Promise<NormalizedSession[]> {
     return (this.children.get(sessionId) ?? []).map((id) => ({ id, parentId: sessionId }));
   }
+  async listSessions(): Promise<NormalizedSession[]> {
+    return [...this.sessions.values()];
+  }
   async abortSession(sessionId: string) {
     this.aborted.push(sessionId);
   }

@@ -13,6 +13,7 @@ import {
 
 export interface AgentJobStore {
   listJobs(): Job[];
+  getSampleImport?(id: string): { status: string; attempt: { id: string }; receipt?: { createdSampleIds: string[] } };
   createJob(type: string, payload: Record<string, unknown>): Job;
   updateJob(
     id: string,
@@ -49,6 +50,7 @@ export interface AgentAttention {
 }
 
 export interface AgentRunView {
+  importTask?: boolean;
   id: string;
   name: string;
   jobStatus: "queued" | "running" | "failed" | "succeeded";
@@ -62,6 +64,7 @@ export interface AgentRunView {
 }
 
 export interface TerminalNotice {
+  action?: "refresh-samples";
   id: string;
   kind: "completed" | "failed";
   name: string;
@@ -328,17 +331,34 @@ export class AgentRunService {
     }
   }
 
+  /** Internal verification/product hook: model text cannot establish success. */
+  publishImportReceipt(jobId: string): boolean {
+    const job = this.store.listJobs().find(item => item.id === jobId);
+    if (!job || job.type !== "sample-import" || typeof job.payload.importId !== "string") return false;
+    const imported = this.store.getSampleImport?.(job.payload.importId);
+    if (imported?.status !== "committed" || imported.attempt.id !== job.payload.attemptId || !imported.receipt?.createdSampleIds.length) return false;
+    if (job.status === "succeeded") return true;
+    this.store.updateJob(jobId, "succeeded", job.payload);
+    // The notice carries its action from the first snapshot the client sees, so
+    // a later snapshot cannot deliver the same notice without it.
+    this.pushNotice(jobId, "completed", this.payload(job), undefined, "refresh-samples");
+    this.emitState();
+    return true;
+  }
+
   private pushNotice(
     jobId: string,
     kind: TerminalNotice["kind"],
     payload: AgentRunPayload,
     error?: string,
+    action?: TerminalNotice["action"],
   ) {
     const notice: TerminalNotice = {
       id: jobId,
       kind,
       name: payload.name,
       createdAt: this.clock(),
+      ...(action ? { action } : {}),
       ...(payload.sessionId && this.adapter
         ? { sessionUrl: this.adapter.buildSessionUrl(payload.sessionId) }
         : {}),
