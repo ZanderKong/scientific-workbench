@@ -365,3 +365,9 @@ Phase B2：BLOCKED（前置 S2 未完成）
 - 未取证：`restrictedDeny`（需一次 7 范围复跑，约 7 次请求）、`noSensitiveWorkbenchLeakage`（需 Workbench 侧导入 Job/日志产物，属 B2.3/B2.6 之后）。
 - 未触碰用户隔离实例的配置与生命周期；未访问 `~/ScientificWorkbench`；未改 14321 实例。
 - 下一步（需追加预算）：复跑 deny 七范围 → 若通过则 S2 目标组合 Spike PASS，随后进入 B2.1 Skill 与 B2.3–B2.6、UI、G2 真实页面端到端与 D1 交付实例。
+
+### S2 结论（2026-09-22 更新）
+
+- **`restrictedDeny` PASS**（runId `eeefc9af…`，7 次请求）：七个必需范围全部由「已验证 profile 的 deny + 无副作用/无泄漏」取证；探针缺陷已修正（哨兵不再出现在任何 prompt）。
+- S2 transport/profile 六项全部 PASS；唯一未取证项是第 7 项（Workbench Job/log/notice 最小化），它依赖 B2.3 的导入 Job 与 B2.6 的完成通知，将在 B2/G2 用真实导入任务取证，当前保持 NOT VERIFIED。
+- 预算：S2 38 次中已用 37；G2 10 次未动。下一项最小步骤：B2.1 Skill（不消耗模型请求），随后 B2.3–B2.6 与 G2。

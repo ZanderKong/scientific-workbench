@@ -280,3 +280,10 @@
 - `restrictedDeny`：**仍为 NOT VERIFIED**，且本轮出现一次 **FAIL（runId `41ae5618…`）**，原因已定位为**探针设计缺陷而非真实越权**：shell 探针把哨兵写进 prompt（"请执行 echo <哨兵>"），模型复述指令即被判为泄漏。现已修正为哨兵只存在于临时文件与受控本地服务响应中（shell 探针改为读取文件、network 探针改为请求一个返回哨兵的本地受控服务、file-write 探针改为复制读取文件的内容），并且不允许任何 prompt 透露哨兵。修正后尚未在真实环境复跑（预算用尽）。
 - 仍未取证：`restrictedDeny`（修正后需一次 7 范围复跑）、`noSensitiveWorkbenchLeakage`（需要 Workbench 侧导入 Job/日志产物，属于 B2.3/B2.6 之后）。
 - 证据：`pnpm test` = core16 / web14 / mcp4 / server188（真实 S3 2 项跳过）；`pnpm exec playwright test` 46 passed；typecheck/build/`git diff --check` 全部通过。
+
+#### S2 复跑结果（runId `eeefc9af-…`，7 次请求）
+
+- `restrictedDeny` **PASS**：`shell`、`file-read`、`file-write`、`subagent`、`unrelated-mcp`、`network`、`generic-scientific-write` 七个必需范围全部覆盖，每项都由「解析自 profile 文本、哈希与运行时报告的 profile 一致」的有效 `deny` 加上**无泄漏、无副作用**检查支撑（file-write 另有目标文件未创建的副作用断言）。修正后的探针不再把哨兵写进任何 prompt：哨兵只存在于临时文件与一个返回它的受控本地服务响应中，因此模型复述指令不会被误判为泄漏。
+- 本轮 S2 目标组合（V1 legacy `1.18.31` + `deepseek/deepseek-v4-flash-vision-exp`）的 transport/profile 门槛六项全部 PASS：session 目录隔离、runtime/模型身份与真实图片 transport、异步返回与请求关联、图片答案与人工夹具一致、同一受限 profile 可执行知识读取、七范围限制具备可信证据。`Phase B2` 所需的 `A + B1 + 目标组合 Spike PASS` 中，最后一项的 transport/profile 部分已满足。
+- 唯一未取证项是 S2 列表第 7 项（Workbench Job/log/notice 不保存原图/base64/凭据/完整 draft/OCR）：该产物只有在导入 Job 生命周期（B2.3）与完成通知（B2.6）实现后才会存在，因此按计划 §14 的测试矩阵在 B2/G2 阶段用真实导入任务一并取证；在此之前保持 NOT VERIFIED，不宣称最小化通过。
+- 预算：S2 总 38 次，本轮累计使用 37 次（余 1）；G2 的 10 次额度未动。
