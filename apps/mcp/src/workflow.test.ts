@@ -35,6 +35,40 @@ afterAll(async () => {
   if (serverProcess && serverProcess.exitCode === null) { serverProcess.kill('SIGTERM'); await new Promise<void>(resolve => { serverProcess.once('exit', () => resolve()); setTimeout(() => { serverProcess.kill('SIGKILL'); resolve(); }, 3000).unref(); }); }
   fs.rmSync(root, { recursive: true, force: true });
 });
+interface ScopedClient {
+  client: Client;
+  transport: StdioClientTransport;
+  close(): Promise<void>;
+}
+
+/** Spawns an additional MCP server instance bound to a restricted import scope. */
+async function connectScoped(scope: string, attempt: string): Promise<ScopedClient> {
+  const transport = new StdioClientTransport({
+    command: process.execPath,
+    args: ['--import', 'tsx', fileURLToPath(new URL('./main.ts', import.meta.url))],
+    env: Object.fromEntries(
+      Object.entries({
+        ...process.env,
+        WORKBENCH_API: base,
+        WORKBENCH_API_TOKEN: token,
+        WORKBENCH_IMPORT_SCOPE: scope,
+        WORKBENCH_IMPORT_ATTEMPT: attempt,
+      }).filter((entry): entry is [string, string] => typeof entry[1] === 'string'),
+    ),
+    stderr: 'pipe',
+  });
+  const client = new Client({ name: 'workbench-scoped', version: '1' });
+  await client.connect(transport);
+  return { client, transport, close: async () => { await client.close(); await transport.close(); } };
+}
+
+async function callWith<T = Record<string, unknown>>(client: Client, name: string, args: Record<string, unknown> = {}): Promise<T> {
+  const result = await client.callTool({ name, arguments: args });
+  const text = (result.content as { type: string; text?: string }[]).filter(item => item.type === 'text').map(item => item.text).join('');
+  if (result.isError) throw new Error(text);
+  return JSON.parse(text) as T;
+}
+
 async function call<T = Record<string, unknown>>(name: string, args: Record<string, unknown> = {}): Promise<T> {
   const result = await client.callTool({ name, arguments: args });
   const text = (result.content as { type: string; text?: string }[]).filter(item => item.type === 'text').map(item => item.text).join('');
@@ -114,4 +148,50 @@ it('serves the same agent knowledge through resources, tools and legacy syntax',
   const sample = await call<{ content: string }>('knowledge_read', { id: 'protocol-sample-document' });
   expect(syntaxText).toBe(sample.content);
   await expect(call('knowledge_read', { id: '../guide' })).rejects.toThrow();
+}, 30000);
+
+it('confines a restricted import MCP instance to its own import scope', async () => {
+  const imagePath = path.join(root, 'scoped-source.png');
+  fs.writeFileSync(imagePath, Buffer.from(REAL_PNG_BASE64, 'base64'));
+  const file = await call<{ id: string }>('attachment_upload', { filePath: imagePath, mimeType: 'image/png' });
+  const importId = crypto.randomUUID();
+  const prepared = await call<{ sourceDataId: string; attempt: { id: string }; recordVersion: number }>(
+    'sample_import_prepare',
+    { importId, attachmentIds: [file.id] },
+  );
+  const before = (await call<{ total: number }>('sample_list', { limit: 200 })).total;
+  const scopedClient = await connectScoped(importId, prepared.attempt.id);
+  try {
+    // 1. Only the import tool set is advertised: no attachment upload, no
+    //    generic scientific writes, no backup or runtime operations.
+    const tools = (await scopedClient.client.listTools()).tools.map(tool => tool.name).sort();
+    expect(tools).toEqual([
+      'knowledge_index',
+      'knowledge_read',
+      'object_search',
+      'property_search',
+      'sample_import_commit',
+      'sample_import_get',
+      'sample_import_save_draft',
+    ]);
+    // 2. A hidden tool cannot be invoked even by naming it directly.
+    await expect(callWith(scopedClient.client, 'sample_create', { body: '- 越权' })).rejects.toThrow(/不允许调用工具/);
+    await expect(callWith(scopedClient.client, 'attachment_upload', { filePath: imagePath, mimeType: 'image/png' })).rejects.toThrow(/不允许调用工具/);
+    await expect(callWith(scopedClient.client, 'data_update', { id: prepared.sourceDataId, expectedVersion: 1, body: '- 越权' })).rejects.toThrow(/不允许调用工具/);
+    // 3. The scoped import identity cannot be swapped for another import id.
+    const forced = await callWith<{ importId: string; sourceDataId: string }>(scopedClient.client, 'sample_import_get', { id: crypto.randomUUID() });
+    expect(forced.importId).toBe(importId);
+    // 4. Only knowledge resources are reachable.
+    const resources = (await scopedClient.client.listResources()).resources.map(item => item.uri);
+    expect(resources).toEqual(['workbench://knowledge']);
+    await expect(scopedClient.client.readResource({ uri: 'workbench://operations' })).rejects.toThrow();
+    await expect(scopedClient.client.readResource({ uri: 'workbench://dictionary/objects' })).rejects.toThrow();
+    const knowledge = await scopedClient.client.readResource({ uri: 'workbench://knowledge/protocol-common' });
+    expect(JSON.stringify(knowledge.contents)).toContain('protocol-common');
+    // 5. No entity was created by any of the refused calls.
+    expect((await call<{ total: number }>('sample_list', { limit: 200 })).total).toBe(before);
+    expect((await call<{ version: number }>('data_get', { id: prepared.sourceDataId })).version).toBe(1);
+  } finally {
+    await scopedClient.close();
+  }
 }, 30000);

@@ -7,19 +7,47 @@ import { operations, operationRequest } from '@workbench/core';
 
 const base = process.env.WORKBENCH_API ?? 'http://127.0.0.1:4317/api/v1';
 const token = process.env.WORKBENCH_API_TOKEN;
+/**
+ * Restricted import scope. When set, this MCP process only exposes the tools a
+ * single deterministic import needs, forces every import call onto that import
+ * id, and hides every other resource. The filter lives here rather than only in
+ * the runtime permission config, so a manually crafted tool call is refused too.
+ */
+const importScope = (process.env.WORKBENCH_IMPORT_SCOPE ?? '').trim() || undefined;
+const importAttempt = (process.env.WORKBENCH_IMPORT_ATTEMPT ?? '').trim() || undefined;
+if (importScope && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(importScope))
+  throw new Error('WORKBENCH_IMPORT_SCOPE 必须是导入 UUID');
+const IMPORT_TOOLS = new Set(['knowledge_index', 'knowledge_read', 'object_search', 'property_search', 'sample_import_get', 'sample_import_save_draft', 'sample_import_commit']);
+const IMPORT_IMPORT_TOOLS = new Set(['sample_import_get', 'sample_import_save_draft', 'sample_import_commit']);
+const scoped = Boolean(importScope);
 async function request(route: string, init: RequestInit = {}) {
   const response = await fetch(base + route, { ...init, headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(init.body && !(init.body instanceof FormData) ? { 'Content-Type': 'application/json' } : {}), ...init.headers } });
   if (!response.ok) throw Object.assign(new Error(await response.text()), { status: response.status });
   return response;
 }
 const server = new Server({ name: 'scientific-workbench', version: '0.2.0' }, { capabilities: { tools: {}, resources: {} } });
-server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: [
-  ...operations.map(operation => ({ name: operation.name, description: operation.description, inputSchema: operation.input })),
-  { name: 'attachment_upload', description: '流式上传客户端本地文件。先获得附件ID，再加入Data组件；不在工具JSON内传二进制。', inputSchema: { type: 'object' as const, properties: { filePath: { type: 'string' }, mimeType: { type: 'string' } }, required: ['filePath'] } },
-] }));
+server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: scoped
+  ? operations.filter(operation => IMPORT_TOOLS.has(operation.name)).map(operation => ({ name: operation.name, description: operation.description, inputSchema: operation.input }))
+  : [
+      ...operations.map(operation => ({ name: operation.name, description: operation.description, inputSchema: operation.input })),
+      { name: 'attachment_upload', description: '流式上传客户端本地文件。先获得附件ID，再加入Data组件；不在工具JSON内传二进制。', inputSchema: { type: 'object' as const, properties: { filePath: { type: 'string' }, mimeType: { type: 'string' } }, required: ['filePath'] } },
+    ] }));
 server.setRequestHandler(CallToolRequestSchema, async ({ params }) => {
   try {
-    const args = params.arguments ?? {};
+    const args = { ...(params.arguments ?? {}) } as Record<string, unknown>;
+    if (scoped) {
+      if (!IMPORT_TOOLS.has(params.name))
+        throw new Error(`受限导入作用域不允许调用工具：${params.name}`);
+      if (IMPORT_IMPORT_TOOLS.has(params.name)) {
+        args.id = importScope;
+        if (importAttempt) {
+          const requested = args.attemptId;
+          if (requested !== undefined && requested !== importAttempt)
+            throw new Error('受限导入作用域不接受其它 attemptId');
+          args.attemptId = importAttempt;
+        }
+      }
+    }
     if (params.name === 'attachment_upload') {
       if (typeof args.filePath !== 'string' || !path.isAbsolute(args.filePath)) throw new Error('需要绝对文件路径');
       const file = fs.realpathSync(args.filePath);
@@ -40,21 +68,29 @@ server.setRequestHandler(CallToolRequestSchema, async ({ params }) => {
   }
 });
 const KNOWLEDGE_ID = /^[a-z][a-z0-9-]*$/;
-server.setRequestHandler(ListResourcesRequestSchema, async () => ({ resources: [
-  { uri: 'workbench://syntax', name: '规范文档语法', mimeType: 'text/markdown' },
-  { uri: 'workbench://knowledge', name: 'Agent 知识索引', mimeType: 'application/json' },
-  { uri: 'workbench://operations', name: 'API与MCP操作规范', mimeType: 'application/json' },
-  { uri: 'workbench://dictionary/objects', name: '对象字典', mimeType: 'application/json' },
-  { uri: 'workbench://dictionary/properties', name: '属性字典', mimeType: 'application/json' },
-] }));
-server.setRequestHandler(ListResourceTemplatesRequestSchema, async () => ({ resourceTemplates: [
-  { uriTemplate: 'workbench://sample/{id}/document', name: '样品实际正文', mimeType: 'text/markdown' },
-  { uriTemplate: 'workbench://data/{id}', name: 'Data实际正文', mimeType: 'text/markdown' },
-  { uriTemplate: 'workbench://analysis/{id}/context', name: '分析上下文', mimeType: 'text/markdown' },
-  { uriTemplate: 'workbench://attachment/{id}', name: '图片资源或附件下载入口' },
-  { uriTemplate: 'workbench://knowledge/{id}', name: 'Agent 知识内容', mimeType: 'text/markdown' },
-] }));
+server.setRequestHandler(ListResourcesRequestSchema, async () => ({ resources: scoped
+  ? [
+      { uri: 'workbench://knowledge', name: 'Agent 知识索引', mimeType: 'application/json' },
+    ]
+  : [
+      { uri: 'workbench://syntax', name: '规范文档语法', mimeType: 'text/markdown' },
+      { uri: 'workbench://knowledge', name: 'Agent 知识索引', mimeType: 'application/json' },
+      { uri: 'workbench://operations', name: 'API与MCP操作规范', mimeType: 'application/json' },
+      { uri: 'workbench://dictionary/objects', name: '对象字典', mimeType: 'application/json' },
+      { uri: 'workbench://dictionary/properties', name: '属性字典', mimeType: 'application/json' },
+    ] }));
+server.setRequestHandler(ListResourceTemplatesRequestSchema, async () => ({ resourceTemplates: scoped
+  ? [{ uriTemplate: 'workbench://knowledge/{id}', name: 'Agent 知识内容', mimeType: 'text/markdown' }]
+  : [
+      { uriTemplate: 'workbench://sample/{id}/document', name: '样品实际正文', mimeType: 'text/markdown' },
+      { uriTemplate: 'workbench://data/{id}', name: 'Data实际正文', mimeType: 'text/markdown' },
+      { uriTemplate: 'workbench://analysis/{id}/context', name: '分析上下文', mimeType: 'text/markdown' },
+      { uriTemplate: 'workbench://attachment/{id}', name: '图片资源或附件下载入口' },
+      { uriTemplate: 'workbench://knowledge/{id}', name: 'Agent 知识内容', mimeType: 'text/markdown' },
+    ] }));
 server.setRequestHandler(ReadResourceRequestSchema, async ({ params: { uri } }) => {
+  if (scoped && uri !== 'workbench://knowledge' && !/^workbench:\/\/knowledge\//.test(uri))
+    throw new Error(`受限导入作用域不允许读取资源：${uri}`);
   let text: string, mimeType = 'text/markdown';
   if (uri === 'workbench://syntax') text = (await (await request('/knowledge/protocol-sample-document')).json()).content;
   else if (uri === 'workbench://knowledge') { text = await (await request('/knowledge')).text(); mimeType = 'application/json'; }
