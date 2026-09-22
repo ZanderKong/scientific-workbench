@@ -12,26 +12,30 @@
 
 当前定位为开发预览，不能把上述“已实现”理解为所有平台和边界均完成验收。
 
-## AI 图片导入尚未开放
+## AI 图片导入：在验证组合下开放
 
-真实 Vision V1/V2 与 restricted import profile 仍为 **NOT VERIFIED**，Phase B2 仍为 **BLOCKED**。产品页面没有 AI 图片导入入口。
+AI 图片导入入口位于「样品 → ＋新建样品 右侧箭头 → AI 从实验记录新建样品」。它只在**已真实验证的目标组合**下就绪：
 
-后续审核接受了图片校验竞态与 CLI 依赖边界修复，但 Spike 仍存在以下证据判定问题：
+- runtime：OpenCode V1 legacy `1.18.31`，transport `/session/:id/prompt_async`
+- 模型：`deepseek/deepseek-v4-flash-vision-exp`
+- 受限 profile 与知识 bundle 必须与能力记录一致，且运行时实际生效的目录策略、scoped MCP 工具表与记录逐项相符
 
-- 缺少 parent 关联时退回顺序匹配，可能误认回复。
-- 普通工具错误可能被当成权限拒绝，缺少与所测能力的核对。
-- 空白或无关产物可能被当作本次运行无泄漏的证据。
-- 正向测试使用短定时器清除 busy，已观察到并行运行失败、单独重跑通过。
+任一条件不满足时 readiness 会给出具体原因并拒绝启动，界面不会出现可用状态；这不是通用 AI 能力，换模型或换版本需要重新取证。使用步骤与隔离实例见 [GETTING_STARTED.md](GETTING_STARTED.md) 与项目根 `HANDOFF.md`。
 
-因此，脚本的 PASS 当前不能作为开放 AI 导入的充分依据。修补与真实环境验证是后续独立任务，不影响用户在隔离工作区检查常规界面。
+真实页面验收（三组场景：一页多样品、多页同样品、关键歧义走 Question）与重启重开、产物最小化核对见 [VERIFICATION.md](VERIFICATION.md) 2026-09-23 一节。已授权额度 G2 使用 8/10，S2 49/54。
+
+## 使用边界（AI 导入）
+
+- 识别结果必须对照原始记录核查；软件不判断科研结论。
+- 关键歧义由模型发起 Question，回答前不会提交；不要把它当作自动批准权限的通道。
+- 完成通知只提供「刷新样品」按钮，不会自动刷新列表，也不打开外部会话。
+- 真实 macOS 中文输入法、真实 S3、旧工作区转换核对等仍为未验收项。
 
 ## 验证范围
 
-实现者报告的完整回归为 core16 / web14 / mcp3 / server169，真实 S3 两项跳过，Playwright 46 项通过。随后独立审核运行相关 7 个文件：107 项通过、1 项 Spike 正向测试失败；该项单独重跑通过。两组结果均保留，不能只选通过的一次作为结论。
+2026-09-23 完整 gate（本轮一次执行）：`pnpm agent:knowledge:check` PASS（7 项，bundleHash `4b4afd85…`）；`pnpm typecheck` / `pnpm build` PASS；`pnpm test` = core16 / web14 / mcp4 / server221（真实 S3 2 项按设计跳过）；`pnpm test:e2e` 51 项通过；`pnpm api:spec` 无 diff；`git diff --check` PASS。更早的 46/107 项结果作为历史记录保留。
 
-后续 `pnpm build` 与独立人工验收实例健康检查通过。未重新运行的完整回归不得记为本轮执行。
-
-尚需人工或真实环境验证的内容包括：macOS 中文输入法选字、其余页面状态和长内容体验、实际旧工作区转换核对、真实 Vision 与 restricted profile。历史 S3 / OpenCode 冒烟仅代表当时环境，不保证所有服务版本或供应商兼容。
+尚需人工或真实环境验证的内容包括：macOS 中文输入法选字、其余页面状态和长内容体验、实际旧工作区转换核对、真实 S3（需容器）。历史 S3 / OpenCode 冒烟仅代表当时环境，不保证所有服务版本或供应商兼容。
 
 ## 使用边界
 

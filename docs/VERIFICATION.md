@@ -287,3 +287,68 @@
 - 本轮 S2 目标组合（V1 legacy `1.18.31` + `deepseek/deepseek-v4-flash-vision-exp`）的 transport/profile 门槛六项全部 PASS：session 目录隔离、runtime/模型身份与真实图片 transport、异步返回与请求关联、图片答案与人工夹具一致、同一受限 profile 可执行知识读取、七范围限制具备可信证据。`Phase B2` 所需的 `A + B1 + 目标组合 Spike PASS` 中，最后一项的 transport/profile 部分已满足。
 - 唯一未取证项是 S2 列表第 7 项（Workbench Job/log/notice 不保存原图/base64/凭据/完整 draft/OCR）：该产物只有在导入 Job 生命周期（B2.3）与完成通知（B2.6）实现后才会存在，因此按计划 §14 的测试矩阵在 B2/G2 阶段用真实导入任务一并取证；在此之前保持 NOT VERIFIED，不宣称最小化通过。
 - 预算：S2 总 38 次，本轮累计使用 37 次（余 1）；G2 的 10 次额度未动。
+
+### 2026-09-22 七项真实前置门槛复验
+
+当前有效证据为 `audit/2026-09-22/ai-import/profile.json` 与 `artifacts.json`，固定 V1 1.18.31、deepseek/deepseek-v4-flash-vision-exp、策略指纹与知识 bundle。前六项与真实 Job/log/notice 第七项全部 PASS，未将第七项延期。capability /2 见同目录 `capability.json`。这是剩余 B2 的开工门槛，不是完整产品交付。
+
+先前六项证据的本地 hash 证明不足，本轮重新取得目录有效配置、Agent 规则和实际 scoped MCP 工具表。第一次真实产物导入被接线的工具步骤完成误判提前终止，未创建样品；修补后第二次 commit，图像连通区计数6与正式正文一致，Data/镜像/receipt版本2，关闭再开 Store 可读。最小化检查使用真实产物与采集身份/时间，失败记录保留在 HANDOFF。
+
+## 2026-09-23 AI 导入收尾：生命周期、UI、自动化、真实 G2 与实例
+
+执行 `docs/plans/AI_IMPORT_DEEPSEEK_HANDOFF_PLAN.md`（D0 → C1 → C2 → T1 → G2 → D1）。基线 `a3f73e6` 加全部未提交工作，未 reset/clean。
+
+### C1 生命周期专项（`apps/server/src/sample-import-runs.test.ts`，15 项）
+
+真实 Store、真实 B1 commit 与真实 HTTP 授权层，只替换 runtime 传输与模型提交：
+
+- 相同 start replay 返回同一 Job；身份或 expectedVersion 变化则 CONFLICT；并发 start 只创建一个 Job、一次 session、一次发送。
+- 受限任务请求额外权限时，先对账 receipt→持久撤销 attempt 资格→尽力 abort；失败后到达的合法 commit 被拒且零新增实体。
+- commit 与 cancel 两种顺序：先 commit 后 cancel 保持 succeeded 且不重复建实体；先 cancel 后 commit 被拒且零实体。
+- 两个相同 retry 解析为同一新 Job/attempt；旧 attempt 的事件与取消不能改动新 attempt；用户说明经私密文件迁移后恢复。
+- 被替换 attempt 的任务即使仍 active 也不能写成功/失败，只被标记取消。
+- 重启对账：pending / creating-session（有/无关联 session）/ session-created / dispatching 四种中断，恢复不新建 session、不重发 prompt；创建响应丢失时按确定性关联找到并关闭孤儿 session；运行时无法回答归属时保持 running+uncertain。
+- 无关联最终回复判定：V1 `/session/status` 只列非 idle 会话，缺席等价 idle，但仍需完成且无工具的关联回复；完成态工具步骤不算结束。
+- receipt 优先：提交后 runtime 全面报错、重启与恢复都不改变成功，也不产生重复实体。
+- 发送响应丢失：任务保持 running+uncertain 且 promptMessageId 已持久，后续只监听不重发。
+- 私密输入：仅 importId/attemptId/tokenId/token/endpoint/note，0600，成功后删除，取消保留以便重试还原；不含 prompt/draft/OCR/图片。
+- scoped token HTTP 作用域：可读自身导入、可写 draft/commit、可读 knowledge；访问其他 import、样品列表被 403；取消后 403，撤销后 401。
+- 漂移：profile 被改或端点变化时 scoped token 立即被吊销。
+- shutdown 后不再访问已关闭 Store，在途工作被排空。
+
+### T1 自动化
+
+- 新增 `test/e2e/sample-import.spec.ts` 5 项：普通新建不受影响；3 张（PNG/WebP/JPEG）按用户排序上传、一次上传失败后重试、类型与体积拒绝；完成通知出现后列表**未自动刷新**，点击横幅本体不打开会话，搜索词在手动刷新后保留，刷新后与重开都能读到新样品；关键歧义进入 attention 且零提交、澄清入口指向运行时自身 `/server/<key>/session/<id>`；取消 + 重试后零新增正式实体；prepare/start 响应丢失后同一 importId 继续且只有一个 Job。
+- 新增 `apps/server/src/import-artifact-leak.test.ts` 5 项：用真实图片字节、内联 base64 载荷、真实凭据形态、真实工作区路径与真实 draft/OCR/prompt 文本逐一证明检测生效且不回显敏感内容；采集缺失、范围不足、0 产物、截断、非本轮 run、陈旧时间、跨 session、空文本一律 NOT VERIFIED；报告自身含凭据或图片载荷即 FAIL。
+- `pnpm api:spec` 无 diff：UI-only 的 readiness/start 未进入科学 operations。
+
+### G2 真实页面验收（`scripts/g2-import-acceptance.mts`）
+
+独立数据目录、独立端口 14323、attach 既授权隔离 OpenCode 4199。真实 readiness 通过（flavor v1 / 1.18.31 / 目标模型 / profileHash 与 capability 一致 / bundle 一致 / scoped MCP 七工具表）。三组场景全部从页面上传开始，模型为真实 `deepseek/deepseek-v4-flash-vision-exp`：
+
+| 场景 | 结果 | 核对要点 |
+| --- | --- | --- |
+| ① 一页多样品不同用量 | R1/R2/R3 三个样品 | 2.5/5.0/7.5 g、10/20/30 mL、30/45/60 min 各自成对，零串样；原料/坩埚为共享对象；备注入各样品正文；正文无页码；各样品 1 个 Data 绑定指向同一来源 Data v2 |
+| ② 两页同一样品 | 只建 1 个 T7 | 两页内容合并、页序 1/2 正确、来源图片两张；provenance 2 条；未机械按页建样品 |
+| ③ 关键用量歧义 | 1 个 Q1，用量 8 g | 模型明确提问 5 g/8 g 冲突并声明未确认前不作为已确认属性提交；回答后按选定值提交；单次 receipt 内含回答后的值 |
+
+真实模型在三个场景都主动提问（原料身份、备注归属、产物归属、跨页归属），全部经产品澄清入口回答；问答与回答内容取自运行时 session 历史。
+
+重启核对：5 样品 / 3 Data / 4 附件全部可读，正文与磁盘一致、Data 绑定与 receipt 的 `sourceDataVersion` 对齐、重复实体 0。最小化：三组分别以真实 Job 行、真实服务日志（约 300 KB，redact 后请求日志）与由持久 Job 行派生的完成通知检查，均 PASS。
+
+预算：G2 8/10（余 2），三次真实失败计数保留（场景轮询窗口过短；回答 payload 形状 400；用错 question 路由 404）。S2 仍 49/54。
+
+### gate（本轮一次完整执行）
+
+```text
+pnpm agent:knowledge:check  PASS（7 项，bundleHash 4b4afd85…）
+pnpm typecheck              PASS
+pnpm build                  PASS
+pnpm test                   PASS：core 16 / web 14 / mcp 4 / server 221（真实 S3 2 项按设计跳过）
+pnpm test:e2e               PASS：51
+git diff --check            PASS
+```
+
+### 仍未验收
+
+真实 macOS 中文输入法选字、真实 S3（需容器）、旧工作区 DOC-002 实际转换核对、其余页面逐状态人工视觉、完整首版其余缺口。完成通知在重启后被重新核对时已过 TTL，采用由持久 Job 行派生的等价记录；「回答前无 commit」的持久化形式为单次 receipt 含回答后取值与 question 早于 `committedAt`。

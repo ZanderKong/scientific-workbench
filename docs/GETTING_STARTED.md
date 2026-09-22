@@ -61,7 +61,30 @@ macOS 默认启动选择文件位于 `~/Library/Application Support/ScientificWo
 
 通过 [MCP](API_MCP.md) 可以让外部客户端访问授权范围内的数据；[OpenCode](OPENCODE_INTEGRATION.md) 是可选连接。不开启这些连接也能使用常规记录功能。
 
-目前没有已开放的“上传实验记录图片并自动创建样品”入口。Vision 测试脚本是开发验证工具，不是用户导入命令。
+### 从实验记录图片新建样品（AI 导入）
+
+入口在「样品 → ＋新建样品 右侧箭头 → AI 从实验记录新建样品」。它只在已真实验证的目标组合下可用：
+
+- OpenCode V1 legacy `1.18.31`，transport `/session/:id/prompt_async`
+- 模型 `deepseek/deepseek-v4-flash-vision-exp`
+- 受限 profile 与知识 bundle 与能力记录一致（`audit/2026-09-22/ai-import/capability.json`）
+
+启动前设置导入运行时端点与**私密**凭据文件（0600，非符号链接，不要放进仓库）：
+
+```bash
+WORKBENCH_IMPORT_OPENCODE_URL=http://127.0.0.1:4199 WORKBENCH_IMPORT_ENV_FILE="$HOME/.opencode-acceptance/server.env" pnpm start
+```
+
+使用步骤：
+
+1. 打开弹窗，选择 JPEG/PNG/WebP 图片（最多 10 张、单张 10 MiB、合计 30 MiB），拖动调整页序，可移除或重试单张上传。
+2. 可选补充说明会作为科研输入传给模型，不会被当作权限指令。
+3. 点击「开始导入」。弹窗关闭不会取消任务；未满足 readiness 时界面会显示具体原因。
+4. 任务在右下角 Task Stack 中显示，可取消、查看失败原因并重试；需要澄清时会提示打开会话，**回答前不会提交**。
+5. 完成后出现「实验记录导入完成，刷新样品列表查看／刷新样品」，点击才刷新列表；软件不会自动刷新或打开外部页面。
+6. 成功后核对正文、对象与属性、来源 Data 与原图、provenance 与 receipt。
+
+受限说明：AI 只通过作用域限定的一次性凭据访问单个导入，其他数据与删除类操作不在范围内；识别内容必须对照原始记录核查。Vision 测试脚本（`scripts/verify-import-artifacts.mts`）仍是开发取证工具，不是用户导入命令。
 
 ## 常见问题
 

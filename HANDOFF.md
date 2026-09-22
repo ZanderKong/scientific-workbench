@@ -1,5 +1,7 @@
 # 当前接续入口
 
+> 最新接续（2026-09-23）：`docs/plans/AI_IMPORT_DEEPSEEK_HANDOFF_PLAN.md` 已执行完毕，见文末「2026-09-23 计划执行」一节。基线 `a3f73e6` 加当时全部未提交/未跟踪工作已按阶段提交；AI 图片导入在「V1 1.18.31 + deepseek/deepseek-v4-flash-vision-exp + 受限 profile」验证组合下可用，并在真实页面完成三组场景与重启重开核对。完整首版仍未完成，其余未验收项见文末与 docs/STATUS.md。
+
 更新：2026-09-13。总体：完整首版未完成。以下历史记录按日期保留，以末尾最新接续为准。
 
 ## 必须先知道
@@ -380,3 +382,99 @@ Phase B2：BLOCKED（前置 S2 未完成）
 - `knowledge.test.ts` 的白名单断言改为从 `KNOWLEDGE_IDS` 单一来源派生，避免每次新增知识都要手改测试。
 - 本轮证据：`pnpm agent:knowledge:check` PASS（7 项）；`pnpm typecheck`/`pnpm build` PASS；`pnpm test` = core16 / web14 / mcp4 / server191（真实 S3 2 项跳过）；`pnpm exec playwright test` 46 passed；`git diff --check` PASS。未消耗真实模型请求（S2 余 1 次、G2 10 次未动）。
 - 下一步：B2.3 持久化启动与 receipt 对账 → B2.4 Question/取消/重试 → B2.5 样品入口与 Modal → B2.6 完成通知与手动刷新 → G1 → G2 真实页面端到端（含 S2 未取证的第 7 项最小化）→ D1 交付实例。
+
+## 2026-09-22 实际执行接续：基础修补与七项真实门槛
+
+- 基线 a3f73e6。用户要求严格保持七项前置门槛，本次未沿用此前“第七项延期”的说明。
+- 已先复现：缺 capability、缺 bundle、错误 provider 三种错误 ready；配置覆盖、缓存掩盖篡改；本地 deny 自算 hash 错误 PASS；缺实际类别的产物错误 PASS。正式反例测试保留，临时基线模块已移除。
+- 修补：每 import/attempt 独立目录、并发 ensure 合并、已有绑定不可覆盖、当前文件重新核对；capability /2 要求七项、bundle、精确身份和 transport；策略指纹与明确动态绑定分离并包含 MCP/operations 实现哈希。
+- 真实有效策略：目标目录 GET /config 与 /agent，检查继承规则；/experimental/tool 只列内置工具，因此用相同已绑定命令的真实 scoped MCP 客户端取七项工具表，另核对运行时 /mcp connected。OpenCode 末尾自带 tool-output 的 external_directory 允许不会放开 read/edit/write/bash，其他继承 allow/ask 仍拒绝。本地文件 hash 本身不算有效权限证据。
+- 新最小接线 scripts/verify-import-artifacts.mts：实际 main HTTP server、Store Job、真实 MCP/B1、现有通知路径；父进程捕获真实 stdout/stderr，不用文件名或扫描时补身份。产物逐项需 run/session/job/时间/范围；普通载荷禁止 draft/OCR/prompt/body/images 字段。
+- 真实复验：profile run 2377956c-6acf-4897-9b2c-ce192301b5c3 前六项 PASS（10 次）；artifact run 2f5af60d-3a9d-4dec-b938-dbac8c8bf012 第七项 PASS（1 次）。同一策略与 bundle，摘要见 audit/2026-09-22/ai-import。模拟图六个方块，正式正文记录六个，Data/镜像/receipt v2，Store 重开可读。
+- 首次 artifact run cf221650-12cc-430b-a5e9-336f7e4b9849（1 次）未 commit：接线误把完成的工具步骤当最终回答，已修正并补回归；没有样品写入，不抹除失败。CLI 旧测试的“所有能力都用 bash 拒绝”不再能证明科学写入拒绝，断言改为 NOT VERIFIED 并检查缺项。
+- 用户回复“继续”后按已提出申请执行 S2 总上限54次；目前累计49次，剩5次；G2 10次未动。所有调用先持久记账，不隐式重发。
+- 状态：七项真实前置门槛 PASS，B2 现在具备开工条件，产品仍未交付。下一步 B2 生命周期、UI、回归、真实页面 G2。尚未修改原型、用户科研目录、14321实例或用户全局配置；验收子进程关闭，证据临时目录保留，专属 OpenCode directory disposed（服务本体未重启）。
+
+## 2026-09-22 DeepSeek 接续交接：停止新增实现，转入收尾计划
+
+- 用户本轮要求核对未完成事项并制定交给 DeepSeek 的执行计划。已生成 `docs/plans/AI_IMPORT_DEEPSEEK_HANDOFF_PLAN.md`；该文是本次增量接续入口，不重新设计 A/B1。
+- HEAD 仍为 a3f73e6，基础修补、真实证据和 B2 初稿均未提交，包含未跟踪文件。不得 reset/clean 或只按 HEAD 接续。此交接阶段只写文档，没有继续修代码、模型调用、提交、push 或 PR。
+- 新 `sample-import-runs.ts` 已接 start/readiness、dispatch、轮询、cancel/retry/recover 初稿；main/auth 已接 UI 路由及 scoped token。仍需处理失败后撤销资格、retry 并发、session 响应丢失对账、receipt 优先、重启私密输入、shutdown 异步生命周期并补专项测试。具体风险与验收在新计划 C1。
+- 样品菜单和 SampleImportModal 是初稿；TaskStack 和 App 尚未接齐导入取消/重试/刷新动作。真实页面 G2、最终实例均未完成。
+- 本次重新运行 `pnpm --filter @workbench/web exec tsc --noEmit`：FAIL，SampleImportModal.tsx:20 TS2554（useRef 缺初始值）。`git diff --check`：PASS。此前服务端类型检查和局部 77 项通过不代表后续 B2 全树通过；当前完整 gate 尚未执行。
+- 七项前置证据仍见 audit/2026-09-22/ai-import；仅证明目标组合与最小真实接线，不能代表新产品链路通过。S2 累计49/54，余5；G2 0/10，余10。此次交接未消耗额度。
+- 服务：本次计划核对没有启动或停止服务；上一执行阶段验收子进程已结束，原始证据临时目录保留。4199 隔离 OpenCode 是否仍在运行须接手时确认，不擅自重启；14321/4317/5173 既有实例及用户科研目录未操作。
+- 下一步：按新计划 D0 核对工作树和证据 → C1 编译/生命周期 → C2 TaskStack/Modal → T1 → G2 → D1。不要重新跑没有相关变化的全部 Spike，也不要停在 mock 通过。
+
+## 2026-09-23 计划执行：生命周期、UI、自动化、真实 G2 与交付实例（优先于上文）
+
+- 执行 `docs/plans/AI_IMPORT_DEEPSEEK_HANDOFF_PLAN.md`（D0 → C1 → C2 → T1 → G2 → D1）。基线为 HEAD `a3f73e6` 加当时全部未提交/未跟踪工作；未 reset/clean，未覆盖任何既有改动。冻结原型未改。
+- **C1 编译与生命周期**：修复 `SampleImportModal.tsx` 的 `useRef` 类型错误并整理为明确类型，全树 typecheck 恢复通过。`sample-import-runs.ts` 由初稿重写为完整生命周期：终态统一「先对账 receipt → 持久撤销 attempt 资格 → 尽力 abort → 再对账」，撤销失败只进 `uncertain` 而绝不宣称终态；start/retry/cancel 共用每 import 互斥与 CAS，两个相同 retry 返回同一新 Job/attempt，旧事件与旧取消不能改动新 attempt；`recover()` 不再对创建阶段直接失败，改用持久 Job 行里的确定性关联（session 标题）+ 运行时 session 列表对账，无法唯一确认时进 attention/uncertain 且禁止重发；发送前持久 messageId，已发送任务只恢复监听；成功/失败/取消/重试的私密输入保留策略一致（成功删除、失败与取消保留以便重试还原用户说明，重试迁移到新 attempt）；`shutdown()` 排空在途 dispatch/reconcile 并在 `stopped` 后不写 Store；`scopeState` 每个请求复核磁盘 profile 绑定，端点或 profile 漂移立即吊销 scoped token。
+- **C1 关键修补**：完成通知此前会先经 `AgentRunService` 以「无 action」的形态到达客户端，客户端按 id 去重后再也拿不到 `refresh-samples`；现在通知在源头就带 action。`importReplyEnded` 修正真实 V1 语义：`/session/status` 只列非 idle 会话，因此「不在快照里」等价 idle，且仍需本次请求关联的 completed 无工具最终回复。
+- **C2 UI**：`SampleImportModal` 补齐缩略图、页序、移除、单项上传重试、可选说明、真实模型与 readiness 原因、StrictMode/关闭后异步更新/object URL 释放、连续选图与上传返回竞态、prepare/start 防重复与「查询并重试启动」；`SamplesPage` 新建菜单可发现且有遮罩/Escape 关闭；`TaskStack` 对导入任务提供可发现的取消、澄清与重试入口（普通任务行为不变）；完成通知只调用 `App.refresh`，不打开会话、不导航、不自动刷新，hover/focus/pending 暂停消失。
+- **T1 自动化**：新增 `sample-import-runs.test.ts` 15 项（真实 Store/B1 + 真实 HTTP 授权层，只替换 runtime 与 submit）、`import-artifact-leak.test.ts` 5 项（用真实图片字节、真实凭据形态、真实 draft/OCR 文本反向证明最小化检测，并覆盖采集不完整/陈旧/越界一律 NOT VERIFIED）、`test/e2e/sample-import.spec.ts` 5 项（真实 UI、HTTP、上传、parser、B1 commit、文件持久化，只替换 runtime）。gate 见本节末。
+- **G2 真实页面验收**：`scripts/g2-import-acceptance.mts` 独立数据目录 `~/ZanderProject/ScientificWorkbench-g2-20260923`、独立端口 14323、attach 既授权隔离 OpenCode 4199（V1 1.18.31 + `deepseek/deepseek-v4-flash-vision-exp`），真实 readiness（profileHash 与 capability 一致、bundle 一致、scoped MCP 七工具表）。三组场景全部从页面上传开始：①一页多样品不同用量 → R1/R2/R3 三个样品，2.5/5.0/7.5 g 与 10/20/30 mL、30/45/60 min 各自成对、零串样，原料/坩埚为共享对象，备注进入各样品正文且正文无页码；②两页同一样品 → 只建 1 个样品 T7，两页内容与页序（page 1、2）正确合并，来源图片两张；③关键歧义 → 真实进入 Question（模型明确说明 5 g/8 g 冲突且「未确认前不作为已确认属性提交」），回答后按选定值 8 g 提交。真实模型在场景 1/2/3 都主动提问（原料身份、备注归属、产物归属、跨页归属），全部经产品澄清入口回答，问答与回答内容取自运行时 session 历史而非自报。
+- **G2 重启与最小化**：停止并重启同一实例后，5 个样品、3 个 Data、4 个附件全部可读，正文与磁盘一致、Data 绑定与 receipt 版本对齐、重复实体数为 0。三组场景分别用真实 Job 行、真实服务日志（约 300 KB，含 redact 后的请求日志）与由持久 Job 行派生的完成通知做最小化检查，均 PASS（未发现图片字节、内联载荷、凭据、工作区路径、draft/OCR/prompt 字段）。通知项标注 `noticeSource: derived-from-durable-job`。
+- **G2 预算与失败记账**：G2 额度 10 次，本轮累计使用 **8 次**（余 2）。前三次为真实失败并保留计数：第 1 次因验收脚本场景轮询窗口过短放弃；第 2 次回答 payload 形状不符（400）；第 3 次用错 question 路由（V2 路由看不到 legacy 会话，404）。修正为 V1 `/question/{id}/reply` 与逐子问题选项后才取得三组结果。S2 仍为 49/54，未动。
+- **已知未取证/弱点（不得当作通过）**：完成通知产物在重启核对时已过 TTL，采用由持久 Job 行派生的等价记录（产品通知本身就是该行的纯函数）；「回答前无 commit」本轮为运行期现场观察，持久化形式是单次 receipt 内含回答后的 8 g（若回答前已 commit，replay-proof 规则会拒绝其后提交）与 question 时间早于 `committedAt`；澄清回答使用运行时自身 V1 question-reply 契约（其 UI 同路由）提交，未在 OpenCode Web UI 内点击。场景 3 正文里模型自行写了一行未绑定的 `[数据] 2026-09-20 实验记录图片`（真实来源 Data 仍正确绑定在追加的占位块上），属模型侧写法问题，记为待改进而非程序缺陷。真实 macOS 中文输入法、真实 S3、旧目录实际转换核对等既有未验收项不受本轮影响。
+- **交付实例**：`pnpm import:instance`（等价命令见 README/HANDOFF 文末），数据目录 `~/ZanderProject/ScientificWorkbench-g2-20260923`，端口 14323，非敏感示例图 `audit/2026-09-22/ai-import/g2/fixtures`，菜单位置「样品 → ＋新建样品 右侧箭头 → AI 从实验记录新建样品」。既有 14321 人工实例、4317/5173、用户科研目录与用户 OpenCode 全局配置均未操作。
+
+## 2026-09-23 计划执行：生命周期、UI、自动化、真实 G2 与交付实例（优先于上文）
+
+- 执行 `docs/plans/AI_IMPORT_DEEPSEEK_HANDOFF_PLAN.md`（D0 → C1 → C2 → T1 → G2 → D1）。基线为 HEAD `a3f73e6` 加当时全部未提交/未跟踪工作；未 reset/clean，未覆盖任何既有改动。冻结原型未改。
+- **C1 编译与生命周期**：修复 `SampleImportModal.tsx` 的 `useRef` 类型错误并整理为明确类型，全树 typecheck 恢复通过。`sample-import-runs.ts` 由初稿重写为完整生命周期：终态统一「先对账 receipt → 持久撤销 attempt 资格 → 尽力 abort → 再对账」，撤销失败只进 `uncertain` 而绝不宣称终态；start/retry/cancel 共用每 import 互斥与 CAS，两个相同 retry 返回同一新 Job/attempt，旧事件与旧取消不能改动新 attempt；`recover()` 不再对创建阶段直接失败，改用持久 Job 行里的确定性关联（session 标题）+ 运行时 session 列表对账，无法唯一确认时进 attention/uncertain 且禁止重发；发送前持久 messageId，已发送任务只恢复监听；成功/失败/取消/重试的私密输入保留策略一致（成功删除、失败与取消保留以便重试还原用户说明，重试迁移到新 attempt）；`shutdown()` 排空在途 dispatch/reconcile 并在 `stopped` 后不写 Store；`scopeState` 每个请求复核磁盘 profile 绑定，端点或 profile 漂移立即吊销 scoped token。
+- **C1 关键修补**：完成通知此前会先经 `AgentRunService` 以「无 action」的形态到达客户端，客户端按 id 去重后再也拿不到 `refresh-samples`；现在通知在源头就带 action。`importReplyEnded` 修正真实 V1 语义：`/session/status` 只列非 idle 会话，因此「不在快照里」等价 idle，且仍需本次请求关联的 completed 无工具最终回复。
+- **C2 UI**：`SampleImportModal` 补齐缩略图、页序、移除、单项上传重试、可选说明、真实模型与 readiness 原因、StrictMode/关闭后异步更新/object URL 释放、连续选图与上传返回竞态、prepare/start 防重复与「查询并重试启动」；`SamplesPage` 新建菜单可发现且有遮罩/Escape 关闭；`TaskStack` 对导入任务提供可发现的取消、澄清与重试入口（普通任务行为不变）；完成通知只调用 `App.refresh`，不打开会话、不导航、不自动刷新，hover/focus/pending 暂停消失。
+- **T1 自动化**：新增 `sample-import-runs.test.ts` 15 项（真实 Store/B1 + 真实 HTTP 授权层，只替换 runtime 与 submit）、`import-artifact-leak.test.ts` 5 项（用真实图片字节、真实凭据形态、真实 draft/OCR 文本反向证明最小化检测，并覆盖采集不完整/陈旧/越界一律 NOT VERIFIED）、`test/e2e/sample-import.spec.ts` 5 项（真实 UI、HTTP、上传、parser、B1 commit、文件持久化，只替换 runtime）。gate 见本节末。
+- **G2 真实页面验收**：`scripts/g2-import-acceptance.mts` 独立数据目录 `~/ZanderProject/ScientificWorkbench-g2-20260923`、独立端口 14323、attach 既授权隔离 OpenCode 4199（V1 1.18.31 + `deepseek/deepseek-v4-flash-vision-exp`），真实 readiness（profileHash 与 capability 一致、bundle 一致、scoped MCP 七工具表）。三组场景全部从页面上传开始：①一页多样品不同用量 → R1/R2/R3 三个样品，2.5/5.0/7.5 g 与 10/20/30 mL、30/45/60 min 各自成对、零串样，原料/坩埚为共享对象，备注进入各样品正文且正文无页码；②两页同一样品 → 只建 1 个样品 T7，两页内容与页序（page 1、2）正确合并，来源图片两张；③关键歧义 → 真实进入 Question（模型明确说明 5 g/8 g 冲突且「未确认前不作为已确认属性提交」），回答后按选定值 8 g 提交。真实模型在场景 1/2/3 都主动提问（原料身份、备注归属、产物归属、跨页归属），全部经产品澄清入口回答，问答与回答内容取自运行时 session 历史而非自报。
+- **G2 重启与最小化**：停止并重启同一实例后，5 个样品、3 个 Data、4 个附件全部可读，正文与磁盘一致、Data 绑定与 receipt 版本对齐、重复实体数为 0。三组场景分别用真实 Job 行、真实服务日志（约 300 KB，含 redact 后的请求日志）与由持久 Job 行派生的完成通知做最小化检查，均 PASS（未发现图片字节、内联载荷、凭据、工作区路径、draft/OCR/prompt 字段）。通知项标注 `noticeSource: derived-from-durable-job`。
+- **G2 预算与失败记账**：G2 额度 10 次，本轮累计使用 **8 次**（余 2）。前三次为真实失败并保留计数：第 1 次因验收脚本场景轮询窗口过短放弃；第 2 次回答 payload 形状不符（400）；第 3 次用错 question 路由（V2 路由看不到 legacy 会话，404）。修正为 V1 `/question/{id}/reply` 与逐子问题选项后才取得三组结果。S2 仍为 49/54，未动。
+- **已知未取证/弱点（不得当作通过）**：完成通知产物在重启核对时已过 TTL，采用由持久 Job 行派生的等价记录（产品通知本身就是该行的纯函数）；「回答前无 commit」本轮为运行期现场观察，持久化形式是单次 receipt 内含回答后的 8 g（若回答前已 commit，replay-proof 规则会拒绝其后提交）与 question 时间早于 `committedAt`；澄清回答使用运行时自身 V1 question-reply 契约（其 UI 同路由）提交，未在 OpenCode Web UI 内点击。场景 3 正文里模型自行写了一行未绑定的 `[数据] 2026-09-20 实验记录图片`（真实来源 Data 仍正确绑定在追加的占位块上），属模型侧写法问题，记为待改进而非程序缺陷。真实 macOS 中文输入法、真实 S3、旧目录实际转换核对等既有未验收项不受本轮影响。
+- **交付实例**：`pnpm import:instance`（等价命令见 README/HANDOFF 文末），数据目录 `~/ZanderProject/ScientificWorkbench-g2-20260923`，端口 14323，非敏感示例图 `audit/2026-09-22/ai-import/g2/fixtures`，菜单位置「样品 → ＋新建样品 右侧箭头 → AI 从实验记录新建样品」。既有 14321 人工实例、4317/5173、用户科研目录与用户 OpenCode 全局配置均未操作。
+
+### gate（2026-09-23，代码改动完成后一次完整执行）
+
+```text
+pnpm agent:knowledge:check  PASS（7 项，bundleHash 4b4afd8536809476859f32bf3e6867d55db2d14c43eb86fa76e0677189c3ad7b）
+pnpm typecheck              PASS（core / mcp / web / server）
+pnpm build                  PASS（core / mcp / web / server）
+pnpm test                   PASS：core 16 / web 14 / mcp 4 / server 221（真实 S3 2 项按设计跳过）
+pnpm test:e2e               PASS：51 passed（含新增 sample-import 5 项）
+git diff --check            PASS
+pnpm api:spec               无 diff（UI-only 的 readiness/start 未进入科学 operations）
+```
+
+### 交接字段（本轮）
+
+```text
+基线 / 最终状态：HEAD a3f73e6 + 全部未提交工作 → 本轮分阶段本地提交（未 push、未建 PR）
+修改范围：apps/server/src/{sample-import-runs.ts,sample-import-agent.ts,agent-runs.ts,auth.ts,main.ts,opencode.ts,import-observation.ts} 与其测试；
+          apps/web/src/{components/SampleImportModal.tsx,components/TaskStack.tsx,components/sample-import.css,pages/SamplesPage.tsx,App.tsx,workbench.css}；
+          test/e2e/{sample-import.spec.ts,fake-opencode.ts}、playwright.config.ts；scripts/{g2-import-acceptance.mts,g2-instance.mts}、package.json
+自动化：unit 255 通过（含 2 项真实 S3 跳过）；E2E 51 通过；api:spec 无 diff
+真实 G2：三组场景全部提交（R1/R2/R3、T7、Q1），重启重开一致，最小化三组 PASS；证据 audit/2026-09-22/ai-import/g2/{g2-report.json,budget.json,fixtures,scenario1-completed.png,scenario3-question.png}
+预算：S2 49/54 未动；G2 8/10（余 2），三次真实失败已计数
+跳过项及原因：真实 S3 2 项（需容器，按设计跳过）
+未运行项：真实 macOS 中文输入法、旧工作区实际转换核对、完整首版其余页面人工视觉
+用户目录与实例保护：未访问 ~/ScientificWorkbench；未操作 14321/4317/5173；未改用户 OpenCode 全局配置与原型
+剩余服务：4199 隔离 OpenCode（既有，未重启）；交付实例见 URL 与端口
+```
+
+### 交付实例启动/停止
+
+```bash
+# 启动（前台，Ctrl-C 即停止）
+pnpm import:instance
+# 等价显式命令
+WORKBENCH_DATA_DIR=/Users/kong/ZanderProject/ScientificWorkbench-g2-20260923 \
+WORKBENCH_PORT=14323 WORKBENCH_HOST=127.0.0.1 \
+WORKBENCH_IMPORT_OPENCODE_URL=http://127.0.0.1:4199 \
+WORKBENCH_IMPORT_ENV_FILE=/Users/kong/.opencode-acceptance/server.env \
+WORKBENCH_IMPORT_CAPABILITY_FILE=$PWD/audit/2026-09-22/ai-import/capability.json \
+npx tsx apps/server/src/main.ts
+```
+
+- 入口：http://127.0.0.1:14323/ → 样品 → ＋新建样品 右侧箭头 → AI 从实验记录新建样品
+- 模型：`deepseek/deepseek-v4-flash-vision-exp`（V1 legacy 1.18.31，`/session/:id/prompt_async`）
+- 示例图：`audit/2026-09-22/ai-import/g2/fixtures/*.png`（合成记录，非真实实验数据）
+- 日志：前台 stdout；验收运行日志归档在 `audit/2026-09-22/ai-import/g2/workbench.log`（未提交）
