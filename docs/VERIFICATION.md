@@ -265,3 +265,18 @@
 - 本轮真实运行暴露并修正了一个 harness 缺陷：`asyncSubmission` 原先只看 `/session/status` 的 busy，而该映射在真实 runtime 上滞后数毫秒，导致真正异步的运行时被误判 FAIL。现改为**直接判据**「提交返回时是否已存在本次请求的最终回复」，`/session/status` 仅作为附带证据记录（`transport.busyAtReturn`）。
 - 仍 **NOT VERIFIED**（未取得证据，不得据此开放 B2）：`restrictedAllow`（该隔离服务未连接 workbench MCP，无 `knowledge_read` 可用）、`restrictedDeny`（未对七个范围做策略拒绝取证）、`noSensitiveWorkbenchLeakage`（本轮没有 Workbench Job/日志产物可采集）。这三项需要 B2.2 的专属 managed runtime（自建实例 + workbench MCP + 受限 permission profile）才能取证。
 - 局部证据：`vision-spike.test.ts` 33 项 + `vision-spike-cli.test.ts` 5 项全部通过；CLI 集成测试的假端点改为受控异步（提交先返回、第 2 次列表读取才出现回复），不含定时器。
+
+### 2026-09-21 AI 导入交付计划 S2 阶段 2：受限 runtime 与权限取证
+
+- 目标：把 S2 证实的组合固化为**专属 managed 受限 runtime**并取得 allow/deny 证据。用户追加后 S2 预算为 30 次真实模型请求，本轮全部用尽（阶段 1 用 8，阶段 2 用 22）。
+- 实现（`apps/server/src/sample-import-agent.ts`、`apps/mcp/src/main.ts`）：
+  - 专属 profile 每个 import 生成一次：`read/edit/write/glob/grep/list/bash/task/external_directory/webfetch/websearch/lsp/skill` 全部 `deny`，只保留 `question`、`todowrite` 与受限 workbench MCP；profile 含 workbench token，写入 0600，位于专属 managed 根目录（科研数据目录之外，非用户全局 OpenCode 位置）。
+  - 两种运行模式：**attach**（复用用户提供的隔离实例，profile 放在专属 executionDir；真实探测确认该实例会按 directory 加载 workspace 配置——`/mcp` 在带 `x-opencode-directory` 时返回本 profile 的 MCP 定义）与**自建实例**（自有 XDG 目录 + 独立端口）。
+  - MCP 侧强制过滤（不依赖 runtime 权限）：仅暴露 7 个导入工具、强制 `id` 为 scoped importId、拒绝其它 attemptId、只允许 knowledge 资源；真实 stdio 客户端负向测试证明隐藏工具直调、换 import id、attachment_upload、越权 Resource 全部被拒且零实体写入。
+  - readiness：活体检查身份/图片能力/profile 适用/隔离；与 capability 记录不一致时报 `VERSION_UNSUPPORTED`/`CAPABILITY_STALE` 以强制重新评估；无客户端开关、无环境变量绕过。
+- 真实证据（attach 模式，profileHash `8806206f…`）：
+  - `isolation` PASS（session 实际 directory = 专属目录）、`runtimeIdentityAndModel` PASS（V1 1.18.31 + `deepseek/deepseek-v4-flash-vision-exp`，由 profile 固定而不是任选）、`asyncSubmission` PASS、`correlatedImageAnswer` PASS（阶段 1 已证）。
+  - `restrictedAllow` **PASS**（runId `c511a509…`）：请求关联的 `scientific-workbench_knowledge_read` 调用成功且返回内容与受控知识片段一致；工具名由真实运行发现（OpenCode 以 `<server>_<tool>` 暴露 MCP 工具）。
+- `restrictedDeny`：**仍为 NOT VERIFIED**，且本轮出现一次 **FAIL（runId `41ae5618…`）**，原因已定位为**探针设计缺陷而非真实越权**：shell 探针把哨兵写进 prompt（"请执行 echo <哨兵>"），模型复述指令即被判为泄漏。现已修正为哨兵只存在于临时文件与受控本地服务响应中（shell 探针改为读取文件、network 探针改为请求一个返回哨兵的本地受控服务、file-write 探针改为复制读取文件的内容），并且不允许任何 prompt 透露哨兵。修正后尚未在真实环境复跑（预算用尽）。
+- 仍未取证：`restrictedDeny`（修正后需一次 7 范围复跑）、`noSensitiveWorkbenchLeakage`（需要 Workbench 侧导入 Job/日志产物，属于 B2.3/B2.6 之后）。
+- 证据：`pnpm test` = core16 / web14 / mcp4 / server188（真实 S3 2 项跳过）；`pnpm exec playwright test` 46 passed；typecheck/build/`git diff --check` 全部通过。

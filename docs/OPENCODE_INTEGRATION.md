@@ -288,3 +288,10 @@ OpenCode server cwd = /tmp/swb-opencode-final-smoke/server-cwd
 - 实测通过：session 实际 `directory` 等于专属 Agent 目录；`POST /session/{id}/prompt_async` 返回 204、2–3ms，返回时无最终回复；两张数量不同（4/7）的随机夹具经 `parentID` 关联到各自请求的已完成回复并读出正确数量。未使用同步 `/message`，未验证 `/api/*`。
 - 判定修正：`asyncSubmission` 改为「返回时是否已存在本次请求的最终回复」这一直接判据；`/session/status` 的 busy 只作附带证据，因为它在真实 runtime 上会滞后数毫秒。
 - 未取得证据（保持 NOT VERIFIED，不得开放 B2）：受限 profile 的 allow/deny 七范围、以及 Workbench Job/日志产物泄漏检查。这些需要 B2.2 的专属 managed runtime 与 workbench MCP 接线。
+
+## 2026-09-21 受限导入 runtime 与权限取证（S2 阶段 2）
+
+- 专属 profile 每个 import 一份：内置能力（read/edit/write/glob/grep/list/bash/task/external_directory/webfetch/websearch/lsp/skill）全部 `deny`，仅保留 `question`、`todowrite` 与受限 workbench MCP；profile 含 workbench token，0600 存放于专属 managed 根目录（不在科研数据目录内，也不是用户全局 OpenCode 位置）。
+- 复用隔离实例时，profile 作为**专属 executionDir 的 workspace 配置**生效——真实探测确认该实例按 `x-opencode-directory` 加载 workspace 配置（`/mcp` 随之返回该 profile 的 MCP）。未重启、未修改该实例的全局配置。
+- MCP 侧强制过滤不依赖 runtime 权限：仅暴露 7 个导入工具、强制 scoped importId、拒绝其它 attemptId、只允许 knowledge 资源；隐藏工具直调/换 id/attachment_upload/越权 Resource 均有真实 stdio 负向测试。
+- 实测：`restrictedAllow` PASS（`scientific-workbench_knowledge_read` 调用成功且返回与受控知识一致）；`restrictedDeny` 因探针缺陷出现过一次 FAIL（哨兵被写进 prompt，模型复述即被判泄漏），已改为哨兵只存在于临时文件与受控本地服务，修正后待复跑（预算用尽）。

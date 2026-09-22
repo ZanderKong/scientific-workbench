@@ -355,3 +355,13 @@ Phase B2：BLOCKED（前置 S2 未完成）
 - **仍未取证（NOT VERIFIED，B2 不得开放）**：`restrictedAllow`、`restrictedDeny`（七范围）、Workbench 产物泄漏检查。该隔离服务未连接任何 MCP（`/mcp` 为空）且没有受限 permission profile，因此 allow/deny 无法在这台服务上取证；需要按 B2.2 自建专属 managed runtime（独立目录/端口 + workbench MCP + 受限 profile）后再取证。
 - 预算状态：S2 剩余约 7 次；一次完整的 allow(1)+deny(7)+图片(1) 取证约需 9 次，超出剩余额度。已向用户申请追加（见下）。
 - 下一步：先实现 B2.2 的窄接线（`sample-import-agent.ts`：import scope、MCP 工具过滤、受限 profile、readiness），自建专属 managed 实例，再用追加额度完成 allow/deny/产物取证；之后进入 B2.3–B2.6 与 UI。
+
+## 2026-09-21 S2 阶段 2：受限 runtime 与权限取证（预算用尽）
+
+- 用户追加 S2 预算至 30 次；本轮阶段 1 用 8、阶段 2 用 22，**已全部用尽**。G2 的 10 次额度未动。
+- 新增：`apps/server/src/sample-import-agent.ts`（专属 profile + attach/自建两种 managed runtime + readiness）、`apps/mcp/src/main.ts` 导入作用域过滤（强制 scoped importId、隐藏非导入工具与资源）、harness 支持固定目标模型与「已验证 profile 的有效 deny + 无副作用」第二类证据。
+- 真实证据：attach 模式 profileHash `8806206f…`；`isolation`/`runtimeIdentityAndModel`/`asyncSubmission`/`correlatedImageAnswer` PASS；**`restrictedAllow` PASS**（runId `c511a509…`，请求关联的 `scientific-workbench_knowledge_read` 成功且返回与受控知识片段一致）。
+- `restrictedDeny` 仍未取证，并出现一次 FAIL（runId `41ae5618…`）：根因是**探针缺陷**——shell 探针把哨兵放进 prompt，模型复述指令被判为泄漏。已修正（哨兵只存在于临时文件与受控本地服务），修正后尚未复跑。
+- 未取证：`restrictedDeny`（需一次 7 范围复跑，约 7 次请求）、`noSensitiveWorkbenchLeakage`（需 Workbench 侧导入 Job/日志产物，属 B2.3/B2.6 之后）。
+- 未触碰用户隔离实例的配置与生命周期；未访问 `~/ScientificWorkbench`；未改 14321 实例。
+- 下一步（需追加预算）：复跑 deny 七范围 → 若通过则 S2 目标组合 Spike PASS，随后进入 B2.1 Skill 与 B2.3–B2.6、UI、G2 真实页面端到端与 D1 交付实例。
