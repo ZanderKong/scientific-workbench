@@ -10,3 +10,6 @@ demo/workspace
 .DS_Store
 playwright-report
 test-results
+
+# Raw acceptance logs stay local; only de-identified evidence is committed.
+audit/**/*.log

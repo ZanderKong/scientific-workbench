@@ -1,0 +1,20 @@
+{
+  "schema": "swb.import-capability/2",
+  "flavor": "v1",
+  "version": "1.18.31",
+  "model": "deepseek/deepseek-v4-flash-vision-exp",
+  "transport": "/session/:id/prompt_async",
+  "profileHash": "749c0777a8f5c0412013ba8caacc9c9529215f1db1ab22f87ec1ea4cb87e9ad9",
+  "bundleHash": "4b4afd8536809476859f32bf3e6867d55db2d14c43eb86fa76e0677189c3ad7b",
+  "checks": {
+    "isolation": "PASS",
+    "runtimeIdentityAndModel": "PASS",
+    "asyncSubmission": "PASS",
+    "correlatedImageAnswer": "PASS",
+    "restrictedAllow": "PASS",
+    "restrictedDeny": "PASS",
+    "noSensitiveWorkbenchLeakage": "PASS"
+  },
+  "verifiedAt": "2026-09-22T06:49:03.222Z",
+  "evidence": "2377956c-6acf-4897-9b2c-ce192301b5c3;2f5af60d-3a9d-4dec-b938-dbac8c8bf012"
+}

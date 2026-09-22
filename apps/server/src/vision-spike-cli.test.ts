@@ -81,8 +81,8 @@ class FakeEndpoint {
   private queuedReads = new Map<string, number>();
 
   async start() {
-    this.server = http.createServer((request, response) =>
-      void this.handle(request, response),
+    this.server = http.createServer(
+      (request, response) => void this.handle(request, response),
     );
     await new Promise<void>((resolve) =>
       this.server.listen(0, "127.0.0.1", resolve),
@@ -93,12 +93,20 @@ class FakeEndpoint {
   async stop() {
     await new Promise<void>((resolve) => this.server.close(() => resolve()));
   }
-  private push(sessionId: string, role: string, parts: unknown[], info: Record<string, unknown>) {
+  private push(
+    sessionId: string,
+    role: string,
+    parts: unknown[],
+    info: Record<string, unknown>,
+  ) {
     const list = this.messages.get(sessionId) ?? [];
     list.push({ info, parts });
     this.messages.set(sessionId, list);
   }
-  private async handle(request: http.IncomingMessage, response: http.ServerResponse) {
+  private async handle(
+    request: http.IncomingMessage,
+    response: http.ServerResponse,
+  ) {
     const url = new URL(request.url ?? "/", "http://127.0.0.1");
     const method = request.method ?? "GET";
     const segments = url.pathname.split("/").filter(Boolean);
@@ -134,7 +142,8 @@ class FakeEndpoint {
           },
         ],
       });
-    if (method === "GET" && url.pathname === "/permission") return send(200, []);
+    if (method === "GET" && url.pathname === "/permission")
+      return send(200, []);
     if (method === "GET" && url.pathname === "/session/status") {
       const data: Record<string, unknown> = {};
       for (const id of this.queued.keys()) data[id] = { type: "busy" };
@@ -169,11 +178,18 @@ class FakeEndpoint {
       const queued: any[] = [];
       if (image) {
         // The fake reads the pixels itself, so the image answers are genuine.
-        const decoded = Buffer.from(String(image.url).split(",")[1] ?? "", "base64");
+        const decoded = Buffer.from(
+          String(image.url).split(",")[1] ?? "",
+          "base64",
+        );
         const raw = await sharp(decoded)
           .raw()
           .toBuffer({ resolveWithObject: true });
-        const count = countRedRegions(raw.data, raw.info.width, raw.info.height);
+        const count = countRedRegions(
+          raw.data,
+          raw.info.width,
+          raw.info.height,
+        );
         queued.push({
           info: {
             id: `msg_a_${++this.sequence}`,
@@ -219,7 +235,11 @@ class FakeEndpoint {
       this.syncPromptCalls++;
       return send(200, { id: "msg_sync" });
     }
-    if (method === "GET" && segments[0] === "session" && segments[2] === "message") {
+    if (
+      method === "GET" &&
+      segments[0] === "session" &&
+      segments[2] === "message"
+    ) {
       const sessionId = segments[1];
       const entries = this.queued.get(sessionId);
       if (entries?.length) {
@@ -321,7 +341,12 @@ describe("vision spike CLI", () => {
     expect(report.isolation.sessionDirectoryMatches).toBe(true);
     expect(report.checks.isolation.status).toBe("PASS");
     expect(report.checks.correlatedImageAnswer.status).toBe("PASS");
-    expect(report.checks.restrictedDeny.status).toBe("PASS");
+    // This fake emits a bash refusal for every capability and has no controlled
+    // network target; that cannot prove generic scientific-write/network denial.
+    expect(report.checks.restrictedDeny.status).toBe("NOT VERIFIED");
+    expect(report.checks.restrictedDeny.detail).toMatch(
+      /network|generic-scientific-write/,
+    );
     expect(report.checks.restrictedAllow.status).toBe("NOT VERIFIED");
     expect(report.checks.noSensitiveWorkbenchLeakage.status).toBe(
       "NOT VERIFIED",

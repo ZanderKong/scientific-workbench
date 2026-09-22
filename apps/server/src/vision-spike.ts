@@ -67,6 +67,10 @@ export interface VisionSpikeMessage {
 }
 
 export interface VisionSpikeDependencies {
+  /** Acquired from the directory-routed runtime, never a caller self-hash. */
+  getEffectiveProfile?(
+    sessionId: string,
+  ): Promise<{ profileHash: string; executionDir: string } | undefined>;
   detectFlavor(): Promise<"v1" | "v2">;
   health(): Promise<{ ok: boolean; version?: string }>;
   listModels(): Promise<
@@ -76,7 +80,10 @@ export interface VisionSpikeDependencies {
       supportsImage?: boolean | "unknown";
     }[]
   >;
-  createSession(input: { title: string; directory: string }): Promise<{ id: string }>;
+  createSession(input: {
+    title: string;
+    directory: string;
+  }): Promise<{ id: string }>;
   getSession(
     sessionId: string,
   ): Promise<{ id: string; directory?: string } | null>;
@@ -91,7 +98,12 @@ export interface VisionSpikeDependencies {
     messageId: string;
     model: { providerId: string; modelId: string };
     images: { mimeType: string; filename: string; data: Buffer }[];
-  }): Promise<{ endpoint: string; requestKeys: string[]; status: number; elapsedMs: number }>;
+  }): Promise<{
+    endpoint: string;
+    requestKeys: string[];
+    status: number;
+    elapsedMs: number;
+  }>;
 }
 
 export interface VisionSpikeImage {
@@ -204,6 +216,11 @@ export interface VisionSpikeOptions {
 export const REQUIRED_ARTIFACT_SCOPES = ["job", "log", "notice"] as const;
 
 export interface ArtifactItem {
+  scope?: "job" | "log" | "notice";
+  runId?: string;
+  sessionId?: string;
+  jobId?: string;
+  observedAt?: string;
   label: string;
   text: string;
   /** The collector could not read the whole artifact. */
@@ -559,7 +576,10 @@ export async function runVisionSpike(
     return finalize(report);
   }
   if (!report.isolation.directorySeparated) {
-    checks.isolation = { status: "FAIL", detail: "executionDir 与 dataDir 未隔离" };
+    checks.isolation = {
+      status: "FAIL",
+      detail: "executionDir 与 dataDir 未隔离",
+    };
     return finalize(report);
   }
   // A targeted re-verification may run the restricted probes only; the image
@@ -652,7 +672,9 @@ export async function runVisionSpike(
         prompt,
         messageId,
         model,
-        images: [{ mimeType: "image/png", filename: `pattern.png`, data: image.png }],
+        images: [
+          { mimeType: "image/png", filename: `pattern.png`, data: image.png },
+        ],
       });
       // The decisive evidence that the request was submitted asynchronously is
       // that the finished reply did not exist yet when submit returned. The
@@ -801,7 +823,9 @@ async function runRestrictedChecks(
       // An allowed probe may legitimately call an index first; the evidence
       // must be an allowed call whose returned content matches the controlled
       // read.
-      const allowedCalls = calls.filter((call) => allow.tools.includes(call.name));
+      const allowedCalls = calls.filter((call) =>
+        allow.tools.includes(call.name),
+      );
       const allowed = allowedCalls.find((call) =>
         (call.output ?? "").includes(allow.marker),
       );
@@ -851,8 +875,7 @@ async function runRestrictedChecks(
 
   const probes = options.denyProbes ?? [];
   const missing = REQUIRED_DENY_CAPABILITIES.filter(
-    (capability) =>
-      !probes.some((probe) => probe.capability === capability),
+    (capability) => !probes.some((probe) => probe.capability === capability),
   );
   const leaked: string[] = [];
   const unproven: string[] = [];
@@ -875,26 +898,40 @@ async function runRestrictedChecks(
     )
       profileProblem = "profile 证据与运行时实际使用的 profile 不一致";
     else {
+      let effective: { profileHash: string; executionDir: string } | undefined;
       try {
-        const parsed = JSON.parse(evidence.text) as {
-          permission?: Record<string, unknown>;
-          mcp?: Record<string, { environment?: Record<string, string> }>;
-        };
-        deniedByProfile = parsed.permission ?? {};
-        const servers = Object.entries(parsed.mcp ?? {});
-        mcpScopeDeclared =
-          servers.length === 1 &&
-          servers[0][0] === "scientific-workbench" &&
-          Boolean(servers[0][1]?.environment?.WORKBENCH_IMPORT_SCOPE);
-        const tools = evidence.importScopeTools ?? [];
-        scopeToolsRestricted =
-          tools.length > 0 &&
-          tools.every((tool) =>
-            (IMPORT_SCOPE_ALLOWLIST as readonly string[]).includes(tool),
-          );
+        effective = await dependencies.getEffectiveProfile?.(sessionId);
       } catch {
-        profileProblem = "profile 证据无法解析";
+        profileProblem = "无法取得运行时有效 profile";
       }
+      if (
+        !effective ||
+        effective.profileHash !== hash ||
+        path.resolve(effective.executionDir) !==
+          path.resolve(options.executionDir)
+      ) {
+        profileProblem = "没有与本次目录绑定的运行时有效 profile 证据";
+      } else
+        try {
+          const parsed = JSON.parse(evidence.text) as {
+            permission?: Record<string, unknown>;
+            mcp?: Record<string, { environment?: Record<string, string> }>;
+          };
+          deniedByProfile = parsed.permission ?? {};
+          const servers = Object.entries(parsed.mcp ?? {});
+          mcpScopeDeclared =
+            servers.length === 1 &&
+            servers[0][0] === "scientific-workbench" &&
+            Boolean(servers[0][1]?.environment?.WORKBENCH_IMPORT_SCOPE);
+          const tools = evidence.importScopeTools ?? [];
+          scopeToolsRestricted =
+            tools.length > 0 &&
+            tools.every((tool) =>
+              (IMPORT_SCOPE_ALLOWLIST as readonly string[]).includes(tool),
+            );
+        } catch {
+          profileProblem = "profile 证据无法解析";
+        }
     }
   }
   for (const probe of probes) {
@@ -928,7 +965,14 @@ async function runRestrictedChecks(
           (call.output ?? "").includes(probe.sentinel) ||
           (call.error ?? "").includes(probe.sentinel),
       );
-    if (sentinelVisible) {
+    if (
+      sentinelVisible ||
+      calls.some(
+        (call) =>
+          ["completed", "success", "succeeded"].includes(call.status ?? "") &&
+          callMatches(call, probe.expects),
+      )
+    ) {
       leaked.push(probe.capability);
       continue;
     }
@@ -939,7 +983,8 @@ async function runRestrictedChecks(
     // Only a policy refusal that really refers to this capability counts. An
     // incidental tool error, a missing file or an unknown tool is not evidence.
     const policyRefusals = calls.filter(
-      (call) => refusalClass(call) === "policy" && callMatches(call, probe.expects),
+      (call) =>
+        refusalClass(call) === "policy" && callMatches(call, probe.expects),
     );
     if (policyRefusals.length) continue;
     if (deniedByProfile) {
@@ -999,7 +1044,7 @@ async function runRestrictedChecks(
     };
 }
 
-async function checkLeakage(
+export async function checkLeakage(
   options: VisionSpikeOptions,
   report: VisionSpikeReport,
   runId: string,
@@ -1037,9 +1082,7 @@ async function checkLeakage(
     );
   }
   if (evidence.runId !== runId)
-    return notVerified(
-      "产物证据不属于本次 run，无法证明覆盖了本轮产物",
-    );
+    return notVerified("产物证据不属于本次 run，无法证明覆盖了本轮产物");
   const collectedAt = Date.parse(evidence.collectedAt);
   if (
     !Number.isFinite(collectedAt) ||
@@ -1051,9 +1094,7 @@ async function checkLeakage(
     (scope) => !evidence.scope.includes(scope),
   );
   if (missingScopes.length)
-    return notVerified(
-      `产物覆盖范围不足，缺少：${missingScopes.join("、")}`,
-    );
+    return notVerified(`产物覆盖范围不足，缺少：${missingScopes.join("、")}`);
   if (!evidence.items.length)
     return notVerified("采集到 0 个产物，无法声称无泄漏");
   const truncated = evidence.items.filter((item) => item.truncated);
@@ -1061,6 +1102,27 @@ async function checkLeakage(
     return notVerified(
       `存在未完整读取的产物（${truncated.length} 个），覆盖范围不足`,
     );
+  const jobs = new Set(evidence.items.map((item) => item.jobId));
+  if (
+    !sessionId ||
+    jobs.size !== 1 ||
+    !evidence.items.every(
+      (item) =>
+        item.jobId &&
+        item.runId === runId &&
+        item.sessionId === sessionId &&
+        item.scope &&
+        REQUIRED_ARTIFACT_SCOPES.includes(item.scope) &&
+        item.text.trim() &&
+        Number.isFinite(Date.parse(item.observedAt ?? "")) &&
+        Date.parse(item.observedAt!) >= startedMs &&
+        Date.parse(item.observedAt!) <= collectedAt,
+    ) ||
+    REQUIRED_ARTIFACT_SCOPES.some(
+      (scope) => !evidence.items.some((item) => item.scope === scope),
+    )
+  )
+    return notVerified("产物缺少逐项身份、时间或 job/log/notice 实际覆盖证据");
   report.artifacts = {
     source: sanitize(evidence.source, secrets),
     scanned: evidence.items.length,
@@ -1075,13 +1137,17 @@ async function checkLeakage(
       secrets,
       imagePrefixes,
       options.dataDir,
+      true,
     );
     // Only categories and a label are reported, never the sensitive text.
     for (const category of categories)
       leaks.push(`${sanitize(item.label, secrets)}/${category}`);
   }
   if (leaks.length)
-    return { status: "FAIL", detail: `产物中发现泄漏类别：${leaks.join("、")}` };
+    return {
+      status: "FAIL",
+      detail: `产物中发现泄漏类别：${leaks.join("、")}`,
+    };
   return {
     status: "PASS",
     detail: `报告与本次 run 的 ${evidence.items.length} 个产物（覆盖 ${evidence.scope.join("/")}）均未发现图片字节、凭据或工作区路径`,
@@ -1093,8 +1159,14 @@ function collectLeakCategories(
   secrets: string[],
   imagePrefixes: string[],
   dataDir: string,
+  inspectPayload = false,
 ): string[] {
   const categories: string[] = [];
+  if (
+    inspectPayload &&
+    /"(?:draft|ocr|transcription|prompt|body|parts|images)"\s*:/i.test(text)
+  )
+    categories.push("完整科研或模型输入字段");
   if (secrets.some((secret) => text.includes(secret))) categories.push("凭据");
   if (imagePrefixes.some((prefix) => prefix && text.includes(prefix)))
     categories.push("图片字节");
@@ -1105,7 +1177,9 @@ function collectLeakCategories(
 }
 
 function finalize(report: VisionSpikeReport): VisionSpikeReport {
-  const statuses = VISION_SPIKE_CHECKS.map((name) => report.checks[name].status);
+  const statuses = VISION_SPIKE_CHECKS.map(
+    (name) => report.checks[name].status,
+  );
   if (statuses.includes("FAIL")) {
     report.conclusion = "FAIL";
     report.reason =
@@ -1136,7 +1210,10 @@ export function sanitize(value: string, secrets: string[] = []): string {
   let text = String(value ?? "");
   for (const secret of secrets)
     if (secret) text = text.split(secret).join("***");
-  text = text.replace(/data:image\/[a-z]+;base64,[A-Za-z0-9+/=]+/gi, "data:image/***");
+  text = text.replace(
+    /data:image\/[a-z]+;base64,[A-Za-z0-9+/=]+/gi,
+    "data:image/***",
+  );
   text = text.replace(/\s+/g, " ").trim();
   return text.length > 240 ? `${text.slice(0, 239)}…` : text;
 }

@@ -7,6 +7,7 @@ import {
   checkImportReadiness,
   ImportAgentRuntime,
   profileHashOf,
+  importPolicyHash,
   repositoryRoot,
   type VerifiedImportCapability,
 } from "./sample-import-agent";
@@ -20,8 +21,10 @@ function setup() {
 }
 afterEach(async () => {
   for (const runtime of runtimes.splice(0)) await runtime.stop();
-  for (const root of roots.splice(0))
+  for (const root of roots.splice(0)) {
     fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(`${root}-import-agent`, { recursive: true, force: true });
+  }
 });
 
 function makeRuntime(root: string, overrides: Record<string, unknown> = {}) {
@@ -94,9 +97,61 @@ describe("import runtime profile", () => {
     // data directory, and never in a user-global OpenCode location.
     expect(status.executionDir.startsWith(root + path.sep)).toBe(false);
     expect(
-      path.dirname(status.executionDir).startsWith(path.dirname(root) + path.sep),
+      path
+        .dirname(status.executionDir)
+        .startsWith(fs.realpathSync(path.dirname(root)) + path.sep),
     ).toBe(true);
-    expect(status.profileHash).toBe(profileHashOf(fs.readFileSync(status.configPath, "utf8")));
+    expect(status.profileHash).toBe(
+      profileHashOf(fs.readFileSync(status.configPath, "utf8")),
+    );
+  });
+});
+
+describe("attempt isolation boundaries", () => {
+  it("coalesces concurrent initialization and rejects changed binding without overwriting", async () => {
+    const root = setup();
+    let launches = 0;
+    const { runtime } = makeRuntime(root, {
+      launcher: async () => {
+        launches++;
+        return { pid: 1, stop: async () => {} };
+      },
+    });
+    const [a, b] = await Promise.all([runtime.ensure(), runtime.ensure()]);
+    expect(a).toEqual(b);
+    expect(launches).toBe(1);
+    const before = fs.readFileSync(a.configPath, "utf8");
+    const other = makeRuntime(root, {
+      workbenchToken: "different-private-token",
+    }).runtime;
+    await expect(other.ensure()).rejects.toThrow(/绑定/);
+    expect(fs.readFileSync(a.configPath, "utf8")).toBe(before);
+  });
+
+  it("normalizes only declared bindings and retains unknown configuration", async () => {
+    const root = setup();
+    const first = makeRuntime(root).runtime;
+    const second = makeRuntime(root, {
+      attemptId: "55555555-5555-4555-8555-555555555555",
+      workbenchToken: "new-secret",
+    }).runtime;
+    await first.ensure();
+    await second.ensure();
+    expect(first.policyHash()).toBe(second.policyHash());
+    const config = JSON.parse(
+      fs.readFileSync(first.status().configPath, "utf8"),
+    );
+    config.mcp["scientific-workbench"].environment.EXTRA = "unknown";
+    expect(importPolicyHash(JSON.stringify(config))).not.toBe(
+      first.policyHash(),
+    );
+  });
+
+  it("rejects path traversal identities before writing", () => {
+    const root = setup();
+    expect(() => makeRuntime(root, { attemptId: "../../escape" })).toThrow(
+      /UUID/,
+    );
   });
 });
 
@@ -119,9 +174,9 @@ describe("attached mode", () => {
     expect(fs.statSync(workspaceConfig).mode & 0o777).toBe(0o600);
     const profile = JSON.parse(fs.readFileSync(workspaceConfig, "utf8"));
     expect(profile.permission.read).toBe("deny");
-    expect(profile.mcp["scientific-workbench"].environment.WORKBENCH_IMPORT_SCOPE).toBe(
-      "11111111-1111-4111-8111-111111111111",
-    );
+    expect(
+      profile.mcp["scientific-workbench"].environment.WORKBENCH_IMPORT_SCOPE,
+    ).toBe("11111111-1111-4111-8111-111111111111");
     const config = runtime.config();
     expect(config.baseUrl).toBe("http://127.0.0.1:4199");
     expect(config.password).toBe("attachment-password");
@@ -133,7 +188,19 @@ describe("attached mode", () => {
 
 describe("import readiness", () => {
   const capability = (profileHash: string): VerifiedImportCapability => ({
-    schema: "swb.import-capability/1",
+    schema: "swb.import-capability/2",
+    bundleHash: "bundle",
+    checks: Object.fromEntries(
+      [
+        "isolation",
+        "runtimeIdentityAndModel",
+        "asyncSubmission",
+        "correlatedImageAnswer",
+        "restrictedAllow",
+        "restrictedDeny",
+        "noSensitiveWorkbenchLeakage",
+      ].map((key) => [key, "PASS" as const]),
+    ),
     flavor: "v1",
     version: "1.18.31",
     model: "deepseek/deepseek-v4-flash-vision-exp",
@@ -142,7 +209,8 @@ describe("import readiness", () => {
     verifiedAt: "2026-09-21T00:00:00.000Z",
     evidence: "docs/VERIFICATION.md#s2",
   });
-  const probeWith = (overrides: Record<string, unknown> = {}) =>
+  const probeWith =
+    (overrides: Record<string, unknown> = {}) =>
     async () => ({
       flavor: "v1" as const,
       version: "1.18.31",
@@ -164,7 +232,85 @@ describe("import readiness", () => {
       dataDir: root,
       bundleHash: "bundle",
     });
-    expect(result).toMatchObject({ ready: false, reasonCode: "PROFILE_MISSING" });
+    expect(result).toMatchObject({
+      ready: false,
+      reasonCode: "PROFILE_MISSING",
+    });
+  });
+
+  it("rejects missing capability, missing bundle and a different provider", async () => {
+    const root = setup();
+    const { runtime } = makeRuntime(root);
+    const status = await runtime.ensure();
+    const base = {
+      runtime,
+      dataDir: root,
+      probe: probeWith(),
+      bundleHash: "bundle",
+    };
+    expect.soft((await checkImportReadiness(base)).ready).toBe(false);
+    expect
+      .soft(
+        (
+          await checkImportReadiness({
+            ...base,
+            capability: capability(runtime.policyHash()),
+            bundleHash: undefined,
+          })
+        ).ready,
+      )
+      .toBe(false);
+    expect
+      .soft(
+        (
+          await checkImportReadiness({
+            ...base,
+            capability: capability(runtime.policyHash()),
+            probe: probeWith({
+              models: [
+                {
+                  providerId: "other",
+                  modelId: "deepseek-v4-flash-vision-exp",
+                  supportsImage: true,
+                },
+              ],
+            }),
+          })
+        ).ready,
+      )
+      .toBe(false);
+  });
+
+  it("does not trust a cached profile hash after disk changes", async () => {
+    const root = setup();
+    const { runtime } = makeRuntime(root);
+    const status = await runtime.ensure();
+    fs.writeFileSync(status.configPath, "{}");
+    expect(
+      (
+        await checkImportReadiness({
+          runtime,
+          dataDir: root,
+          bundleHash: "bundle",
+          capability: capability(runtime.policyHash()),
+          probe: probeWith(),
+        })
+      ).ready,
+    ).toBe(false);
+  });
+
+  it("keeps two attempts in different directories without overwriting", async () => {
+    const root = setup();
+    const first = makeRuntime(root).runtime;
+    const second = makeRuntime(root, {
+      importId: "33333333-3333-4333-8333-333333333333",
+      attemptId: "44444444-4444-4444-8444-444444444444",
+    }).runtime;
+    const a = await first.ensure();
+    const before = fs.readFileSync(a.configPath, "utf8");
+    const b = await second.ensure();
+    expect(b.configPath).not.toBe(a.configPath);
+    expect(fs.readFileSync(a.configPath, "utf8")).toBe(before);
   });
 
   it("is ready only for the verified combination", async () => {
@@ -174,9 +320,12 @@ describe("import readiness", () => {
     const result = await checkImportReadiness({
       runtime,
       dataDir: root,
-      capability: capability(status.profileHash!),
+      capability: capability(runtime.policyHash()),
       bundleHash: "bundle",
-      probe: probeWith(),
+      probe: probeWith({
+        effectivePolicyHash: runtime.policyHash(),
+        transport: "/session/:id/prompt_async",
+      }),
     });
     expect(result, JSON.stringify(result)).toMatchObject({
       ready: true,
@@ -195,13 +344,19 @@ describe("import readiness", () => {
       dataDir: root,
       capability: capability("0".repeat(64)),
       bundleHash: "bundle",
-      probe: probeWith(),
+      probe: probeWith({
+        effectivePolicyHash: runtime.policyHash(),
+        transport: "/session/:id/prompt_async",
+      }),
     });
-    expect(stale).toMatchObject({ ready: false, reasonCode: "CAPABILITY_STALE" });
+    expect(stale).toMatchObject({
+      ready: false,
+      reasonCode: "CAPABILITY_STALE",
+    });
     const drifted = await checkImportReadiness({
       runtime,
       dataDir: root,
-      capability: capability(status.profileHash!),
+      capability: capability(runtime.policyHash()),
       bundleHash: "bundle",
       probe: probeWith({ version: "1.19.0" }),
     });
@@ -212,15 +367,18 @@ describe("import readiness", () => {
     const missing = await checkImportReadiness({
       runtime,
       dataDir: root,
-      capability: capability(status.profileHash!),
+      capability: capability(runtime.policyHash()),
       bundleHash: "bundle",
       probe: probeWith({ models: [] }),
     });
-    expect(missing).toMatchObject({ ready: false, reasonCode: "MODEL_MISSING" });
+    expect(missing).toMatchObject({
+      ready: false,
+      reasonCode: "MODEL_MISSING",
+    });
     const noImage = await checkImportReadiness({
       runtime,
       dataDir: root,
-      capability: capability(status.profileHash!),
+      capability: capability(runtime.policyHash()),
       bundleHash: "bundle",
       probe: probeWith({
         models: [
@@ -245,7 +403,7 @@ describe("import readiness", () => {
     const result = await checkImportReadiness({
       runtime,
       dataDir: root,
-      capability: capability(status.profileHash!),
+      capability: capability(runtime.policyHash()),
       bundleHash: "bundle",
       probe: async () => {
         throw new Error("connect ECONNREFUSED");
@@ -269,8 +427,8 @@ describe("import readiness", () => {
       dataDir: root,
       repoRoot: repositoryRoot(),
       workbenchBaseUrl: "http://127.0.0.1:45999/api/v1",
-      workbenchToken: "t",
-      model: "m",
+      workbenchToken: "workbench-token-secret",
+      model: "deepseek/deepseek-v4-flash-vision-exp",
       importId: "11111111-1111-4111-8111-111111111111",
       attemptId: "22222222-2222-4222-8222-222222222222",
       launcher: async () => ({ pid: 1, stop: async () => {} }),
@@ -283,7 +441,10 @@ describe("import readiness", () => {
       runtime: guarded,
       dataDir: root,
       bundleHash: "bundle",
-      probe: probeWith(),
+      probe: probeWith({
+        effectivePolicyHash: runtime.policyHash(),
+        transport: "/session/:id/prompt_async",
+      }),
     });
     expect(result).toMatchObject({
       ready: false,

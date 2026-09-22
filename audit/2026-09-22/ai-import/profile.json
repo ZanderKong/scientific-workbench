@@ -1,0 +1,93 @@
+{
+  "schema": "swb.vision-spike/2",
+  "startedAt": "2026-09-22T06:43:18.498Z",
+  "runId": "2377956c-6acf-4897-9b2c-ce192301b5c3",
+  "optIn": true,
+  "isolation": {
+    "directorySeparated": true,
+    "dataDirLabel": "scientific-data",
+    "executionDirLabel": "agent-execution",
+    "sessionDirectoryMatches": true
+  },
+  "images": [
+    {
+      "width": 0,
+      "height": 0,
+      "bytes": 1134,
+      "mime": "image/png"
+    },
+    {
+      "width": 0,
+      "height": 0,
+      "bytes": 1861,
+      "mime": "image/png"
+    }
+  ],
+  "image": {
+    "width": 0,
+    "height": 0,
+    "bytes": 1134,
+    "mime": "image/png"
+  },
+  "checks": {
+    "isolation": {
+      "status": "PASS",
+      "detail": "实际 session 的 directory 等于专属 Agent 目录"
+    },
+    "runtimeIdentityAndModel": {
+      "status": "PASS",
+      "detail": "flavor=v1 version=1.18.31 model=deepseek/deepseek-v4-flash-vision-exp"
+    },
+    "asyncSubmission": {
+      "status": "PASS",
+      "detail": "每次图片提交都在阈值内返回，且返回时尚不存在最终回复"
+    },
+    "correlatedImageAnswer": {
+      "status": "PASS",
+      "detail": "图片 1：请求关联的已完成回复读出 3；图片 2：请求关联的已完成回复读出 7"
+    },
+    "restrictedAllow": {
+      "status": "PASS",
+      "detail": "请求关联的调用成功，返回内容与受控读取一致"
+    },
+    "restrictedDeny": {
+      "status": "PASS",
+      "detail": "每个必需范围都有本次请求关联的策略拒绝证据或已验证 profile 的有效 deny + 无副作用检查（共 7 项）"
+    },
+    "noSensitiveWorkbenchLeakage": {
+      "status": "NOT VERIFIED",
+      "detail": "只检查了 harness 报告自身；未采集本次 run（2377956c-6acf-4897-9b2c-ce192301b5c3）的 Workbench Job／日志产物，无法声称无泄漏"
+    }
+  },
+  "conclusion": "NOT VERIFIED",
+  "reason": "noSensitiveWorkbenchLeakage: 只检查了 harness 报告自身；未采集本次 run（2377956c-6acf-4897-9b2c-ce192301b5c3）的 Workbench Job／日志产物，无法声称无泄漏",
+  "runtime": {
+    "version": "1.18.31",
+    "flavor": "v1",
+    "model": "deepseek/deepseek-v4-flash-vision-exp",
+    "models": 16
+  },
+  "transport": {
+    "endpoint": "/session/ses_f38253984ffec6FLS34HwVIg74/prompt_async",
+    "candidateRequestKeys": [
+      "messageID",
+      "parts",
+      "model"
+    ],
+    "status": 204,
+    "submitElapsedMs": 15,
+    "busyAtReturn": true,
+    "replyExistedAtReturn": false
+  },
+  "correlation": {
+    "mode": "parent",
+    "imageIndex": 0
+  },
+  "flavor": "v1",
+  "version": "1.18.31",
+  "model": "deepseek/deepseek-v4-flash-vision-exp",
+  "policyHash": "749c0777a8f5c0412013ba8caacc9c9529215f1db1ab22f87ec1ea4cb87e9ad9",
+  "bundleHash": "4b4afd8536809476859f32bf3e6867d55db2d14c43eb86fa76e0677189c3ad7b",
+  "evidence": "2377956c-6acf-4897-9b2c-ce192301b5c3",
+  "calls": 10
+}

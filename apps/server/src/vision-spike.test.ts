@@ -108,7 +108,8 @@ class FakeRuntime {
   sideEffectFile?: string;
   staleAnswer = "";
   private sequence = 0;
-  private pendingWaiters: ((item: FakeRuntime["pending"][number]) => void)[] = [];
+  private pendingWaiters: ((item: FakeRuntime["pending"][number]) => void)[] =
+    [];
   private statusWaiters: (() => void)[] = [];
   private counters = { image: 0, allow: 0, deny: 0 };
 
@@ -154,8 +155,8 @@ class FakeRuntime {
   }
 
   async start() {
-    this.server = http.createServer((request, response) =>
-      void this.handle(request, response),
+    this.server = http.createServer(
+      (request, response) => void this.handle(request, response),
     );
     await new Promise<void>((resolve) =>
       this.server.listen(0, "127.0.0.1", resolve),
@@ -187,16 +188,17 @@ class FakeRuntime {
         parentID: options.parentId,
         time: { created: Date.now(), completed: options.completed },
       },
-      parts: [
-        { type: "text", text },
-        ...(options.tools ?? []),
-      ],
+      parts: [{ type: "text", text }, ...(options.tools ?? [])],
     });
     this.messages.set(sessionId, list);
     return id;
   }
 
-  private tool(name: string, status: string, extra: Record<string, unknown> = {}) {
+  private tool(
+    name: string,
+    status: string,
+    extra: Record<string, unknown> = {},
+  ) {
     return { type: "tool", tool: name, state: { status, ...extra } };
   }
 
@@ -359,11 +361,7 @@ class FakeRuntime {
       segments[2] === "message"
     )
       return send(200, this.messages.get(segments[1]) ?? []);
-    if (
-      method === "GET" &&
-      segments[0] === "session" &&
-      segments.length === 2
-    )
+    if (method === "GET" && segments[0] === "session" && segments.length === 2)
       return this.sessions.has(segments[1])
         ? send(200, this.sessions.get(segments[1]))
         : send(404, { name: "NotFoundError" });
@@ -386,9 +384,14 @@ class FakeRuntime {
       case "unrelated-after-submit":
         // A new message that is not correlated to our request and only carries
         // the candidate digits inside prose.
-        return this.push(sessionId, "assistant", "Unrelated metadata: 3 4 5 6 7 8", {
-          completed: done,
-        });
+        return this.push(
+          sessionId,
+          "assistant",
+          "Unrelated metadata: 3 4 5 6 7 8",
+          {
+            completed: done,
+          },
+        );
       case "delayed-other-request":
         return this.push(sessionId, "assistant", correct, {
           parentId: "msg_other_request",
@@ -457,7 +460,9 @@ class FakeRuntime {
           parentId: messageId,
           completed,
           tools: [
-            this.tool("knowledge_read", "error", { error: "permission denied" }),
+            this.tool("knowledge_read", "error", {
+              error: "permission denied",
+            }),
           ],
         });
       case "missing-output":
@@ -572,19 +577,26 @@ class FakeRuntime {
           parentId: messageId,
           completed,
           tools: [
-            this.tool("write", "error", { error: "permission denied by policy" }),
-          ],
-        });
-      case "leak":
-        return this.push(sessionId, "assistant", `文件内容是 ${this.denySentinel}`, {
-          parentId: messageId,
-          completed,
-          tools: [
-            this.tool("read", "completed", {
-              output: `文件内容是 ${this.denySentinel}`,
+            this.tool("write", "error", {
+              error: "permission denied by policy",
             }),
           ],
         });
+      case "leak":
+        return this.push(
+          sessionId,
+          "assistant",
+          `文件内容是 ${this.denySentinel}`,
+          {
+            parentId: messageId,
+            completed,
+            tools: [
+              this.tool("read", "completed", {
+                output: `文件内容是 ${this.denySentinel}`,
+              }),
+            ],
+          },
+        );
       default:
         return this.push(sessionId, "assistant", "该操作被拒绝。", {
           parentId: messageId,
@@ -641,9 +653,9 @@ interface Fixture {
     items: { label: string; text: string; truncated?: boolean }[];
   };
   /** Runs the harness while releasing replies at controlled sync points. */
-  run: (overrides?: Partial<VisionSpikeOptions>) => Promise<
-    Awaited<ReturnType<typeof runVisionSpike>>
-  >;
+  run: (
+    overrides?: Partial<VisionSpikeOptions>,
+  ) => Promise<Awaited<ReturnType<typeof runVisionSpike>>>;
 }
 
 /**
@@ -781,7 +793,24 @@ async function fixture(): Promise<Fixture> {
       tools: ["knowledge_read"],
     },
     denyProbes,
-    artifactScan: async ({ runId }) => ({ ...artifacts, runId }),
+    artifactScan: async ({ runId, sessionId }) => {
+      const collectedAt = new Date().toISOString();
+      return {
+        ...artifacts,
+        runId,
+        collectedAt,
+        items: ["job", "log", "notice"].flatMap((scope) =>
+          artifacts.items.map((item) => ({
+            ...item,
+            scope: scope as "job" | "log" | "notice",
+            runId,
+            sessionId,
+            jobId: "test-job",
+            observedAt: collectedAt,
+          })),
+        ),
+      };
+    },
   };
   return {
     runtime,
@@ -809,7 +838,9 @@ describe("vision spike fixture", () => {
     expect(parseIntegerAnswer(" 4 ")).toBe(4);
     expect(parseIntegerAnswer("4.")).toBe(4);
     expect(parseIntegerAnswer("**4**")).toBe(4);
-    expect(parseIntegerAnswer("Unrelated metadata: 3 4 5 6 7 8")).toBeUndefined();
+    expect(
+      parseIntegerAnswer("Unrelated metadata: 3 4 5 6 7 8"),
+    ).toBeUndefined();
     expect(parseIntegerAnswer("图中有 4 个方块")).toBeUndefined();
     expect(parseIntegerAnswer("是 44 吗")).toBeUndefined();
     expect(parseIntegerAnswer("")).toBeUndefined();
@@ -860,10 +891,9 @@ describe("vision spike harness", () => {
       const { runtime, run } = await fixture();
       runtime.imageScenario = scenario;
       const report = await run();
-      expect(
-        report.checks.correlatedImageAnswer.status,
-        scenario,
-      ).not.toBe("PASS");
+      expect(report.checks.correlatedImageAnswer.status, scenario).not.toBe(
+        "PASS",
+      );
       expect(report.conclusion, scenario).not.toBe("PASS");
     }
   });
@@ -884,10 +914,9 @@ describe("vision spike harness", () => {
       const { runtime, run } = await fixture();
       runtime.imageScenario = scenario;
       const report = await run();
-      expect(
-        report.checks.correlatedImageAnswer.status,
-        scenario,
-      ).not.toBe("PASS");
+      expect(report.checks.correlatedImageAnswer.status, scenario).not.toBe(
+        "PASS",
+      );
     }
   }, 20000);
 
@@ -1028,9 +1057,7 @@ describe("vision spike harness", () => {
         items: [],
       }),
     });
-    expect(none.checks.noSensitiveWorkbenchLeakage.status).toBe(
-      "NOT VERIFIED",
-    );
+    expect(none.checks.noSensitiveWorkbenchLeakage.status).toBe("NOT VERIFIED");
   });
 
   it("requires artifact evidence to belong to this run, be fresh and cover the scope", async () => {
@@ -1091,11 +1118,27 @@ describe("vision spike harness", () => {
     );
   });
 
+  it("rejects scope declarations without one associated artifact per category", async () => {
+    const { run } = await fixture();
+    const report = await run({
+      artifactScan: async ({ runId }) => ({
+        source: "test",
+        runId,
+        collectedAt: new Date().toISOString(),
+        scope: ["job", "log", "notice"],
+        items: [{ label: "unrelated", text: "clean" }],
+      }),
+    });
+    expect(report.checks.noSensitiveWorkbenchLeakage.status).toBe(
+      "NOT VERIFIED",
+    );
+  });
+
   it("passes the leakage check only with a clean report and clean collected artifacts", async () => {
     const { run } = await fixture();
     const report = await run();
     expect(report.checks.noSensitiveWorkbenchLeakage.status).toBe("PASS");
-    expect(report.artifacts?.scanned).toBe(1);
+    expect(report.artifacts?.scanned).toBe(3);
     expect(report.conclusion).toBe("PASS");
   });
 });
@@ -1197,8 +1240,35 @@ describe("vision spike restricted probes", () => {
     expect(report.conclusion).toBe("FAIL");
   });
 
+  it("does not accept a local profile and matching self-hash as live evidence", async () => {
+    const { run, runtime } = await fixture();
+    runtime.denyScenario = "prose-only";
+    const text = JSON.stringify({
+      permission: {
+        bash: "deny",
+        read: "deny",
+        edit: "deny",
+        write: "deny",
+        task: "deny",
+        webfetch: "deny",
+        websearch: "deny",
+      },
+      mcp: {
+        "scientific-workbench": {
+          environment: { WORKBENCH_IMPORT_SCOPE: "local-only" },
+        },
+      },
+    });
+    const profileHash = createHash("sha256").update(text).digest("hex");
+    const report = await run({
+      denyProfile: { text, profileHash, importScopeTools: ["knowledge_read"] },
+      expectedProfileHash: profileHash,
+    });
+    expect(report.checks.restrictedDeny.status).toBe("NOT VERIFIED");
+  });
+
   it("accepts a verified profile deny plus a checked absence of effect", async () => {
-    const { options, run, runtime } = await fixture();
+    const { options, run, runtime, deps, executionDir } = await fixture();
     // No refusal event from the runtime, so the verified profile is the only
     // admissible evidence for this capability set.
     runtime.denyScenario = "prose-only";
@@ -1214,20 +1284,30 @@ describe("vision spike restricted probes", () => {
       },
       mcp: {
         "scientific-workbench": {
-          environment: { WORKBENCH_IMPORT_SCOPE: "11111111-1111-4111-8111-111111111111" },
+          environment: {
+            WORKBENCH_IMPORT_SCOPE: "11111111-1111-4111-8111-111111111111",
+          },
         },
       },
     });
     const profileHash = createHash("sha256").update(text).digest("hex");
+    deps.getEffectiveProfile = async () => ({ profileHash, executionDir });
     const report = await run({
       denyProfile: {
         text,
         profileHash,
-        importScopeTools: ["knowledge_index", "knowledge_read", "sample_import_get"],
+        importScopeTools: [
+          "knowledge_index",
+          "knowledge_read",
+          "sample_import_get",
+        ],
       },
       expectedProfileHash: profileHash,
     });
-    expect(report.checks.restrictedDeny.status, report.checks.restrictedDeny.detail).toBe("PASS");
+    expect(
+      report.checks.restrictedDeny.status,
+      report.checks.restrictedDeny.detail,
+    ).toBe("PASS");
     expect(report.checks.restrictedDeny.detail).toContain("profile");
     void options;
   });
@@ -1257,7 +1337,9 @@ describe("vision spike restricted probes", () => {
     const text = JSON.stringify({
       mcp: {
         "scientific-workbench": {
-          environment: { WORKBENCH_IMPORT_SCOPE: "11111111-1111-4111-8111-111111111111" },
+          environment: {
+            WORKBENCH_IMPORT_SCOPE: "11111111-1111-4111-8111-111111111111",
+          },
         },
       },
       permission: {
@@ -1298,7 +1380,9 @@ describe("vision spike restricted probes", () => {
       },
       mcp: {
         "scientific-workbench": {
-          environment: { WORKBENCH_IMPORT_SCOPE: "11111111-1111-4111-8111-111111111111" },
+          environment: {
+            WORKBENCH_IMPORT_SCOPE: "11111111-1111-4111-8111-111111111111",
+          },
         },
       },
     });
