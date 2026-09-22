@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseBody, sha256 } from "@workbench/core";
+import { KNOWLEDGE_IDS, parseBody, sha256 } from "@workbench/core";
 import {
   getKnowledge,
   knowledgeBundleHash,
@@ -12,16 +12,12 @@ import {
 describe("server knowledge loader", () => {
   it("lists the full whitelist with versions, summaries and content hashes", () => {
     const index = listKnowledge();
+    // The loader must expose exactly the registered whitelist, taken from the
+    // single source of truth so adding knowledge cannot silently drift.
     expect(index.map((entry) => entry.id).sort()).toEqual(
-      [
-        "guide",
-        "protocol-analysis-claims-evidence",
-        "protocol-common",
-        "protocol-data-attachments",
-        "protocol-objects-properties",
-        "protocol-sample-document",
-      ].sort(),
+      [...KNOWLEDGE_IDS].sort(),
     );
+    expect(index.length).toBeGreaterThanOrEqual(6);
     expect(knowledgeVersion).toMatch(/^\d{4}-\d{2}-\d{2}/);
     expect(knowledgeBundleHash).toHaveLength(64);
     for (const entry of index) {

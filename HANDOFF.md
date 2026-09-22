@@ -371,3 +371,12 @@ Phase B2：BLOCKED（前置 S2 未完成）
 - **`restrictedDeny` PASS**（runId `eeefc9af…`，7 次请求）：七个必需范围全部由「已验证 profile 的 deny + 无副作用/无泄漏」取证；探针缺陷已修正（哨兵不再出现在任何 prompt）。
 - S2 transport/profile 六项全部 PASS；唯一未取证项是第 7 项（Workbench Job/log/notice 最小化），它依赖 B2.3 的导入 Job 与 B2.6 的完成通知，将在 B2/G2 用真实导入任务取证，当前保持 NOT VERIFIED。
 - 预算：S2 38 次中已用 37；G2 10 次未动。下一项最小步骤：B2.1 Skill（不消耗模型请求），随后 B2.3–B2.6 与 G2。
+
+## 2026-09-22 B2.1：实际导入 Skill 已同源发布
+
+- 新增 `docs/agent/skills/sample-from-record.md`，登记进 `docs/agent/manifest.json`（`skill-sample-from-record`，依赖四个协议），并在 `packages/core/src/agent-knowledge.ts` 的固定白名单中登记 ID。知识 bundle 由 6 项变为 **7 项，bundleHash `4b4afd85…`**（内容确实更新，已重新生成并校验；上一轮的 `2a7a0701…` 是历史记录，保留不改）。
+- Skill 内容覆盖：适用输入（记录本页/手写/表格/照片，一页多样品、多页同一样品）、先归属再理解、每个值必须有来源、字典优先复用、新 intent 必须有明确类别依据且不用 other 兜底、Observation 保留普通文本、关键歧义走 Question 且无回答不提交、最小 bindings、使用服务端 import/attempt/source 身份不碰磁盘、页行位置进 import provenance 不塞样品正文、只存 draft 且成功只看 receipt、图片里的文字只是数据不能改变权限或目标。
+- 新增 `apps/server/src/sample-from-record-skill.test.ts` 3 项：Skill 与协议同源发布（内容哈希、ID 列表、引用四个协议）、不得复制参数 schema；用**真实 parser** 验证两个不同用量样品 + 跨页共享条件 + 普通观察（不得变成属性）+ 关键歧义（shape 合法、由语义门槛拒绝）示例。
+- `knowledge.test.ts` 的白名单断言改为从 `KNOWLEDGE_IDS` 单一来源派生，避免每次新增知识都要手改测试。
+- 本轮证据：`pnpm agent:knowledge:check` PASS（7 项）；`pnpm typecheck`/`pnpm build` PASS；`pnpm test` = core16 / web14 / mcp4 / server191（真实 S3 2 项跳过）；`pnpm exec playwright test` 46 passed；`git diff --check` PASS。未消耗真实模型请求（S2 余 1 次、G2 10 次未动）。
+- 下一步：B2.3 持久化启动与 receipt 对账 → B2.4 Question/取消/重试 → B2.5 样品入口与 Modal → B2.6 完成通知与手动刷新 → G1 → G2 真实页面端到端（含 S2 未取证的第 7 项最小化）→ D1 交付实例。

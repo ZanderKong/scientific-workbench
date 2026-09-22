@@ -13,6 +13,7 @@ export const KNOWLEDGE_IDS = [
   "protocol-objects-properties",
   "protocol-data-attachments",
   "protocol-analysis-claims-evidence",
+  "skill-sample-from-record",
 ] as const;
 export type KnowledgeId = (typeof KNOWLEDGE_IDS)[number];
 export const KNOWLEDGE_ID_SET: ReadonlySet<string> = new Set(KNOWLEDGE_IDS);
