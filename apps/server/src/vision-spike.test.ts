@@ -7,7 +7,7 @@ import http from "node:http";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import crypto from "node:crypto";
+import crypto, { createHash } from "node:crypto";
 import type { AddressInfo } from "node:net";
 import { afterEach, describe, expect, it } from "vitest";
 import sharp from "sharp";
@@ -948,6 +948,16 @@ describe("vision spike harness", () => {
     expect(report.conclusion).toBe("FAIL");
   });
 
+  it("never substitutes another image-capable model for the pinned one", async () => {
+    const { run } = await fixture();
+    const report = await run({ model: "deepseek/other-vision-model" });
+    expect(report.checks.runtimeIdentityAndModel.status).toBe("FAIL");
+    expect(report.checks.runtimeIdentityAndModel.detail).toContain(
+      "deepseek/other-vision-model",
+    );
+    expect(report.conclusion).not.toBe("PASS");
+  });
+
   it("reports FAIL when the runtime cannot be identified", async () => {
     for (const scenario of ["no-version", "no-vision-model"] as const) {
       const { runtime, run } = await fixture();
@@ -1185,6 +1195,123 @@ describe("vision spike restricted probes", () => {
     expect(report.checks.restrictedDeny.status).toBe("FAIL");
     expect(report.checks.restrictedDeny.detail).toContain("副作用");
     expect(report.conclusion).toBe("FAIL");
+  });
+
+  it("accepts a verified profile deny plus a checked absence of effect", async () => {
+    const { options, run, runtime } = await fixture();
+    // No refusal event from the runtime, so the verified profile is the only
+    // admissible evidence for this capability set.
+    runtime.denyScenario = "prose-only";
+    const text = JSON.stringify({
+      permission: {
+        bash: "deny",
+        read: "deny",
+        edit: "deny",
+        write: "deny",
+        task: "deny",
+        webfetch: "deny",
+        websearch: "deny",
+      },
+      mcp: {
+        "scientific-workbench": {
+          environment: { WORKBENCH_IMPORT_SCOPE: "11111111-1111-4111-8111-111111111111" },
+        },
+      },
+    });
+    const profileHash = createHash("sha256").update(text).digest("hex");
+    const report = await run({
+      denyProfile: {
+        text,
+        profileHash,
+        importScopeTools: ["knowledge_index", "knowledge_read", "sample_import_get"],
+      },
+      expectedProfileHash: profileHash,
+    });
+    expect(report.checks.restrictedDeny.status, report.checks.restrictedDeny.detail).toBe("PASS");
+    expect(report.checks.restrictedDeny.detail).toContain("profile");
+    void options;
+  });
+
+  it("rejects a profile claim that is not bound to the running profile", async () => {
+    const { run, runtime } = await fixture();
+    runtime.denyScenario = "prose-only";
+    const text = JSON.stringify({ permission: { read: "deny" } });
+    const profileHash = createHash("sha256").update(text).digest("hex");
+    const mismatched = await run({
+      denyProfile: { text, profileHash },
+      expectedProfileHash: "0".repeat(64),
+    });
+    expect(mismatched.checks.restrictedDeny.status).toBe("NOT VERIFIED");
+    expect(mismatched.checks.restrictedDeny.detail).toContain("profile");
+    const tampered = await run({
+      denyProfile: { text: `${text} `, profileHash },
+      expectedProfileHash: profileHash,
+    });
+    expect(tampered.checks.restrictedDeny.status).toBe("NOT VERIFIED");
+    expect(tampered.checks.restrictedDeny.detail).toContain("哈希");
+  });
+
+  it("does not accept a profile that leaves a required scope allowed", async () => {
+    const { run, runtime } = await fixture();
+    runtime.denyScenario = "prose-only";
+    const text = JSON.stringify({
+      mcp: {
+        "scientific-workbench": {
+          environment: { WORKBENCH_IMPORT_SCOPE: "11111111-1111-4111-8111-111111111111" },
+        },
+      },
+      permission: {
+        bash: "allow",
+        read: "deny",
+        edit: "deny",
+        write: "deny",
+        task: "deny",
+        webfetch: "deny",
+        websearch: "deny",
+      },
+    });
+    const profileHash = createHash("sha256").update(text).digest("hex");
+    const report = await run({
+      denyProfile: {
+        text,
+        profileHash,
+        importScopeTools: ["knowledge_read"],
+      },
+      expectedProfileHash: profileHash,
+    });
+    expect(report.checks.restrictedDeny.status).toBe("NOT VERIFIED");
+    expect(report.checks.restrictedDeny.detail).toContain("shell");
+  });
+
+  it("still fails when a forbidden effect happens despite the profile", async () => {
+    const { run, runtime } = await fixture();
+    runtime.denyScenario = "side-effect";
+    const text = JSON.stringify({
+      permission: {
+        bash: "deny",
+        read: "deny",
+        edit: "deny",
+        write: "deny",
+        task: "deny",
+        webfetch: "deny",
+        websearch: "deny",
+      },
+      mcp: {
+        "scientific-workbench": {
+          environment: { WORKBENCH_IMPORT_SCOPE: "11111111-1111-4111-8111-111111111111" },
+        },
+      },
+    });
+    const profileHash = createHash("sha256").update(text).digest("hex");
+    const report = await run({
+      denyProfile: {
+        text,
+        profileHash,
+        importScopeTools: ["knowledge_read"],
+      },
+      expectedProfileHash: profileHash,
+    });
+    expect(report.checks.restrictedDeny.status).toBe("FAIL");
   });
 
   it("stays NOT VERIFIED when the probe set does not cover a required scope", async () => {

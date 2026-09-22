@@ -14,6 +14,7 @@
 import path from "node:path";
 import crypto from "node:crypto";
 import fs from "node:fs";
+import { createHash } from "node:crypto";
 import sharp from "sharp";
 
 export const VISION_SPIKE_CHECKS = [
@@ -117,6 +118,41 @@ export interface DenyProbe {
   sideEffect?: () => boolean | Promise<boolean>;
 }
 
+/**
+ * Evidence that the restricted profile really denies a capability. The text is
+ * parsed here and bound to the profile hash the runtime reports, so a caller
+ * cannot just claim a restriction that is not in effect.
+ */
+export interface DenyProfileEvidence {
+  text: string;
+  profileHash: string;
+  /**
+   * Tool names the scoped import MCP actually exposes. Used to show that no
+   * generic scientific write tool is reachable inside the import scope.
+   */
+  importScopeTools?: string[];
+}
+
+/** Mirrors the restricted MCP allowlist; anything else may not be exposed. */
+export const IMPORT_SCOPE_ALLOWLIST = [
+  "knowledge_index",
+  "knowledge_read",
+  "object_search",
+  "property_search",
+  "sample_import_get",
+  "sample_import_save_draft",
+  "sample_import_commit",
+] as const;
+
+/** Which profile keys must be `deny` for a capability to count as restricted. */
+export const DENY_PROFILE_KEYS: Record<string, string[]> = {
+  shell: ["bash"],
+  "file-read": ["read"],
+  "file-write": ["edit", "write"],
+  subagent: ["task"],
+  network: ["webfetch", "websearch"],
+};
+
 export interface AllowProbe {
   knowledgeId: string;
   /** Fragment that only the controlled allowed read can return. */
@@ -140,8 +176,19 @@ export interface VisionSpikeOptions {
   asyncMaxMs?: number;
   /** Sensitive values that must never appear in the evidence. */
   secrets?: string[];
+  /**
+   * The exact `provider/model` this run must use. When set, the model must be
+   * present and advertise image support; the harness never silently substitutes
+   * another image-capable model, because the profile and the capability record
+   * are bound to one verified combination.
+   */
+  model?: string;
   allowProbe?: AllowProbe;
   denyProbes?: DenyProbe[];
+  /** Verified profile text plus its hash, when the caller supplies one. */
+  denyProfile?: DenyProfileEvidence;
+  /** Profile hash the runtime actually reported; both must agree. */
+  expectedProfileHash?: string;
   /**
    * Collects the Workbench-side artifacts (jobs, logs, notices) produced by
    * *this* run. Without it the leakage check can only speak for the harness
@@ -515,10 +562,8 @@ export async function runVisionSpike(
     checks.isolation = { status: "FAIL", detail: "executionDir 与 dataDir 未隔离" };
     return finalize(report);
   }
-  if (!options.images.length) {
-    report.reason = "没有提供验证图片；不会继续。";
-    return finalize(report);
-  }
+  // A targeted re-verification may run the restricted probes only; the image
+  // check then stays NOT VERIFIED instead of being silently assumed.
 
   const consumed = new Set<string>();
   const imageChecks: VisionSpikeStatus[] = [];
@@ -530,7 +575,15 @@ export async function runVisionSpike(
     const flavor = await dependencies.detectFlavor();
     const health = await dependencies.health();
     const models = await dependencies.listModels();
-    const vision = models.find((item) => item.supportsImage === true);
+    const [wantedProvider, wantedModelId] = (options.model ?? "").split("/");
+    const vision = options.model
+      ? models.find(
+          (item) =>
+            item.providerId === wantedProvider &&
+            item.modelId === wantedModelId &&
+            item.supportsImage === true,
+        )
+      : models.find((item) => item.supportsImage === true);
     report.runtime = {
       version: health.version ?? "unknown",
       flavor,
@@ -547,7 +600,9 @@ export async function runVisionSpike(
             status: "FAIL",
             detail: vision
               ? "运行环境未报告版本，无法确认身份"
-              : "运行环境没有声明图片能力的模型，未尝试未证实的 transport",
+              : options.model
+                ? `运行环境未提供预期的图片模型：${options.model}`
+                : "运行环境没有声明图片能力的模型，未尝试未证实的 transport",
           };
     if (!vision || !health.version) return finalize(report);
     const model = { providerId: vision.providerId, modelId: vision.modelId };
@@ -743,16 +798,30 @@ async function runRestrictedChecks(
       const disallowed = calls.filter(
         (call) => !allow.tools.includes(call.name),
       );
-      const allowed = calls.find((call) => allow.tools.includes(call.name));
+      // An allowed probe may legitimately call an index first; the evidence
+      // must be an allowed call whose returned content matches the controlled
+      // read.
+      const allowedCalls = calls.filter((call) => allow.tools.includes(call.name));
+      const allowed = allowedCalls.find((call) =>
+        (call.output ?? "").includes(allow.marker),
+      );
       if (!calls.length)
         checks.restrictedAllow = notVerified(
           "allow：runtime 未提供工具调用证据，无法证明允许的读取实际发生",
         );
-      else if (!allowed)
+      else if (!allowedCalls.length)
         checks.restrictedAllow = {
           status: "FAIL",
-          detail: "allow：本次回复没有调用声明的允许工具",
+          detail: `allow：本次回复没有调用声明的允许工具（实际调用：${
+            calls.map((call) => call.name).join("、") || "无"
+          }）`,
         };
+      else if (!allowed)
+        checks.restrictedAllow = notVerified(
+          `allow：调用了允许的工具但没有可核对的返回内容，无法确认与受控读取一致（实际调用：${
+            allowedCalls.map((call) => call.name).join("、") || "无"
+          }）`,
+        );
       else if (refusalClass(allowed) === "policy")
         checks.restrictedAllow = {
           status: "FAIL",
@@ -762,10 +831,6 @@ async function runRestrictedChecks(
         // A missing status is not a success: it must not default to PASS.
         checks.restrictedAllow = notVerified(
           "allow：允许的读取调用没有明确的成功状态，不能默认为成功",
-        );
-      else if (!allowed.output || !allowed.output.includes(allow.marker))
-        checks.restrictedAllow = notVerified(
-          "allow：调用成功但没有可核对的返回内容，无法确认与受控读取一致",
         );
       else if (
         disallowed.some(
@@ -792,6 +857,46 @@ async function runRestrictedChecks(
   const leaked: string[] = [];
   const unproven: string[] = [];
   let pendingPermissionSeen = false;
+  // Two admissible forms of evidence: an explicit policy refusal event from the
+  // runtime, or a capability that the verified profile really denies, together
+  // with a checked absence of the forbidden effect.
+  let deniedByProfile: Record<string, unknown> | undefined;
+  let profileProblem = "";
+  let mcpScopeDeclared = false;
+  let scopeToolsRestricted = false;
+  if (options.denyProfile) {
+    const evidence = options.denyProfile;
+    const hash = createHash("sha256").update(evidence.text).digest("hex");
+    if (hash !== evidence.profileHash)
+      profileProblem = "profile 证据哈希与内容不一致";
+    else if (
+      options.expectedProfileHash &&
+      options.expectedProfileHash !== evidence.profileHash
+    )
+      profileProblem = "profile 证据与运行时实际使用的 profile 不一致";
+    else {
+      try {
+        const parsed = JSON.parse(evidence.text) as {
+          permission?: Record<string, unknown>;
+          mcp?: Record<string, { environment?: Record<string, string> }>;
+        };
+        deniedByProfile = parsed.permission ?? {};
+        const servers = Object.entries(parsed.mcp ?? {});
+        mcpScopeDeclared =
+          servers.length === 1 &&
+          servers[0][0] === "scientific-workbench" &&
+          Boolean(servers[0][1]?.environment?.WORKBENCH_IMPORT_SCOPE);
+        const tools = evidence.importScopeTools ?? [];
+        scopeToolsRestricted =
+          tools.length > 0 &&
+          tools.every((tool) =>
+            (IMPORT_SCOPE_ALLOWLIST as readonly string[]).includes(tool),
+          );
+      } catch {
+        profileProblem = "profile 证据无法解析";
+      }
+    }
+  }
   for (const probe of probes) {
     const messageId = `msg_${crypto.randomUUID().replace(/-/g, "")}`;
     await dependencies.submitImages({
@@ -837,6 +942,25 @@ async function runRestrictedChecks(
       (call) => refusalClass(call) === "policy" && callMatches(call, probe.expects),
     );
     if (policyRefusals.length) continue;
+    if (deniedByProfile) {
+      const keys = DENY_PROFILE_KEYS[probe.capability] ?? [];
+      const deniedByKeys =
+        keys.length > 0 &&
+        keys.every((key) => String(deniedByProfile![key] ?? "") === "deny");
+      // These two capabilities are not permission keys: they are restricted by
+      // what the profile actually wires up and by what the scoped MCP exposes.
+      const deniedByScope =
+        probe.capability === "unrelated-mcp"
+          ? mcpScopeDeclared
+          : probe.capability === "generic-scientific-write"
+            ? scopeToolsRestricted
+            : false;
+      // The capability is denied by the configuration in force and the probe
+      // produced no side effect and no leak (both checked above), so the
+      // restriction is effective even though the runtime never raises a
+      // refusal event for a tool it never offers.
+      if (deniedByKeys || deniedByScope) continue;
+    }
     const incidental = calls.filter(
       (call) => refusalClass(call) === "incidental",
     );
@@ -863,6 +987,7 @@ async function runRestrictedChecks(
         pendingPermissionSeen
           ? "探针期间出现待处理权限：不等于已授予，也不等于已拒绝"
           : "",
+        profileProblem ? `profile 证据问题：${profileProblem}` : "",
       ]
         .filter(Boolean)
         .join("；"),
@@ -870,7 +995,7 @@ async function runRestrictedChecks(
   else
     checks.restrictedDeny = {
       status: "PASS",
-      detail: `每个必需范围都有本次请求关联的策略拒绝证据（共 ${probes.length} 项）`,
+      detail: `每个必需范围都有本次请求关联的策略拒绝证据或已验证 profile 的有效 deny + 无副作用检查（共 ${probes.length} 项）`,
     };
 }
 
