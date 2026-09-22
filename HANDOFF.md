@@ -465,6 +465,10 @@ pnpm api:spec               无 diff（UI-only 的 readiness/start 未进入科�
 ```bash
 # 启动（前台，Ctrl-C 即停止）
 pnpm import:instance
+# 常驻启动（脱离当前 shell；日志同时写入该文件，已被 .gitignore 排除）
+nohup npx tsx scripts/g2-instance.mts > audit/2026-09-22/ai-import/g2/instance.log 2>&1 &
+# 停止
+pkill -f "scripts/g2-instance.mts"
 # 等价显式命令
 WORKBENCH_DATA_DIR=/Users/kong/ZanderProject/ScientificWorkbench-g2-20260923 \
 WORKBENCH_PORT=14323 WORKBENCH_HOST=127.0.0.1 \
@@ -477,4 +481,5 @@ npx tsx apps/server/src/main.ts
 - 入口：http://127.0.0.1:14323/ → 样品 → ＋新建样品 右侧箭头 → AI 从实验记录新建样品
 - 模型：`deepseek/deepseek-v4-flash-vision-exp`（V1 legacy 1.18.31，`/session/:id/prompt_async`）
 - 示例图：`audit/2026-09-22/ai-import/g2/fixtures/*.png`（合成记录，非真实实验数据）
-- 日志：前台 stdout；验收运行日志归档在 `audit/2026-09-22/ai-import/g2/workbench.log`（未提交）
+- 日志：前台 stdout；常驻时 `audit/2026-09-22/ai-import/g2/instance.log`；验收运行日志 `.../workbench.log`（两者均未提交）
+- 注意：用工具后台任务启动会被超时看门狗结束，需要常驻时用上面的 `nohup` 形式
